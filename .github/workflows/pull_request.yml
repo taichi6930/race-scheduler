@@ -697,7 +697,6 @@ jobs:
       - detect-changed-packages
       - call-static-checks
       - call-workflow-hygiene-check
-      - call-build-test
       - call-test-packages
       - call-component-test
     if: always()
