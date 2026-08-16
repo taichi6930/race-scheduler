@@ -7,7 +7,7 @@ import 'dio_call_handler.dart';
 /// エンドポイントは作らない、要件スコープ外）。公開リポジトリの読み取りは
 /// 認証不要（匿名レート制限 60回/時/IP、NFR-01）。
 const String kGithubReleasesUrl =
-    'https://api.github.com/repos/taichi6930/race-schedule/releases';
+    'https://api.github.com/repos/taichi6930/race-scheduler/releases';
 
 abstract class IReleaseRemoteDataSource {
   /// draft・prerelease を含む全リリースを、GitHubの既定順（新しい順）で取得する
