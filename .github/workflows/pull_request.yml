@@ -274,6 +274,8 @@ jobs:
         run: bun run check:deploy-working-dirs
       - name: Check wrangler.toml for non-inherited binding warnings
         run: bun run check:wrangler-config
+      - name: Check api cron definitions are in sync (wrangler.toml ⇔ scheduled.ts)
+        run: bun run check:cron-sync
       - name: Check Node.js major version is in sync (.nvmrc ⇔ package.json ⇔ dependabot.yml)
         run: bun run check:node-version-sync
 

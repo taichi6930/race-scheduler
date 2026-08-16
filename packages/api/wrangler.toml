@@ -139,9 +139,11 @@ simple = { limit = 30, period = 60 }
 [env.development]
 name = "race-schedule-dev"
 
-# Web Push の期限到来分を配信する（毎分）。web-push-design.md §5 参照。
+# Web Push の期限到来分を配信する。production環境（毎分、web-push-design.md §5）と
+# 異なり、development環境には実際の利用者・購読が存在しないため、配信の即時性より
+# 起動回数削減を優先し5分おきに縮小する（CFCOST-01/QRUN-10対応、2026-08-16）。
 [env.development.triggers]
-crons = ["* * * * *"]
+crons = ["*/5 * * * *"]
 
 [env.development.secrets]
 # All environment variables are stored as secrets
@@ -174,9 +176,11 @@ simple = { limit = 30, period = 60 }
 [env.test]
 name = "race-schedule-test"
 
-# Web Push の期限到来分を配信する（毎分）。web-push-design.md §5 参照。
+# Web Push の期限到来分を配信する。UAT smoke（testing-conventions.md §7）等の
+# 疎通確認では即時配信を要求しないため、production環境（毎分）より頻度を落とし
+# 5分おきに縮小する（CFCOST-01/QRUN-10対応、2026-08-16）。
 [env.test.triggers]
-crons = ["* * * * *"]
+crons = ["*/5 * * * *"]
 
 [env.test.secrets]
 # All environment variables are stored as secrets

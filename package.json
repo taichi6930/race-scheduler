@@ -41,6 +41,7 @@
         "check:miniflare-sync": "bun scripts/check-miniflare-wrangler-sync.ts",
         "check:deploy-working-dirs": "bun scripts/check-deploy-working-dirs.ts",
         "check:wrangler-config": "bun scripts/check-wrangler-config.ts",
+        "check:cron-sync": "bun scripts/check-cron-sync.ts",
         "check:node-version-sync": "bun scripts/check-node-version-sync.ts",
         "check:stale-aidlc-docs": "bun scripts/find-stale-aidlc-docs.ts",
         "check:generated-dirs": "bun scripts/check-generated-dirs-excluded.ts",

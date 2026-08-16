@@ -18,5 +18,23 @@ runs:
         CF_API_TOKEN: ${{ inputs.cloudflare-api-token }}
         CF_ACCOUNT_ID: ${{ inputs.cloudflare-account-id }}
       run: |
-        [ -z "$CF_API_TOKEN" ] && echo "❌ Cloudflare API Token: NOT SET" || echo "✅ Cloudflare API Token: SET"
-        [ -z "$CF_ACCOUNT_ID" ] && echo "❌ CLOUDFLARE_ACCOUNT_ID: NOT SET" || echo "✅ CLOUDFLARE_ACCOUNT_ID: SET"
+        missing=0
+        if [ -z "$CF_API_TOKEN" ]; then
+          echo "❌ Cloudflare API Token: NOT SET"
+          missing=1
+        else
+          echo "✅ Cloudflare API Token: SET"
+        fi
+        if [ -z "$CF_ACCOUNT_ID" ]; then
+          echo "❌ CLOUDFLARE_ACCOUNT_ID: NOT SET"
+          missing=1
+        else
+          echo "✅ CLOUDFLARE_ACCOUNT_ID: SET"
+        fi
+        # CFOPS-09: 必須シークレットが空欄でも success 扱いになっていたため、
+        # 「検証」の名の通り、未設定ならここでジョブを失敗させる
+        # （後段のwrangler呼び出しで分かりにくく失敗するのを防ぐ）。
+        if [ "$missing" -eq 1 ]; then
+          echo "::error::Cloudflare secrets are missing. See above for details."
+          exit 1
+        fi
