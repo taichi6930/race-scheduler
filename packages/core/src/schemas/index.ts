@@ -10,4 +10,5 @@ export * from './raceDetailUiSchema';
 export * from './raceFilterValidation';
 export * from './raceUpsertValidation';
 export * from './raceValidation';
+export * from './releaseNoteSchema';
 export * from './upsertResultSchema';

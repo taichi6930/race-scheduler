@@ -2,7 +2,7 @@
 //
 // | ID   | 条件                                        | 期待                                              |
 // | ---- | -------------------------------------------- | ---------------------------------------------------- |
-// | T-01 | リクエストURL                                | GitHub Releases APIのURL（絶対URL）へリクエストする |
+// | T-01 | リクエストURL                                | 自前API（baseUrl起点の相対パス /release-notes）へリクエストする |
 // | T-02 | 正常応答（200・リリース配列）                | ReleaseModelのリストを返す                          |
 // | T-03 | 正常応答（200・配列でない形状）              | 例外がスローされる                                  |
 // | T-04 | 異常応答（403・レート制限等）                | 例外がスローされる                                  |
@@ -46,10 +46,8 @@ class _CapturingAdapter implements HttpClientAdapter {
 
 void main() {
   group('ReleaseRemoteDataSource.getReleases', () {
-    test('[T-01] リクエストURL_GitHub Releases APIの絶対URLへリクエストする', () async {
+    test('[T-01] リクエストURL_自前APIのbaseUrl起点の相対パスへリクエストする', () async {
       final adapter = _CapturingAdapter();
-      // アプリ本体バックエンド向けのbaseUrlを設定していても、絶対URLが
-      // 優先されることを確認するため、あえて別ホストのbaseUrlを設定する。
       final dio = Dio(BaseOptions(baseUrl: 'https://example.test'))
         ..httpClientAdapter = adapter;
       final dataSource = ReleaseRemoteDataSource(dio: dio);
@@ -58,9 +56,8 @@ void main() {
 
       expect(
         adapter.lastOptions!.uri.toString(),
-        startsWith(kGithubReleasesUrl),
+        'https://example.test/release-notes',
       );
-      expect(adapter.lastOptions!.uri.host, 'api.github.com');
     });
 
     test('[T-02] 正常応答_配列_ReleaseModelのリストを返す', () async {

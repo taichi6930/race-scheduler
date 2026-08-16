@@ -18,6 +18,7 @@ import { PlayerRepository } from '../repository/implement/playerRepository';
 import { PushRequestRepository } from '../repository/implement/pushRequestRepository';
 import { PushSubscriptionRepository } from '../repository/implement/pushSubscriptionRepository';
 import { RaceRepository } from '../repository/implement/raceRepository';
+import { ReleaseNoteRepository } from '../repository/implement/releaseNoteRepository';
 import { UiLayoutRepository } from '../repository/implement/uiLayoutRepository';
 import { WebPushSendRepository } from '../repository/implement/webPushSendRepository';
 import { AnnouncementUsecase } from '../usecase/implement/announcementUsecase';
@@ -30,6 +31,7 @@ import { PlaceUsecase } from '../usecase/implement/placeUsecase';
 import { PlayerUsecase } from '../usecase/implement/playerUsecase';
 import { PushUsecase } from '../usecase/implement/pushUsecase';
 import { RaceUsecase } from '../usecase/implement/raceUsecase';
+import { ReleaseNoteUsecase } from '../usecase/implement/releaseNoteUsecase';
 import { UiLayoutUsecase } from '../usecase/implement/uiLayoutUsecase';
 
 /**
@@ -116,6 +118,14 @@ export const registerApplication = (): void => {
     // 委譲するためrepositoryを持たない）
     container.register(DI_TOKENS.AnnouncementUsecase, {
         useClass: AnnouncementUsecase,
+    });
+
+    // ReleaseNote domain（What's New画面向け更新履歴。release-notes-db移行）
+    container.register(DI_TOKENS.ReleaseNoteRepository, {
+        useClass: ReleaseNoteRepository,
+    });
+    container.register(DI_TOKENS.ReleaseNoteUsecase, {
+        useClass: ReleaseNoteUsecase,
     });
 
     // Calendar domain

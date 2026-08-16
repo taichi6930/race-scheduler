@@ -34,10 +34,12 @@ export const DI_TOKENS = {
     BackfillRepository: 'BackfillRepository',
     FeatureFlagRepository: 'FeatureFlagRepository',
     UiLayoutRepository: 'UiLayoutRepository',
+    ReleaseNoteRepository: 'ReleaseNoteRepository',
     // Usecase
     AnnouncementUsecase: 'AnnouncementUsecase',
     FeatureFlagUsecase: 'FeatureFlagUsecase',
     UiLayoutUsecase: 'UiLayoutUsecase',
+    ReleaseNoteUsecase: 'ReleaseNoteUsecase',
     CalendarUsecase: 'CalendarUsecase',
     PlaceUsecase: 'PlaceUsecase',
     RaceUsecase: 'RaceUsecase',

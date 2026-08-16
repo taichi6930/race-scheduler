@@ -859,4 +859,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          # release_noteテーブルへのdual-write先（本番）。どちらか欠けていればスクリプト側で
+          # スキップする（ベストエフォート、autoRelease.ts参照）。
+          MAIN_API_URL: ${{ vars.MAIN_API_URL }}
+          SERVICE_AUTH_TOKEN: ${{ secrets.SERVICE_AUTH_TOKEN }}
         run: bun scripts/release/autoRelease.ts

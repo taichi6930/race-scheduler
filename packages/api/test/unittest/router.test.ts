@@ -804,6 +804,7 @@ describe('サービス間認証: ルート分類の回帰防止（SECAUTH-08）'
         'GET /health',
         'GET /ui/announcement',
         'GET /ui/race-detail',
+        'GET /release-notes',
         'GET /openapi.json',
         'GET /docs',
         'GET /calendar',
@@ -839,6 +840,7 @@ describe('サービス間認証: ルート分類の回帰防止（SECAUTH-08）'
         'POST /internal/ui-layout/preview',
         'POST /internal/backfill/place',
         'POST /internal/backfill/race',
+        'POST /release-notes',
     ];
 
     it('ルート一覧が想定どおりに分類されていること（免除リスト+保護対象=登録済み全ルート）', () => {
