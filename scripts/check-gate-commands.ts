@@ -27,13 +27,28 @@ const BUN_RUN_PATTERN = /bun run ([a-zA-Z][a-zA-Z0-9:_-]*)/g;
 
 /**
  * 指定ドキュメント群から `bun run <script>` で参照されているスクリプト名の集合を抽出する。
+ *
+ * `.claude/docs/loop-engineering/` はprivateリポジトリ（race-schedule）を指す
+ * シンボリックリンクであり、公開リポジトリ（race-scheduler）のCIでは
+ * サブモジュールを意図的にチェックアウトしないため（プライベートリポジトリの
+ * 認証情報を公開CIに渡さないための設計判断）実体が存在しない。他のツール
+ * （Biomeの`.claude/docs`関連ファイルへの警告）と同様、ファイル不在は
+ * エラーではなくスキップ対象として扱う。
  * @param docFiles - 走査対象の Markdown ファイルパス配列
  * @returns 参照されているスクリプト名の集合（重複除去済み）
  */
 const extractReferencedScripts = (docFiles: string[]): Set<string> => {
     const scripts = new Set<string>();
     for (const file of docFiles) {
-        const content = readFileSync(file, 'utf-8');
+        let content: string;
+        try {
+            content = readFileSync(file, 'utf-8');
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+                continue;
+            }
+            throw error;
+        }
         for (const match of content.matchAll(BUN_RUN_PATTERN)) {
             scripts.add(match[1]);
         }
