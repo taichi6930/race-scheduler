@@ -23,6 +23,10 @@
 # - connect-src/font-src に fonts.gstatic.com が要る: Roboto等のWebフォントを
 #   Google Fonts CDNから直接fetchする（<link>ではなくFlutter Web内部からのfetchのため
 #   style-srcではなくconnect-srcの対象）。
+# - connect-src に api.github.com が要る: 更新履歴画面（WhatsNewScreen）が
+#   GitHub Releases APIを直接fetchする（release_remote_data_source.dart。新規
+#   バックエンドエンドポイントは作らない設計のため）。本CSP策定時（SEC-055）には
+#   この機能が未実装で、追加時にconnect-srcの更新が漏れていた。
 # - script-src に 'unsafe-inline' を含めない: index.html のインラインscript
 #   （起動スプラッシュ除去・push-sw登録）は app-bootstrap.js（同一オリジン）へ切り出し済み。
 # - script-src に 'wasm-unsafe-eval' が要る: CanvasKitのWebAssembly実行に必要
@@ -34,4 +38,4 @@
   Cache-Control: no-cache
   X-Content-Type-Options: nosniff
   Referrer-Policy: no-referrer
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://*.tn-product.workers.dev https://www.gstatic.com https://fonts.gstatic.com; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://*.tn-product.workers.dev https://www.gstatic.com https://fonts.gstatic.com https://api.github.com; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
