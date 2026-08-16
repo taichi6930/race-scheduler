@@ -10,6 +10,7 @@
  * | 3 | -            | フィールドカタログ（7キー）が埋め込まれていること         |
  * | 4 | -            | 使い方の説明・プレビュー用レース選択欄が含まれていること   |
  * | 5 | -            | 未保存離脱ガード（beforeunload・dirtyトラッキング）が含まれていること（QADM-05） |
+ * | 6 | -            | エラー領域のrole="alert"・タイムアウト付きfetchが含まれていること（QADM-03/QADM-08） |
  *
  * ## カバレッジ目標: 行・分岐カバレッジ 100%
  */
@@ -68,5 +69,24 @@ describe('admin/controller/renderRaceDetailLayoutPage', () => {
         expect(html).toContain("tbodyEl.addEventListener('change', markDirty)");
         expect(html).toContain("tbodyEl.addEventListener('input', markDirty)");
         expect(html).toContain('dirty = false;');
+    });
+
+    it('6: エラー領域のrole="alert"・タイムアウト付きfetchが含まれていること', () => {
+        const html = renderRaceDetailLayoutPage(false);
+
+        expect(html).toContain(
+            '<p id="error" class="error" role="alert" hidden></p>',
+        );
+        expect(html).toContain(
+            '<p id="preview-error" class="error" role="alert" hidden></p>',
+        );
+        expect(html).toContain('function fetchWithTimeout(path, options)');
+        expect(html).toContain(
+            "fetchWithTimeout('/race-detail-layout/api/races')",
+        );
+        expect(html).toContain(
+            "fetchWithTimeout('/race-detail-layout/api/preview'",
+        );
+        expect(html).toContain("fetchWithTimeout('/race-detail-layout/api', {");
     });
 });
