@@ -1,0 +1,256 @@
+name: Dependabot Automation
+
+on:
+  pull_request_target:
+    branches:
+      - main
+  workflow_run:
+    workflows: ["Dependabot Lockfile Check"]
+    types: [completed]
+
+## トップレベルは最小権限（contents: read）に絞り、書き込みが必要なジョブは
+## ジョブ単位で明示的に取得する（SEC-052対応）。
+## `repository-projects: write` は両ジョブいずれからも未使用のため削除した
+## （projects関連のgh/API呼び出しが本ファイルに存在しないことを確認済み）。
+permissions:
+  contents: read
+
+jobs:
+  # dependabotのnpmエコシステム更新がpackage.jsonのバージョンのみを書き換え、
+  # bun.lockを追従させないため（bun.lockはnpmエコシステムのアップデータが未対応/
+  # 不完全対応）、全てのnpm系dependabot PRが`bun install --frozen-lockfile`の
+  # 不整合検知（`error: lockfile had changes, but lockfile is frozen`）で
+  # 恒常的にCI赤になっていた。
+  #
+  # bun.lockの再生成そのものは非特権ワークフロー
+  # （dependabot-lockfile-check.yml、pull_requestトリガー・contents:readのみ・
+  # secretsアクセス無し）で行い、dependabotのPRブランチ内容をそちらでcheckoutする。
+  # このジョブ（pull_request_target/workflow_runの特権コンテキスト、contents:write
+  # やsecretsを保持）はPRブランチの内容を一切checkoutせず、workflow_run経由で
+  # artifact（再生成後のbun.lockそのもの）だけを受け取り、GitHub Contents API
+  # 経由でPRブランチへ書き込む。この分離により「特権コンテキストでの未信頼コード
+  # checkout」（CodeQL: Checkout of untrusted code in a privileged context、
+  # いわゆるpwn request）を構造的に回避する（権限最小化や--ignore-scriptsだけの
+  # 対症療法では、checkoutの存在自体を検出するCodeQLのルールは解消できなかった）。
+  # dependabotのPR作成者判定はcheck-lockfile側（PRの作成者ベース）で行っており、
+  # artifactが存在する（=check-lockfileが差分ありと判断した）こと自体が
+  # dependabot PRである十分な根拠になる。workflow_run.actorはこのワークフロー実行
+  # を引き起こした操作の実行者であり、必ずしもdependabotとは限らない（例:
+  # リポジトリオーナーがGitHub UIの「Update branch」でPRブランチにmainを取り込む
+  # と、actorはオーナー自身になり誤って弾かれる）ため、ここでは判定に使わない。
+  fix-lockfile:
+    if: |
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      actions: read
+    concurrency:
+      group: ${{ github.workflow }}-fix-lockfile-${{ github.event.workflow_run.id }}
+      cancel-in-progress: true
+    steps:
+      - name: Download bun.lock artifact
+        id: download
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: bun-lock-fix
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: artifact
+
+      # artifactはbun.lock自体に差分がある場合のみアップロードされるため、
+      # 存在しない（=差分なし）場合はここで何もせず正常終了する。
+      #
+      # base64化したbun.lockの内容（数十KB）をシェル変数経由で`-f content=...`の
+      # コマンドライン引数として渡すと、Linuxの単一引数長制限（MAX_ARG_STRLEN、
+      # 既定128KB）に抵触し `gh: Argument list too long`（exit 126）で失敗する
+      # （実際にPR #2172/#2173で発生）。jqの`--rawfile`でファイルから直接読み込み、
+      # 生成したJSONをgh apiへstdin経由（--input -）で渡すことで引数長制限を回避する。
+      - name: Push updated bun.lock via Contents API
+        if: steps.download.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -o pipefail
+          pr_number="$(cat artifact/pr_number.txt)"
+          branch="$(gh pr view "$pr_number" --repo "$REPO" --json headRefName --jq .headRefName)"
+          current_sha="$(gh api "repos/$REPO/contents/bun.lock?ref=$branch" --jq .sha)"
+          base64 -w0 artifact/bun.lock > artifact/bun.lock.b64
+          jq -n \
+            --arg message "chore: bun.lockをdependabotの依存更新へ追従させる" \
+            --rawfile content artifact/bun.lock.b64 \
+            --arg sha "$current_sha" \
+            --arg branch "$branch" \
+            '{message: $message, content: $content, sha: $sha, branch: $branch}' \
+            | gh api --method PUT "repos/$REPO/contents/bun.lock" --input -
+
+  # SEC-025対応: dependabotジョブの自動マージ有効化（`gh pr merge --auto`）は
+  # 依存の脆弱性を一切見ずに実行されていた。dependabot-lockfile-check.yml（非特権、
+  # PRブランチをcheckoutできる）が実行したbun audit（DEP-020のallowlist適用済み）の
+  # 結果をartifact経由で受け取り、脆弱性を検出していた場合は自動マージを無効化する。
+  # fix-lockfileと同じworkflow_runトリガー・artifact受け渡し設計を踏襲し、
+  # 特権コンテキストでの未信頼コードcheckoutを避ける。
+  enforce-audit-gate:
+    # CodeQL (Artifact poisoning) 対応: workflow_run トリガーでダウンロードする
+    # artifact は、生成元のワークフロー実行がフォークのブランチ由来だと外部ユーザーの
+    # 制御下になりうる（GitHubの標準的な緩和策）。dependabot-lockfile-check.yml は
+    # フォークではなく本リポジトリ内のブランチでのみ動く想定だが、head_repository が
+    # 本リポジトリと一致することを明示的に確認してからのみ実行する。
+    if: |
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    concurrency:
+      group: ${{ github.workflow }}-audit-gate-${{ github.event.workflow_run.id }}
+      cancel-in-progress: true
+    steps:
+      - name: Download audit result artifact
+        id: download
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: dependabot-audit-result
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: artifact
+
+      - name: Disable auto-merge if a vulnerability was detected
+        if: steps.download.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        # CodeQL (Artifact poisoning) 対応: artifact の中身（pr_number.txt）は
+        # workflow_run 経由で受け渡されるため、内容の真正性をこのジョブ単体では
+        # 検証できない。fix-lockfileと同じ設計だが、こちらは「任意のPRに対して
+        # gh pr merge --disable-auto / gh pr comment を実行する」ため、万一
+        # artifactの中身が細工されていた場合の影響がより大きい。PR番号を使う前に
+        # 実際の作成者がdependabot[bot]であることを検証し、check-lockfileジョブの
+        # 実行条件（`github.event.pull_request.user.login == 'dependabot[bot]'`）と
+        # 同じ信頼境界を再確認することで、artifactの中身が細工されていても
+        # dependabot以外のPRには一切作用しないようにする。
+        run: |
+          set -o pipefail
+          result="$(cat artifact/audit_result.txt)"
+          if [ "$result" != "failure" ]; then
+            exit 0
+          fi
+          pr_number="$(cat artifact/pr_number.txt)"
+          if ! [[ "$pr_number" =~ ^[0-9]+$ ]]; then
+            echo "::warning::pr_number.txt is not a valid PR number, skipping"
+            exit 0
+          fi
+          pr_info="$(gh pr view "$pr_number" --repo "$REPO" --json url,author)"
+          pr_author="$(echo "$pr_info" | jq -r '.author.login')"
+          if [ "$pr_author" != "dependabot[bot]" ]; then
+            echo "::warning::PR #$pr_number is not authored by dependabot[bot] (actual: $pr_author), skipping"
+            exit 0
+          fi
+          pr_url="$(echo "$pr_info" | jq -r '.url')"
+          gh pr merge --disable-auto "$pr_url" || true
+          gh pr comment "$pr_url" --body "⚠️ **依存関係の脆弱性監査（\`bun audit --audit-level moderate\`）で検出あり** - 自動マージを無効化しました。内容を確認し、対応不要と判断できる場合は \`docs/security/audit-allowlist.json\` に理由付きで登録してから再度自動マージを有効化するか、対応後に手動でマージしてください（SEC-025）。"
+
+  dependabot:
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'pull_request_target' && github.actor == 'dependabot[bot]'
+    timeout-minutes: 5
+    # `gh pr merge`（contents: write が必要）・`gh pr review`/`gh pr merge`（pull-requests:
+    # write）・`gh pr edit --add-label`/`gh pr comment`（issues: write）を行うため必要。
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Fetch Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          skip-commit-verification: true
+
+      - name: Approve PR
+        run: gh pr review --approve "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Add dependabot label
+        run: gh pr edit "$PR_URL" --add-label "dependabot"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Add security label for security updates
+        if: steps.metadata.outputs.update-type == 'version-update:semver-patch' && steps.metadata.outputs.security-updates-only == 'true'
+        run: gh pr edit "$PR_URL" --add-label "security"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Enable auto-merge for Security Updates
+        if: |
+          steps.metadata.outputs.dependency-type == 'direct:development' &&
+          steps.metadata.outputs.security-updates-only == 'true'
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Enable auto-merge for patch updates
+        if: |
+          steps.metadata.outputs.update-type == 'version-update:semver-patch' &&
+          steps.metadata.outputs.security-updates-only != 'true'
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Enable auto-merge for minor updates (dev dependencies only)
+        if: |
+          steps.metadata.outputs.update-type == 'version-update:semver-minor' &&
+          steps.metadata.outputs.dependency-type == 'indirect:dependabot'
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Enable auto-merge for specific major updates (google libraries)
+        if: |
+          steps.metadata.outputs.update-type == 'version-update:semver-major' &&
+          contains(steps.metadata.outputs.dependency-names, 'googleapis')
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # github-actionsエコシステムはdependabot.ymlでgroups.github-actions.patterns: ["*"]
+      # によりpatch/minor/majorを分けず1グループにまとめているため、fetch-metadataの
+      # update-typeでの判定は使えない（グループ化更新では単一のupdate-typeに定まらない）。
+      # 代わりにdependabot.ymlのcommit-message.prefix（自前定義で確実）で判定する。
+      # Actionsの更新は影響範囲がCI/CD自体に限定され、CI通過が実質的な安全確認になるため
+      # patch/minor/majorを問わず自動マージ対象とする。
+      - name: Enable auto-merge for github-actions ecosystem updates
+        if: startsWith(github.event.pull_request.title, 'chore(deps-actions):')
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Comment on major update PRs (manual review required)
+        if: |
+          steps.metadata.outputs.update-type == 'version-update:semver-major' &&
+          !contains(steps.metadata.outputs.dependency-names, 'googleapis') &&
+          steps.metadata.outputs.dependency-type == 'direct:dependabot' &&
+          !startsWith(github.event.pull_request.title, 'chore(deps-actions):')
+        run: |
+          gh pr comment "$PR_URL" --body "⚠️ **Major version update detected** - Manual review required before merge."
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

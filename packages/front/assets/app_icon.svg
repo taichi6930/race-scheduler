@@ -1,0 +1,118 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"
+     shape-rendering="geometricPrecision" text-rendering="optimizeLegibility">
+  <defs>
+    <!-- 外側円のクリップ -->
+    <clipPath id="clip-outer">
+      <circle cx="256" cy="256" r="248"/>
+    </clipPath>
+    <!-- 中央円のクリップ -->
+    <clipPath id="clip-inner">
+      <circle cx="256" cy="256" r="110"/>
+    </clipPath>
+    <!-- チェッカーフラッグ模様 (20×20 = 10×10 × 2×2) -->
+    <pattern id="checker" x="212" y="208" width="20" height="20" patternUnits="userSpaceOnUse">
+      <rect width="10" height="10" fill="#1B2631"/>
+      <rect x="10" width="10" height="10" fill="#D5D8DC"/>
+      <rect y="10" width="10" height="10" fill="#D5D8DC"/>
+      <rect x="10" y="10" width="10" height="10" fill="#1B2631"/>
+    </pattern>
+  </defs>
+
+  <!-- ══ 金色の外リング ══ -->
+  <circle cx="256" cy="256" r="256" fill="#F4D03F"/>
+
+  <!-- ══ ダークネイビー背景 ══ -->
+  <circle cx="256" cy="256" r="248" fill="#1B2631"/>
+
+  <!-- ══ 4分割カラーセクター ══ -->
+  <!-- 左上: 競馬 (クリムゾンレッド) -->
+  <path d="M256,256 L8,256 A248,248 0 0,1 256,8 Z"    fill="#A93226" clip-path="url(#clip-outer)"/>
+  <!-- 右上: 競輪 (ディープブルー) -->
+  <path d="M256,256 L256,8 A248,248 0 0,1 504,256 Z"   fill="#1A5276" clip-path="url(#clip-outer)"/>
+  <!-- 右下: オートレース (バーントオレンジ) -->
+  <path d="M256,256 L504,256 A248,248 0 0,1 256,504 Z"  fill="#CA6F1E" clip-path="url(#clip-outer)"/>
+  <!-- 左下: ボートレース (ダークティール) -->
+  <path d="M256,256 L256,504 A248,248 0 0,1 8,256 Z"   fill="#117A65" clip-path="url(#clip-outer)"/>
+
+  <!-- ══ 分割線 (十字) ══ -->
+  <line x1="256" y1="8"   x2="256" y2="504" stroke="rgba(255,255,255,0.40)" stroke-width="4"/>
+  <line x1="8"   y1="256" x2="504" y2="256" stroke="rgba(255,255,255,0.40)" stroke-width="4"/>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!--  競技アイコン                               -->
+  <!-- ══════════════════════════════════════════ -->
+
+  <!-- ▌左上: 競馬 — 馬の頭部+首シルエット (右向き・長い鼻・三角耳) ▌-->
+  <path d="
+    M 120,108
+    C 120,102 124,97 130,95
+    L 136,95
+    L 145,80
+    L 154,95
+    C 160,98 168,104 177,112
+    L 192,118
+    C 195,121 196,126 194,130
+    C 192,136 186,141 179,144
+    C 170,147 160,148 150,148
+    C 142,148 136,152 132,158
+    C 128,164 126,170 126,178
+    L 112,178
+    C 110,168 110,156 114,144
+    C 117,132 119,120 120,108
+    Z" fill="white"/>
+  <!-- 目 -->
+  <circle cx="162" cy="112" r="5" fill="#1B2631"/>
+  <!-- 鼻孔 -->
+  <circle cx="186" cy="127" r="3.5" fill="#1B2631"/>
+
+  <!-- ▌右上: 競輪 — 自転車ホイール (wheel) ▌-->
+  <!-- 中心 (365,140), r=48 -->
+  <circle cx="365" cy="140" r="48" fill="none" stroke="white" stroke-width="5.5"/>
+  <circle cx="365" cy="140" r="9"  fill="white"/>
+  <!-- 8本スポーク -->
+  <line x1="365" y1="140" x2="365" y2="92"  stroke="white" stroke-width="3.5"/>
+  <line x1="365" y1="140" x2="399" y2="106" stroke="white" stroke-width="3.5"/>
+  <line x1="365" y1="140" x2="413" y2="140" stroke="white" stroke-width="3.5"/>
+  <line x1="365" y1="140" x2="399" y2="174" stroke="white" stroke-width="3.5"/>
+  <line x1="365" y1="140" x2="365" y2="188" stroke="white" stroke-width="3.5"/>
+  <line x1="365" y1="140" x2="331" y2="174" stroke="white" stroke-width="3.5"/>
+  <line x1="365" y1="140" x2="317" y2="140" stroke="white" stroke-width="3.5"/>
+  <line x1="365" y1="140" x2="331" y2="106" stroke="white" stroke-width="3.5"/>
+
+  <!-- ▌左下: ボートレース — ボート船体 + 波 ▌-->
+  <!-- 船体 (三角形、先端 148,320) -->
+  <path d="M110,356 L148,320 L186,356 L176,366 L120,366 Z" fill="white"/>
+  <!-- 波 -->
+  <path d="M106,382 Q127,362 148,382 Q169,402 190,382"
+        stroke="white" stroke-width="5.5" fill="none" stroke-linecap="round"/>
+
+  <!-- ▌右下: オートレース — スピードメーター ▌-->
+  <!-- ゲージ弧: 中心 (375,375), r=50, 上半円 (反時計回り) -->
+  <path d="M325,375 A50,50 0 0,0 425,375"
+        stroke="white" stroke-width="5.5" fill="none" stroke-linecap="round"/>
+  <!-- 目盛り5本 (外r=50 → 内r=40) -->
+  <line x1="325" y1="375" x2="335" y2="375" stroke="white" stroke-width="3"/>  <!-- 180° 左 -->
+  <line x1="340" y1="340" x2="347" y2="347" stroke="white" stroke-width="3"/>  <!-- 135° 左上 -->
+  <line x1="375" y1="325" x2="375" y2="335" stroke="white" stroke-width="3"/>  <!-- 90°  上 -->
+  <line x1="410" y1="340" x2="403" y2="347" stroke="white" stroke-width="3"/>  <!-- 45°  右上 -->
+  <line x1="425" y1="375" x2="415" y2="375" stroke="white" stroke-width="3"/>  <!-- 0°   右 -->
+  <!-- 針 (約60°、高速寄り) -->
+  <line x1="375" y1="375" x2="395" y2="341"
+        stroke="white" stroke-width="5.5" stroke-linecap="round"/>
+  <circle cx="375" cy="375" r="7.5" fill="white"/>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!--  中央円 — チェッカーフラッグ (日程を表現)   -->
+  <!-- ══════════════════════════════════════════ -->
+  <circle cx="256" cy="256" r="110" fill="white"/>
+
+  <!-- ポール -->
+  <line x1="210" y1="208" x2="210" y2="308"
+        stroke="#1B2631" stroke-width="5.5" stroke-linecap="round"/>
+  <!-- フラッグ生地 (100×60, 内側クリップ) -->
+  <rect x="212" y="208" width="100" height="60"
+        fill="url(#checker)" clip-path="url(#clip-inner)"/>
+
+  <!-- 中央円の金色リング -->
+  <circle cx="256" cy="256" r="110" fill="none" stroke="#F4D03F" stroke-width="5"/>
+</svg>

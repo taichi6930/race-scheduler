@@ -1,0 +1,862 @@
+name: Deploy
+
+## トップレベルは最小権限（contents: read）に絞り、issues/pull-requests書き込みが必要な
+## ジョブ（remove-label, deploy-front, post-merge-verify）だけがジョブ単位で明示的に
+## 追加取得する（SEC-052対応）。新規ジョブを足したときに既定で書き込み権限を持たない
+## fail-safeな構成にする狙い。
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ "v*" ]
+    paths:
+      - "packages/admin/**"
+      - "packages/api/**"
+      - "packages/db/**"
+      - "packages/front/**"
+      # core は admin/api/batch 全てが @race-schedule/core に依存しており
+      # （packages/*/package.jsonのdependencies参照）、core単体の変更もビルド成果物に
+      # 反映されるため、他パッケージと同様にトリガー対象へ含める必要がある。
+      - "packages/core/**"
+      - "packages/batch/**"
+      # テストファイルのみの変更はビルド成果物に影響せずデプロイ不要なため対象から除外する
+      # （テスト規約 §2 の配置ルールに従い packages/<pkg>/test/** 配下に統一されている）。
+      # GitHub Actionsのpaths判定は「最後にマッチしたパターンが正か負か」で決まるため、
+      # この除外パターンは対象となる正パターン（上記の各packages/**）より後に置く必要がある。
+      - "!packages/*/test/**"
+      # ドキュメントのみの変更（README/SETUP/ARCHITECTURE等）もビルド成果物に影響しない
+      # ため対象から除外する（pull_request.yml の detect-changed-packages が
+      # `!packages/xxx/**/*.md` で行っている除外と同じ方針）。
+      - "!packages/*/**/*.md"
+      # 開発用スクリプト（api の scripts/、db の script/）はwranglerの
+      # デプロイ対象（main = "src/index.ts"）からもsrcコードからも参照されない
+      # ため対象から除外する。
+      - "!packages/*/scripts/**"
+      - "!packages/db/script/**"
+      - ".github/workflows/deploy*.yml"
+      # determine-targets ジョブの diff 検知（route step）が参照する共有Actionの変更。
+      # ここに無いとdetermine-targets内の「shared_changed」判定に到達する前に
+      # ワークフロー自体がトリガーされず、検知漏れになる。
+      - ".github/actions/deploy-cloudflare-workers/**"
+      - ".github/actions/validate-cf-secrets/**"
+      - ".github/actions/setup-workspace/**"
+      - ".github/actions/setup-deploy-env/**"
+      - ".github/actions/create-github-app-token/**"
+  pull_request:
+    types: [ labeled ]
+    paths:
+      - "packages/admin/**"
+      - "packages/api/**"
+      - "packages/db/**"
+      - "packages/front/**"
+      - "packages/core/**"
+      - "packages/batch/**"
+      - ".github/workflows/deploy*.yml"
+      - ".github/workflows/pull_request.yml"
+      - ".github/actions/deploy-cloudflare-workers/**"
+      - ".github/actions/validate-cf-secrets/**"
+      - ".github/actions/setup-workspace/**"
+      - ".github/actions/setup-deploy-env/**"
+      - ".github/actions/create-github-app-token/**"
+  issues:
+    types: [ labeled ]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Deploy target"
+        type: choice
+        options: [ "all", "admin", "api", "db", "batch", "front" ]
+        default: "all"
+      environment:
+        description: "Environment"
+        type: choice
+        options: [ "development", "test", "production" ]
+        default: "test"
+
+jobs:
+  determine-targets:
+    # CICD-118/119対応（2026-08-01）: `on.issues.types: [labeled]`にはpathsフィルタが
+    # 無く、リポジトリの全Issueへの全ラベル付与でこのジョブが起動していた（CICD-118）。
+    # `on.pull_request.types: [labeled]`にはpathsフィルタがあるため対象PRは絞られるが、
+    # そのPR内では依然デプロイと無関係なラベル（lint:fix等）でも同じく無条件起動して
+    # いた（CICD-119）。ラベル判定自体（下記case文）は元々「未知のラベルは何もしない」
+    # 安全設計だったため、判定ロジックは一切変えずに、既知のデプロイ用ラベルでない
+    # issues/pull_requestイベントだけを早期スキップする。
+    if: |
+      (github.event_name != 'issues' && github.event_name != 'pull_request') ||
+      contains(fromJson('["development-deploy","deploy-development","deploy-db-development","deploy-batch-development","deploy-front-development"]'), github.event.label.name)
+    runs-on: ubuntu-24.04
+    # 差分の基準タグを「Deploy が成功した最新のタグ」にするため、route ステップが
+    # gh api で過去の Deploy 実行結果を参照する（actions: read が必要）。
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      environment: ${{ steps.route.outputs.environment }}
+      deploy-admin: ${{ steps.route.outputs.deploy-admin }}
+      deploy-api: ${{ steps.route.outputs.deploy-api }}
+      deploy-db: ${{ steps.route.outputs.deploy-db }}
+      deploy-batch: ${{ steps.route.outputs.deploy-batch }}
+      deploy-front: ${{ steps.route.outputs.deploy-front }}
+      label-to-remove: ${{ steps.route.outputs.label-to-remove }}
+    steps:
+      # 元 validate-env-config ジョブ（同じif条件・needsなしで別ジョブに分かれていた
+      # ため、GitHub Actionsのジョブ単位最低1分課金が二重にかかっていた。secrets/vars
+      # のechoのみでファイル参照が無いためcheckout不要、このジョブの最初のステップとして
+      # 統合する）。
+      - name: Check GitHub Secrets
+        run: |
+          echo "=== GitHub Secrets Status ==="
+
+          required_secrets=(
+            "CLOUDFLARE_WORKERS_API_TOKEN"
+            "CLOUDFLARE_PAGES_API_TOKEN"
+            "CLOUDFLARE_D1_API_TOKEN"
+            "CLOUDFLARE_ACCOUNT_ID"
+            "DB_ID"
+            "PERSONAL_ACCESS_TOKEN"
+          )
+
+          for secret in "${required_secrets[@]}"; do
+            if [ -n "${!secret}" ]; then
+              echo "✅ $secret: SET"
+            else
+              echo "❌ $secret: NOT SET"
+            fi
+          done
+        env:
+          CLOUDFLARE_WORKERS_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+          CLOUDFLARE_PAGES_API_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_API_TOKEN }}
+          CLOUDFLARE_D1_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DB_ID: ${{ secrets.DB_ID }}
+          PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+
+      - name: Check GitHub Variables
+        run: |
+          echo "=== GitHub Variables Status ==="
+
+          required_vars=(
+            "MAIN_API_URL"
+            "CORS_ALLOWED_ORIGINS"
+          )
+
+          for var in "${required_vars[@]}"; do
+            if [ -n "${!var}" ]; then
+              echo "✅ $var: SET"
+            else
+              echo "⚠️  $var: NOT SET"
+            fi
+          done
+        env:
+          MAIN_API_URL: ${{ vars.MAIN_API_URL }}
+          CORS_ALLOWED_ORIGINS: ${{ vars.CORS_ALLOWED_ORIGINS }}
+
+      - name: Check Environment-Specific Secrets
+        run: |
+          echo "=== Environment-Specific Secrets (development) ==="
+
+          if [ -n "${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}" ]; then
+            echo "✅ CLOUDFLARE_WORKERS_API_TOKEN available"
+          else
+            echo "❌ CLOUDFLARE_WORKERS_API_TOKEN not available"
+          fi
+
+          if [ -n "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" ]; then
+            echo "✅ CLOUDFLARE_ACCOUNT_ID available"
+          else
+            echo "❌ CLOUDFLARE_ACCOUNT_ID not available"
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Determine deploy targets
+        id: route
+        # SEC-040対応: ラベル名・refはPR/Issueに書き込み権限を持つ第三者が制御できる値のため、
+        # `run:` のスクリプト本文へ直接展開すると（例: ラベル名に `$(...)` やバッククォートを
+        # 含めることで）任意コマンド実行を許してしまう。env: 経由でシェル変数に渡すことで、
+        # 値は常にデータとして扱われテンプレート展開時にスクリプトへ埋め込まれない。
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          LABEL_NAME: ${{ github.event.label.name }}
+          REF_NAME: ${{ github.ref }}
+          # find_last_deployed_tag が gh api を使うために必要
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          EVENT="$EVENT_NAME"
+          LABEL="$LABEL_NAME"
+          REF="$REF_NAME"
+
+          environment=""
+          deploy_admin="false"
+          deploy_api="false"
+          deploy_db="false"
+          deploy_batch="false"
+          deploy_front="false"
+          label_to_remove=""
+
+          # push（main / タグ）向けの差分ベース判定。CHANGED_FILES（改行区切りの
+          # 変更ファイル一覧）を受け取り、deploy_* を必要なものだけ true にする。
+          # - packages/core は api/batch 全てが
+          #   @race-schedule/core に依存する（package.jsonのdependencies参照）ため、
+          #   core の変更を2パッケージへ伝播させる（front/dbは非依存なので伝播しない）。
+          #   pull_request.yml の detect-changed-packages ジョブと同じ伝播方針。
+          # - デプロイの実装詳細を持つ共有ファイル（deploy.yml自身、各Workerの
+          #   デプロイに使う共有Action）の変更は、影響範囲を個別パッケージの
+          #   diffだけから特定できないため安全側に倒して全サービスを対象にする。
+          # - サービス専用のreusableワークフロー（deploy-api-reusable.yml等）の
+          #   変更は、そのサービスのみを対象にする。
+          detect_targets_from_diff() {
+            local changed="$1"
+
+            if echo "$changed" | grep -qE '^(\.github/workflows/deploy\.yml|\.github/actions/(deploy-cloudflare-workers|validate-cf-secrets|setup-workspace)/)'; then
+              deploy_admin="true"
+              deploy_api="true"
+              deploy_db="true"
+              deploy_batch="true"
+              deploy_front="true"
+              return
+            fi
+
+            # 以下はビルド成果物に影響せずデプロイ不要なため、パッケージ判定の対象から除外する:
+            #   - テストファイル（テスト規約 §2 の配置ルールに従い packages/<pkg>/test/** 配下）
+            #   - ドキュメント（README/SETUP/ARCHITECTURE等、拡張子.md）
+            #   - 開発用スクリプト（apiのscripts/、dbのscript/。wranglerの
+            #     デプロイ対象 main = "src/index.ts" からもsrcコードからも参照されない）
+            local changed_non_test
+            changed_non_test=$(echo "$changed" | grep -vE '^packages/[^/]+/test/|^packages/[^/]+/scripts?/|\.md$')
+
+            local core_changed="false"
+            if echo "$changed_non_test" | grep -q '^packages/core/'; then
+              core_changed="true"
+            fi
+
+            if [ "$core_changed" = "true" ] || echo "$changed_non_test" | grep -qE '^(packages/admin/|\.github/workflows/deploy-admin-reusable\.yml$)'; then
+              deploy_admin="true"
+            fi
+            if [ "$core_changed" = "true" ] || echo "$changed_non_test" | grep -qE '^(packages/api/|\.github/workflows/deploy-api-reusable\.yml$)'; then
+              deploy_api="true"
+            fi
+            if [ "$core_changed" = "true" ] || echo "$changed_non_test" | grep -qE '^(packages/batch/|\.github/workflows/deploy-batch-reusable\.yml$)'; then
+              deploy_batch="true"
+            fi
+            if echo "$changed_non_test" | grep -qE '^(packages/front/|\.github/workflows/deploy-front-reusable\.yml$)'; then
+              deploy_front="true"
+            fi
+            if echo "$changed_non_test" | grep -qE '^(packages/db/|\.github/workflows/deploy-db-reusable\.yml$)'; then
+              deploy_db="true"
+            fi
+          }
+
+          if [[ "$EVENT" == "push" && "$REF" == refs/tags/v* ]]; then
+            # タグ push → production
+            environment="production"
+
+            # 比較対象タグ間の差分から必要なサービスだけをデプロイする。
+            #
+            # 基準は「直前のタグ」ではなく「Deploy が成功した最新のタグ」にする。
+            # 直前のタグを基準にすると、そのタグのデプロイが失敗していた場合に
+            # そのタグで入った変更が次のリリースの差分に含まれず、永久に本番へ
+            # 出ないまま取り残される（2026-08-14: v1.55.3 のデプロイが
+            # pre-release-verify のタイムアウトで失敗し、PR #2500 の
+            # packages/batch の変更が v1.55.4 で skip され本番未反映になった）。
+            #
+            # 「成功したタグ」を基準にすれば、そのタグ以降の全変更が必ず差分に
+            # 含まれる（成功したタグ自身も同じ規則で基準を選んでいるため、
+            # 帰納的に取りこぼしが生じない）。
+            find_last_deployed_tag() {
+              local tag conclusion
+              # 自分自身（sed 1p）を除いた新しい順に、最大20件まで遡る
+              for tag in $(git tag --sort=-v:refname | grep -v -- "-draft\." | sed -n '2,21p'); do
+                conclusion=$(gh api \
+                  "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy.yml/runs?event=push&branch=${tag}&per_page=1" \
+                  --jq '.workflow_runs[0].conclusion' 2>/dev/null || echo "")
+                if [ "$conclusion" = "success" ]; then
+                  echo "$tag"
+                  return 0
+                fi
+              done
+              return 1
+            }
+
+            PREV_TAG=$(find_last_deployed_tag || echo "")
+            if [ -z "$PREV_TAG" ]; then
+              # 初回リリース、またはデプロイ成功タグを特定できなかった（API不通等）。
+              # 差分検知の根拠が無いため、取りこぼしを避けて全サービスを対象にする。
+              echo "::notice::デプロイ成功済みのタグを特定できなかったため、全サービスをデプロイ対象にします"
+              deploy_admin="true"
+              deploy_api="true"
+              deploy_db="true"
+              deploy_batch="true"
+              deploy_front="true"
+            else
+              echo "::notice::差分の基準タグ: ${PREV_TAG}"
+              CHANGED_FILES=$(git diff --name-only "$PREV_TAG" HEAD)
+              detect_targets_from_diff "$CHANGED_FILES"
+            fi
+
+          elif [[ "$EVENT" == "push" && "$REF" == "refs/heads/main" ]]; then
+            # main push → test
+            environment="test"
+
+            # 直前コミットとの差分から必要なサービスだけをデプロイする
+            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+            detect_targets_from_diff "$CHANGED_FILES"
+
+          elif [[ "$EVENT" == "pull_request" ]]; then
+            # PR イベント: ラベルに応じてデプロイ
+            if [[ -n "$LABEL" ]]; then
+              label_to_remove="$LABEL"
+              # production 系ラベル（deploy-production / deploy-*-prod）は廃止済み。
+              # production への経路はタグpush（`auto-release`ジョブによるpatch/minorの
+              # 自動タグ作成、またはmajor時の人間による手動タグ作成・Release公開）と
+              # workflow_dispatchの明示選択のみに一本化し、マージ前のアドホック
+              # 本番デプロイ経路を無くした（FR-02）。
+              #
+              # deploy-test /
+              # deploy-db-test / deploy-batch-test / deploy-front-test も廃止済み。
+              # test環境へ触れる経路は「mainマージ（自動デプロイ）」と
+              # 「workflow_dispatchの明示選択」の2つに一本化した。
+              # 理由:
+              #   - api: pre-release-verify / post-merge-verify の
+              #     UAT smoke（tests/uat/smoke/）がtest環境の実URLに直接アクセスして
+              #     「test環境 = 常にmainの最新状態」を前提に検証している。マージ前の
+              #     PRブランチでtest環境を上書きできると、その前提が崩れる
+              #   - db: UAT smokeの対象外だが、マイグレーションはコードの再デプロイと
+              #     違って次のmainマージで自動的に上書き・修復されるものではない。
+              #     後方互換性のないマイグレーションを試し打ちすると、test環境のD1が
+              #     壊れた状態のまま残り続ける恐れがあり、コードの労働以上にリスクが高い
+              #   - batch/front: UAT smokeの対象外で直接的なリスクは低いが、マージすれば
+              #     自動反映されるため、事前確認したい場合はworkflow_dispatchで足りる
+              case "$LABEL" in
+                development-deploy)
+                  environment="development"
+                  deploy_api="true"
+                  deploy_batch="true"
+                  deploy_front="true"
+                  ;;
+                deploy-development)
+                  environment="development"
+                  deploy_api="true"
+                  ;;
+                deploy-db-development)
+                  environment="development"
+                  deploy_db="true"
+                  ;;
+                deploy-batch-development)
+                  environment="development"
+                  deploy_batch="true"
+                  ;;
+                deploy-front-development)
+                  environment="development"
+                  deploy_front="true"
+                  ;;
+              esac
+            fi
+
+          elif [[ "$EVENT" == "issues" ]]; then
+            # Issue ラベルイベント
+            label_to_remove="$LABEL"
+
+            # production 系ラベル（deploy-production / deploy-*-prod）は廃止済み（FR-02）。
+            # deploy-test /
+            # deploy-db-test / deploy-batch-test / deploy-front-test も廃止済み
+            # （理由は上の pull_request ブロックのコメント参照）。
+            case "$LABEL" in
+              development-deploy)
+                environment="development"
+                deploy_api="true"
+                deploy_batch="true"
+                deploy_front="true"
+                ;;
+              deploy-development)
+                environment="development"
+                deploy_api="true"
+                ;;
+              deploy-db-development)
+                environment="development"
+                deploy_db="true"
+                ;;
+              deploy-batch-development)
+                environment="development"
+                deploy_batch="true"
+                ;;
+              deploy-front-development)
+                environment="development"
+                deploy_front="true"
+                ;;
+              *)
+                echo "Unknown label: $LABEL, skipping"
+                ;;
+            esac
+
+          elif [[ "$EVENT" == "workflow_dispatch" ]]; then
+            environment="${{ inputs.environment }}"
+            target="${{ inputs.target }}"
+
+            case "$target" in
+              all)
+                deploy_admin="true"
+                deploy_api="true"
+                deploy_db="true"
+                deploy_batch="true"
+                ;;
+              admin)
+                deploy_admin="true"
+                ;;
+              api)
+                deploy_api="true"
+                ;;
+              db)
+                deploy_db="true"
+                ;;
+              batch)
+                deploy_batch="true"
+                ;;
+              front)
+                deploy_front="true"
+                ;;
+            esac
+          fi
+
+          echo "environment=$environment" >> $GITHUB_OUTPUT
+          echo "deploy-admin=$deploy_admin" >> $GITHUB_OUTPUT
+          echo "deploy-api=$deploy_api" >> $GITHUB_OUTPUT
+          echo "deploy-db=$deploy_db" >> $GITHUB_OUTPUT
+          echo "deploy-batch=$deploy_batch" >> $GITHUB_OUTPUT
+          echo "deploy-front=$deploy_front" >> $GITHUB_OUTPUT
+          echo "label-to-remove=$label_to_remove" >> $GITHUB_OUTPUT
+
+          echo "=== Deploy Targets ==="
+          echo "Environment: $environment"
+          echo "Admin: $deploy_admin"
+          echo "API: $deploy_api"
+          echo "DB: $deploy_db"
+          echo "Batch: $deploy_batch"
+          echo "Front: $deploy_front"
+          echo "Label to remove: $label_to_remove"
+
+  # production リリース前のゲート（FR-01）。sIT（miniflare実D1/R2、リリース対象コミット自体を検証）と
+  # UAT smoke（既にtest環境にデプロイ済みのWorkerへの疎通確認。mainマージのたびにtestへ自動デプロイ
+  # されているため、「タグを打った時点でtest環境上で正常に動いているコードと同一か」の確認になる）を
+  # productionへのデプロイ前に必須化する。development/testへのデプロイでは実行しない
+  # （scheduled-tests.ymlの日次実行が別途カバーしており、都度実行すると通常デプロイが重くなるだけのため）。
+  pre-release-verify:
+    name: "🧪 Pre-Release Verification (sIT + UAT smoke)"
+    needs: [ determine-targets ]
+    if: |
+      always() &&
+      needs.determine-targets.result == 'success' &&
+      needs.determine-targets.outputs.environment == 'production'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # SERVICE_AUTH_TOKENはtest環境用のGitHub Environment secretsに登録されているため、
+    # secretsコンテキストから参照するには対象Environmentを明示する必要がある
+    # （scheduled-tests.ymlのuat-smokeジョブと同じ理由）。
+    environment: test
+    env:
+      MAIN_API_URL: https://race-schedule-test.tn-product.workers.dev
+      SERVICE_AUTH_TOKEN: ${{ secrets.SERVICE_AUTH_TOKEN }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+        with:
+          setup-node: 'false'
+      - name: Run sIT (miniflare)
+        run: bun run test:sit
+      - name: Run UAT smoke tests
+        run: bun run test:uat
+
+  deploy-db:
+    needs: [ determine-targets, pre-release-verify ]
+    if: |
+      always() &&
+      needs.determine-targets.result == 'success' &&
+      needs.determine-targets.outputs.deploy-db == 'true' &&
+      (needs.pre-release-verify.result == 'success' || needs.pre-release-verify.result == 'skipped')
+    uses: ./.github/workflows/deploy-db-reusable.yml
+    with:
+      environment: ${{ needs.determine-targets.outputs.environment }}
+    secrets:
+      CLOUDFLARE_D1_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      DB_ID: ${{ secrets.DB_ID }}
+
+  deploy-api:
+    needs: [ determine-targets, pre-release-verify, deploy-db ]
+    if: |
+      always() &&
+      needs.determine-targets.outputs.deploy-api == 'true' &&
+      needs.determine-targets.result == 'success' &&
+      (needs.pre-release-verify.result == 'success' || needs.pre-release-verify.result == 'skipped') &&
+      (needs.deploy-db.result == 'success' || needs.deploy-db.result == 'skipped')
+    uses: ./.github/workflows/deploy-api-reusable.yml
+    with:
+      environment: ${{ needs.determine-targets.outputs.environment }}
+    secrets:
+      CLOUDFLARE_WORKERS_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      DB_ID: ${{ secrets.DB_ID }}
+      VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+      PUSH_DISPATCH_TOKEN: ${{ secrets.PUSH_DISPATCH_TOKEN }}
+      PUSH_AUTH_ENCRYPTION_KEY: ${{ secrets.PUSH_AUTH_ENCRYPTION_KEY }}
+      SERVICE_AUTH_TOKEN: ${{ secrets.SERVICE_AUTH_TOKEN }}
+      SERVICE_AUTH_TOKEN_PREVIOUS: ${{ secrets.SERVICE_AUTH_TOKEN_PREVIOUS }}
+      ISSUE_BOT_TOKEN: ${{ secrets.ISSUE_BOT_TOKEN }}
+      CLOUDFLARE_ANALYTICS_API_TOKEN: ${{ secrets.CLOUDFLARE_ANALYTICS_API_TOKEN }}
+
+  # 運用者専用の管理Worker（packages/admin、Cloudflare Accessで保護、
+  # admin-package-design.md）。production/testでのみデプロイする
+  # （developmentは対象外。運用者1人しか使わない管理画面のためCloudflare Access
+  # アプリの手動設定を増やさない判断）。deploy-apiが実行された場合はその成功を待つ
+  # （呼び出し先の/internal/feature-flagsが同じデプロイサイクルで揃っている前提の
+  # ため）が、admin単体の変更ではapi側に差分が無くdeploy-api自体がskipされる
+  # （deploy_api=false）ため、successだけでなくskippedも許容する。ここを
+  # successのみに絞っていたため、admin単体変更時にdeploy-adminごとskipされ
+  # デプロイが反映されない不具合があった（2026-08-08）。
+  # 失敗してもpost-merge-verify・auto-releaseはブロックしない（本体api Workerの
+  # 可用性とは独立した、運用者専用の副次的な入口のため）。
+  deploy-admin:
+    needs: [ determine-targets, pre-release-verify, deploy-api ]
+    if: |
+      always() &&
+      needs.determine-targets.outputs.deploy-admin == 'true' &&
+      (needs.determine-targets.outputs.environment == 'production' || needs.determine-targets.outputs.environment == 'test') &&
+      needs.determine-targets.result == 'success' &&
+      (needs.pre-release-verify.result == 'success' || needs.pre-release-verify.result == 'skipped') &&
+      (needs.deploy-api.result == 'success' || needs.deploy-api.result == 'skipped')
+    uses: ./.github/workflows/deploy-admin-reusable.yml
+    with:
+      environment: ${{ needs.determine-targets.outputs.environment }}
+    secrets:
+      CLOUDFLARE_WORKERS_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      SERVICE_AUTH_TOKEN: ${{ secrets.SERVICE_AUTH_TOKEN }}
+      SERVICE_AUTH_TOKEN_PREVIOUS: ${{ secrets.SERVICE_AUTH_TOKEN_PREVIOUS }}
+
+  # scraping・calendarのデプロイはrace-schedule（private submodule）側のdeploy.ymlが担う。
+  # このリポジトリはfront/api/batch/db/admin/coreのみをデプロイする。
+
+  deploy-batch:
+    needs: [ determine-targets, pre-release-verify ]
+    if: |
+      always() &&
+      needs.determine-targets.outputs.deploy-batch == 'true' &&
+      needs.determine-targets.result == 'success' &&
+      (needs.pre-release-verify.result == 'success' || needs.pre-release-verify.result == 'skipped')
+    uses: ./.github/workflows/deploy-batch-reusable.yml
+    with:
+      environment: ${{ needs.determine-targets.outputs.environment }}
+    secrets:
+      CLOUDFLARE_WORKERS_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      SERVICE_AUTH_TOKEN: ${{ secrets.SERVICE_AUTH_TOKEN }}
+      SERVICE_AUTH_TOKEN_PREVIOUS: ${{ secrets.SERVICE_AUTH_TOKEN_PREVIOUS }}
+      ISSUE_BOT_TOKEN: ${{ secrets.ISSUE_BOT_TOKEN }}
+
+  deploy-front:
+    needs: [ determine-targets, pre-release-verify ]
+    if: |
+      always() &&
+      needs.determine-targets.outputs.deploy-front == 'true' &&
+      needs.determine-targets.result == 'success' &&
+      (needs.pre-release-verify.result == 'success' || needs.pre-release-verify.result == 'skipped')
+    uses: ./.github/workflows/deploy-front-reusable.yml
+    # front は PR へのデプロイURLコメント投稿（sticky-pull-request-comment）に
+    # pull-requests: write が必要。トップレベルを絞ったため、この呼び出しジョブで
+    # 明示的に上乗せしないと deploy-front-reusable.yml 側の許可があっても届かない。
+    permissions:
+      contents: read
+      pull-requests: write
+    with:
+      environment: ${{ needs.determine-targets.outputs.environment }}
+    secrets:
+      CLOUDFLARE_PAGES_API_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  remove-label:
+    needs: [ determine-targets, deploy-api, deploy-db, deploy-batch, deploy-front ]
+    if: always() && needs.determine-targets.outputs.label-to-remove != ''
+    runs-on: ubuntu-24.04
+    # ラベル削除（issues.removeLabel、PRのラベルもこのAPIを使う）に issues: write が必要。
+    permissions:
+      issues: write
+    steps:
+      # SEC-039対応: 従来はactions-ecosystem/action-remove-labels@v1（可変タグの
+      # 第三者Action）にGITHUB_TOKEN/PERSONAL_ACCESS_TOKENを渡していたため、
+      # 上流が侵害されるとタグを移動させてトークンを奪取されうる状態だった。
+      # ラベル削除はGitHub REST API 1本で完結するため、公式のactions/github-script
+      # （SHA固定）で内製化し第三者コードへのトークン受け渡し自体を無くした。
+      - name: Remove label (standard)
+        if: needs.determine-targets.outputs.environment != 'production'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: ${{ github.event.issue.number || github.event.pull_request.number }},
+                name: ${{ toJSON(needs.determine-targets.outputs.label-to-remove) }},
+              });
+            } catch (error) {
+              core.info(`Failed to remove label (ignored): ${error.message}`);
+            }
+
+      - name: Remove label (production)
+        if: needs.determine-targets.outputs.environment == 'production'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          github-token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          script: |
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: ${{ github.event.issue.number || github.event.pull_request.number }},
+                name: ${{ toJSON(needs.determine-targets.outputs.label-to-remove) }},
+              });
+            } catch (error) {
+              core.info(`Failed to remove label (ignored): ${error.message}`);
+            }
+
+  # デプロイ後の動作確認（production含む全環境）
+  # 以前は production の動作確認は「schedule.yml で実施」とされていたが、
+  # そのファイル自体が存在せず、production は実質ノーチェックだった。
+  # `wrangler versions secret put` は新しいバージョンを作るだけでデプロイされない
+  # （＝シークレットが実トラフィックに反映されない）という罠があり、この
+  # ヘルスチェックだけでは検知できなかったため、シークレット疎通確認も追加した。
+  post-deploy-verify:
+    name: "✅ Post-Deploy Behavior Check"
+    # このジョブが検証するのはAPIヘルスチェックのみで、batch/frontは一切検証していない
+    # （下記stepsを参照）。そのためdeploy-batch/deploy-frontをneedsに含めると検証対象外の
+    # ジョブの完了を待つだけの不要な直列化になる。
+    needs: [ determine-targets, pre-release-verify, deploy-api ]
+    if: |
+      always() &&
+      needs.determine-targets.result == 'success' &&
+      needs.determine-targets.outputs.deploy-api == 'true' &&
+      (needs.pre-release-verify.result == 'success' || needs.pre-release-verify.result == 'skipped') &&
+      (needs.deploy-api.result == 'success' || needs.deploy-api.result == 'skipped')
+    runs-on: ubuntu-24.04
+    environment: ${{ needs.determine-targets.outputs.environment != 'development' &&
+      needs.determine-targets.outputs.environment || '' }}
+    steps:
+      - name: Wait for Workers to become ready
+        run: sleep 15
+
+      - name: API Health Check
+        env:
+          MAIN_API_URL: ${{ vars.MAIN_API_URL }}
+          ENVIRONMENT: ${{ needs.determine-targets.outputs.environment }}
+        run: |
+          echo "Environment: $ENVIRONMENT"
+          echo "MAIN_API_URL: $MAIN_API_URL"
+
+          if [ -z "$MAIN_API_URL" ]; then
+            echo "⚠️  MAIN_API_URL not set, using environment-based URL"
+            case "$ENVIRONMENT" in
+              production)
+                MAIN_API_URL="https://race-schedule-prod.tn-product.workers.dev"
+                ;;
+              development)
+                MAIN_API_URL="https://race-schedule-dev.tn-product.workers.dev"
+                ;;
+              test)
+                MAIN_API_URL="https://race-schedule-test.tn-product.workers.dev"
+                ;;
+              *)
+                echo "❌ Unknown environment: $ENVIRONMENT"
+                exit 1
+                ;;
+            esac
+          fi
+
+          HEALTH_URL="${MAIN_API_URL}/health"
+          echo "Health check: $HEALTH_URL"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL")
+          if [[ "$STATUS" != "200" ]]; then
+            echo "❌ Health check failed: HTTP $STATUS"
+            exit 1
+          fi
+          echo "✅ Health check passed: HTTP $STATUS"
+
+  # mainマージ直後（test環境デプロイ完了直後）にsIT・UAT smokeを実行する。
+  # 「testでちゃんと動いていることを継続的に検証し、それを信じてproductionへ進む」
+  # ための早期検知であり、pre-release-verify（タグpush時の最終ゲート）を置き換える
+  # ものではない。狙いは2つ:
+  #   1. リリースを試みる何日も前に問題を見つけられる（release時まで気づかないより早い）
+  #   2. production へ進む前に「test環境が壊れている」ことを人が把握できる
+  # push:main による自動デプロイのときだけ実行する（deploy-*-test系ラベルは廃止済み
+  # なので、他にtest環境をこのタイミングで触る経路は無い）。
+  # 通知は error-monitor.yml / health-check-data-freshness.yml と同じ作法
+  # （ラベルでdedupしたGitHub Issueの自動作成・解消時オートクローズ）に揃えている。
+  post-merge-verify:
+    name: "🔬 Post-Merge Verification (sIT + UAT smoke)"
+    needs: [ determine-targets, deploy-api, deploy-batch, deploy-front ]
+    if: |
+      always() &&
+      github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      needs.determine-targets.result == 'success' &&
+      (needs.deploy-api.result == 'success' || needs.deploy-api.result == 'skipped') &&
+      (needs.deploy-batch.result == 'success' || needs.deploy-batch.result == 'skipped') &&
+      (needs.deploy-front.result == 'success' || needs.deploy-front.result == 'skipped')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: write
+    # SERVICE_AUTH_TOKENはtest環境用のGitHub Environment secretsに登録されているため、
+    # secretsコンテキストから参照するには対象Environmentを明示する必要がある。
+    environment: test
+    env:
+      MAIN_API_URL: https://race-schedule-test.tn-product.workers.dev
+      SERVICE_AUTH_TOKEN: ${{ secrets.SERVICE_AUTH_TOKEN }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+        with:
+          setup-node: 'false'
+
+      - name: Wait for Workers to become ready
+        run: sleep 15
+
+      - name: Run sIT (miniflare)
+        id: sit
+        continue-on-error: true
+        run: bun run test:sit
+
+      - name: Run UAT smoke tests
+        id: uat
+        continue-on-error: true
+        run: bun run test:uat
+
+      - name: Create GitHub App Token
+        uses: ./.github/actions/create-github-app-token
+        id: app-token
+        with:
+          app-id: ${{ secrets.BOT_APP_ID }}
+          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
+
+      - name: Sync GitHub Issue with post-merge verification status
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          COMMIT_SHA: ${{ github.sha }}
+          SIT_OUTCOME: ${{ steps.sit.outcome }}
+          UAT_OUTCOME: ${{ steps.uat.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          LABEL="post-merge-verify-failed"
+          gh label create "$LABEL" --color "B60205" \
+            --description "mainマージ後のsIT/UAT smoke失敗の自動検知" >/dev/null 2>&1 || true
+
+          EXISTING=$(gh issue list --label "$LABEL" --state open --json number --jq '.[0].number // empty')
+
+          if [ "$SIT_OUTCOME" = "success" ] && [ "$UAT_OUTCOME" = "success" ]; then
+            if [ -n "$EXISTING" ]; then
+              gh issue comment "$EXISTING" --body "コミット ${COMMIT_SHA} の post-merge-verify（sIT + UAT smoke）が成功したため、自動的にCloseします。"
+              gh issue close "$EXISTING"
+              echo "✅ 検証成功を確認し、Issue #$EXISTING をCloseしました"
+            else
+              echo "✅ 検証成功。対象Issueもなし（何もしません）"
+            fi
+            exit 0
+          fi
+
+          BODY="## mainマージ後の検証（sIT + UAT smoke）が失敗しました
+
+          - コミット: \`${COMMIT_SHA}\`
+          - sIT: ${SIT_OUTCOME} / UAT smoke: ${UAT_OUTCOME}
+          - 実行ログ: ${RUN_URL}
+
+          test環境へのデプロイ自体は完了していますが、sIT または UAT smoke が失敗しています。
+          production リリースは「test環境が正しく動いていることを前提に信頼して進める」運用のため、
+          この状態では \`auto-release\`（patch/minorの自動タグ作成）も実行されません。仮に
+          人間が手動でタグをpushしても \`pre-release-verify\` ゲートで production デプロイが
+          止まります（ゲート自体は健全に機能しますが、リリースしようとしたタイミングで
+          初めて気づくよりも、今のうちに原因を特定・修正してください）。
+
+          _このIssueは \`.github/workflows/deploy.yml\` の \`post-merge-verify\` ジョブにより自動作成されました。_"
+
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "$BODY"
+            echo "既存Issue #$EXISTING にコメントを追加しました"
+          else
+            gh issue create \
+              --title "[Post-Merge] sIT/UAT smoke が失敗（test環境）" \
+              --body "$BODY" --label "$LABEL"
+            echo "新規Issueを作成しました"
+          fi
+
+      - name: Fail job if sIT or UAT smoke failed
+        if: steps.sit.outcome != 'success' || steps.uat.outcome != 'success'
+        run: |
+          echo "❌ sIT: ${{ steps.sit.outcome }} / UAT smoke: ${{ steps.uat.outcome }}"
+          exit 1
+
+  # patch/minor限定の自動タグ作成・自動リリース（auto-semver-release-requirements.md）。
+  # post-merge-verify（sIT+UAT smoke）成功後のみ実行し、直前の実タグ以降にマージされた
+  # 全PR（semver:noneのドキュメントのみPRは対象外）が semver:patch / semver:minor ラベル
+  # （PRを作成するエージェント自身が付与。外部APIキーは使わない方針のため、CIによる
+  # 自動判定は行わない。`.claude/docs/task-workflow.md` 参照）のときだけ、
+  # scripts/release/autoRelease.tsが実タグ・実Releaseを自動作成する
+  # （semver:minorが1件でもあればminorバンプ、無ければpatchバンプ。semver:majorが
+  # 1件でも含まれる場合は自動リリースせず、現状どおり人間の手動publish待ちになる。
+  # semver:noneのPRのみの場合はバージョンを変更しない）。
+  # 作成された実タグのpushにより、既存の pre-release-verify → production デプロイが
+  # 自動的に走る（このジョブ自体はproductionへ直接デプロイしない）。
+  #
+  # secrets.GITHUB_TOKEN で作成したタグ・Releaseは「GITHUB_TOKENが起こしたイベントは
+  # 新たなワークフロー実行をトリガーしない」というGitHub Actionsの仕様により
+  # push:tagsトリガーが発火しないため、post-merge-verifyと同じGitHub Appトークンを使う。
+  #
+  # Kill Switch: リポジトリ変数 AUTO_RELEASE_ENABLED を 'false' にすると
+  # コード変更なしで即座に無効化できる（未設定・'false'以外は有効というfail-safeな既定）。
+  auto-release:
+    name: "🤖 Auto Release (patch/minor)"
+    needs: [ post-merge-verify ]
+    if: |
+      always() &&
+      needs.post-merge-verify.result == 'success' &&
+      vars.AUTO_RELEASE_ENABLED != 'false'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    concurrency:
+      group: auto-release
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+        with:
+          setup-node: 'false'
+
+      - name: Create GitHub App Token
+        uses: ./.github/actions/create-github-app-token
+        id: app-token
+        with:
+          app-id: ${{ secrets.BOT_APP_ID }}
+          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
+
+      - name: Run auto-release
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: bun scripts/release/autoRelease.ts

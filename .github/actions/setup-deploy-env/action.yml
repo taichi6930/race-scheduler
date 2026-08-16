@@ -1,0 +1,22 @@
+name: 'Setup Deploy Environment'
+description: 'Configure environment variables for deploy jobs'
+
+# CICD-88対応（2026-08-02）
+# 目的: 全deploy-*-reusable.yml ワークフローで共通の環境変数設定（FORCE_JAVASCRIPT_ACTIONS_TO_NODE24）
+# を一箇所に集約。これまで各ワークフローで個別定義されていた job-level env を、
+# この composite action 経由で統一管理する。
+#
+# 背景: GitHub Actions は actions/setup-node@v4 が Node 24 互換性の問題を持つため、
+# 本リポジトリの Wrangler デプロイジョブは `npm install` 段階を回避するため
+# FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 フラグを使用している。このフラグの散在を防ぎ、
+# Wrangler 側の要件変更時の一括更新を容易にするため composite action化した。
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup deployment environment
+      shell: bash
+      env:
+        FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+      run: |
+        echo "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=${FORCE_JAVASCRIPT_ACTIONS_TO_NODE24}" >> $GITHUB_ENV

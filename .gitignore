@@ -1,0 +1,94 @@
+# ===================================
+# OS
+# ===================================
+.DS_Store
+
+# ===================================
+# Node.js / Package Managers
+# ===================================
+node_modules/
+package-lock.json
+
+# ===================================
+# Build Outputs
+# ===================================
+dist/
+*.tsbuildinfo
+*.js
+*.d.ts
+# Web Push Service Worker（手書きのソースファイル、ビルド生成物ではない）
+!packages/front/web/push-sw.js
+# SEC-055: index.htmlのインラインscriptを切り出した手書きファイル（ビルド生成物ではない）
+!packages/front/web/app-bootstrap.js
+
+# ===================================
+# Test Coverage
+# ===================================
+coverage/
+
+# ESLint cache
+.eslintcache
+
+# Test logs & debug
+full-test.log
+test-full.log
+test-output.log
+test-run-results.txt
+test-debug.ts
+
+# Coverage reports (Bun/nyc)
+coverage-*
+.c8.output/
+
+# Test report（scripts/generate-test-report.ts の生成物）
+test-report/
+
+# core シンボルマップ（scripts/generate-symbol-map.ts の生成物、TOK-059）
+docs/generated/
+
+# JUnit XML（pull_request.yml の dorny/test-reporter 用に各パッケージ配下へ出力する一時ファイル）
+junit-raw.xml
+junit.xml
+component-junit-raw.xml
+component-junit.xml
+
+# ===================================
+# Environment & Secrets
+# ===================================
+*.env*
+!.env.example
+.dev.vars
+.d1.secret
+.claude/settings.local.json
+chatmode.md
+
+# welcome-message表示済みフラグ（TOK-021: チェックアウト単位で初回セッションのみ表示するための
+# ローカルマーカー。.claude/hooks/welcome-message-gate.sh が生成・参照する）
+.claude/.welcome-shown
+
+# Claude Code agent isolation worktrees (harness-managed, not project content)
+.claude/worktrees/
+
+# ===================================
+# Cloudflare
+# ===================================
+.wrangler/
+# Effective configs contain actual DB IDs
+*.effective.toml
+
+# ===================================
+# Project Specific
+# ===================================
+# Mock HTML fixtures（scripts/download-mock-html.shでR2からダウンロードする実データ。
+# README.mdのみ意図的にコミット対象。旧パス"src/gateway/mockData/*"は現在の
+# ディレクトリ構成と一致しておらず機能していなかったため2026-07-29に実パスへ修正）
+packages/scraping/test/mockData/html/
+# Local R2 cache (for local development/testing)
+local_r2/
+# DB上の使い捨てクエリ・確認用スクリプト（既存マイグレーションの付随物として価値がある
+# ものはgit add -fで個別に追跡する。例: packages/db/script/0009_check_invalid_nar.sql）
+packages/db/script/*
+scripts/*.sql
+
+# Ignore generated wrangler config (packages/*/wrangler.toml はforce-add済み)
+wrangler.toml

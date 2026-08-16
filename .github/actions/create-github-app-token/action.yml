@@ -1,0 +1,46 @@
+name: Create GitHub App Token
+
+description: Create a GitHub App token for automation tasks
+
+# CICD-89対応（2026-08-02）
+# 目的: GitHub App トークン生成ステップの共通化。
+#
+# 背景: 以下の10ワークフローで `actions/create-github-app-token@v3.2.0` が個別実装されていた:
+# - auto-merge-main.yml (2箇所: get-branches, auto-merge ジョブ)
+# - create-pull-request.yml
+# - deploy.yml (2箇所: post-merge-verify, auto-release ジョブ)
+# - backfill-release-notes.yml
+# - batch-all.yml
+# - error-monitor.yml
+# - health-check-data-freshness.yml
+# - scheduled-tests.yml
+# - test-report.yml
+# - uptime-check.yml
+#
+# これらの duplicated implementation を composite action で統合し、
+# トークン生成ロジック（app-id/private-key の取得）を一箇所で管理する。
+# アクション側のバージョン更新やパラメータ変更が必要な場合、この action.yml のみ
+# 更新すれば全ワークフローに自動的に反映される。
+
+inputs:
+  app-id:
+    description: GitHub App ID
+    required: true
+  private-key:
+    description: GitHub App private key
+    required: true
+
+outputs:
+  token:
+    description: GitHub App token
+    value: ${{ steps.app-token.outputs.token }}
+
+runs:
+  using: composite
+  steps:
+    - name: Create GitHub App Token
+      uses: actions/create-github-app-token@v3.2.0
+      id: app-token
+      with:
+        app-id: ${{ inputs.app-id }}
+        private-key: ${{ inputs.private-key }}

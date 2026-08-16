@@ -1,0 +1,162 @@
+/**
+ * MainApiRepository テスト
+ *
+ * ## デシジョンテーブル
+ *
+ * | #  | 条件                          | 期待される動作                                             | Coverage |
+ * |----|-------------------------------|------------------------------------------------------------|----------|
+ * | 1  | fetchFeatureFlagList 呼び出し | gateway.fetchFeatureFlagList へ委譲し結果を返す             | Line     |
+ * | 2  | updateFeatureFlag 呼び出し    | gateway.updateFeatureFlag へkey/enabledを渡して委譲し結果を返す | Line     |
+ * | 3  | backfillPlace 呼び出し        | gateway.backfillPlace へfilterを渡して委譲し結果を返す       | Line     |
+ * | 4  | backfillRace 呼び出し         | gateway.backfillRace へfilterを渡して委譲し結果を返す        | Line     |
+ * | 5  | fetchUiLayout 呼び出し        | gateway.fetchUiLayout へraceTypeを渡して委譲し結果を返す      | Line     |
+ * | 6  | saveUiLayout 呼び出し         | gateway.saveUiLayout へraceType/configを渡して委譲し結果を返す | Line    |
+ * | 7  | previewUiLayout 呼び出し      | gateway.previewUiLayout へconfig/raceIdを渡して委譲し結果を返す | Line   |
+ */
+import 'reflect-metadata';
+
+import { describe, expect, it, mock } from 'bun:test';
+
+import { type RaceDetailUiConfig, RaceType } from '@race-schedule/core';
+
+import type { BackfillFilter } from '../../../../src/dto/backfillResult';
+import type { FeatureFlagStatus } from '../../../../src/dto/featureFlagStatus';
+import type { IMainApiGateway } from '../../../../src/gateway/interface/IMainApiGateway';
+import { MainApiRepository } from '../../../../src/repository/implement/mainApiRepository';
+
+const SAMPLE_FLAGS: FeatureFlagStatus[] = [
+    {
+        key: 'announcement_banner',
+        label: '起動時お知らせバナー',
+        storedEnabled: true,
+        envDefault: false,
+        effectiveEnabled: true,
+        updatedAt: '2026-08-07T00:00:00.000Z',
+    },
+];
+
+const createRepository = (flags: FeatureFlagStatus[] = SAMPLE_FLAGS) => {
+    const mainApiGateway: IMainApiGateway = {
+        fetchFeatureFlagList: mock(() => Promise.resolve(flags)),
+        updateFeatureFlag: mock(() => Promise.resolve(flags)),
+        backfillPlace: mock(() =>
+            Promise.resolve({
+                successCount: 0,
+                failureCount: 0,
+                failures: [],
+                notCachedKeys: [],
+            }),
+        ),
+        backfillRace: mock(() =>
+            Promise.resolve({
+                successCount: 0,
+                failureCount: 0,
+                failures: [],
+                notCachedPlaceIds: [],
+            }),
+        ),
+        fetchUiLayout: mock(() => Promise.resolve({ sections: [] })),
+        saveUiLayout: mock(() => Promise.resolve({ sections: [] })),
+        previewUiLayout: mock(() => Promise.resolve(undefined)),
+        fetchUpcomingKeirinRaces: mock(() => Promise.resolve([])),
+    };
+
+    return {
+        mainApiGateway,
+        repository: new MainApiRepository(mainApiGateway),
+    };
+};
+
+describe('MainApiRepository', () => {
+    it('#1: fetchFeatureFlagListはgatewayへ委譲し結果を返す', async () => {
+        const { mainApiGateway, repository } = createRepository();
+
+        const result = await repository.fetchFeatureFlagList();
+
+        expect(mainApiGateway.fetchFeatureFlagList).toHaveBeenCalled();
+        expect(result).toEqual(SAMPLE_FLAGS);
+    });
+
+    it('#2: updateFeatureFlagはgatewayへkey/enabledを渡して委譲し結果を返す', async () => {
+        const { mainApiGateway, repository } = createRepository();
+
+        const result = await repository.updateFeatureFlag(
+            'announcement_banner',
+            true,
+        );
+
+        expect(mainApiGateway.updateFeatureFlag).toHaveBeenCalledWith(
+            'announcement_banner',
+            true,
+        );
+        expect(result).toEqual(SAMPLE_FLAGS);
+    });
+
+    it('#3: backfillPlaceはgatewayへfilterを渡して委譲し結果を返す', async () => {
+        const { mainApiGateway, repository } = createRepository();
+        const filter: BackfillFilter = {
+            startDate: '2026-01-01',
+            finishDate: '2026-01-31',
+            raceTypeList: ['keirin'],
+        };
+
+        const result = await repository.backfillPlace(filter);
+
+        expect(mainApiGateway.backfillPlace).toHaveBeenCalledWith(filter);
+        expect(result.notCachedKeys).toEqual([]);
+    });
+
+    it('#4: backfillRaceはgatewayへfilterを渡して委譲し結果を返す', async () => {
+        const { mainApiGateway, repository } = createRepository();
+        const filter: BackfillFilter = {
+            startDate: '2026-01-01',
+            finishDate: '2026-01-31',
+            raceTypeList: ['keirin'],
+        };
+
+        const result = await repository.backfillRace(filter);
+
+        expect(mainApiGateway.backfillRace).toHaveBeenCalledWith(filter);
+        expect(result.notCachedPlaceIds).toEqual([]);
+    });
+
+    it('#5: fetchUiLayoutはgatewayへraceTypeを渡して委譲し結果を返す', async () => {
+        const { mainApiGateway, repository } = createRepository();
+
+        const result = await repository.fetchUiLayout(RaceType.KEIRIN);
+
+        expect(mainApiGateway.fetchUiLayout).toHaveBeenCalledWith(
+            RaceType.KEIRIN,
+        );
+        expect(result).toEqual({ sections: [] });
+    });
+
+    it('#6: saveUiLayoutはgatewayへraceType/configを渡して委譲し結果を返す', async () => {
+        const { mainApiGateway, repository } = createRepository();
+        const config: RaceDetailUiConfig = { sections: [] };
+
+        const result = await repository.saveUiLayout(RaceType.KEIRIN, config);
+
+        expect(mainApiGateway.saveUiLayout).toHaveBeenCalledWith(
+            RaceType.KEIRIN,
+            config,
+        );
+        expect(result).toEqual({ sections: [] });
+    });
+
+    it('#7: previewUiLayoutはgatewayへconfig/raceIdを渡して委譲し結果を返す', async () => {
+        const { mainApiGateway, repository } = createRepository();
+        const config: RaceDetailUiConfig = { sections: [] };
+
+        const result = await repository.previewUiLayout(
+            config,
+            'keirin202608021036',
+        );
+
+        expect(mainApiGateway.previewUiLayout).toHaveBeenCalledWith(
+            config,
+            'keirin202608021036',
+        );
+        expect(result).toBeUndefined();
+    });
+});

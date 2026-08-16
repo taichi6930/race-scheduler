@@ -1,0 +1,24 @@
+[
+    {
+        "name": "Timeout failures",
+        "matchedStatuses": ["broken"]
+    },
+    {
+        "name": "Timeout failures",
+        "matchedStatuses": ["failed"],
+        "messageRegex": ".*Timeout.*"
+    },
+    {
+        "name": "Assertion failures",
+        "matchedStatuses": ["failed"],
+        "messageRegex": "^expect\\(.*"
+    },
+    {
+        "name": "Uncaught exceptions / other failures",
+        "matchedStatuses": ["failed"]
+    },
+    {
+        "name": "Skipped",
+        "matchedStatuses": ["skipped"]
+    }
+]

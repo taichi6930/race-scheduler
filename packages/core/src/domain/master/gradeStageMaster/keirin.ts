@@ -1,0 +1,1186 @@
+import { RaceType } from '../../model/valueObject/raceType';
+import type { StageAliasEntry, StagePriorityEntry } from './types';
+
+/** KEIRIN のステージ表記ゆれ一覧。 */
+export const KEIRIN_STAGE_ALIAS_LIST: readonly StageAliasEntry[] = [
+    {
+        stage: 'S級グランプリ',
+        stageByWebSite: ['Ｓ級ＧＰ'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'L級ガールズグランプリ',
+        stageByWebSite: ['Ｌ級ＧＧＰ'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'SA混合ヤンググランプリ',
+        stageByWebSite: ['ＳＡ混合ＹＧＰ'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'S級決勝',
+        stageByWebSite: ['Ｓ級決勝'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'S級準決勝',
+        stageByWebSite: ['Ｓ級準決勝', 'Ｓ級西準決', 'Ｓ級東準決'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'S級準々決勝',
+        stageByWebSite: ['Ｓ級準々決', 'Ｓ級準々Ａ', 'Ｓ級準々Ｂ'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'S級初日特別選抜',
+        stageByWebSite: ['Ｓ級初特選'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'S級特別選抜予選',
+        stageByWebSite: ['Ｓ級特選予', 'Ｓ級西特選', 'Ｓ級東特選'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'S級ゴールデンレーサー賞',
+        stageByWebSite: ['Ｓ級ＧＤＲ'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'S級ダイヤモンドレース',
+        stageByWebSite: ['Ｓ級ＤＭＤ'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'S級ドリームレース',
+        stageByWebSite: ['Ｓ級ＤＲＭ'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'S級オリオン賞',
+        stageByWebSite: ['Ｓ級ＯＲＩ'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'S級シャイニングスター賞',
+        stageByWebSite: ['Ｓ級シャイ'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'S級スタールビー賞',
+        stageByWebSite: ['Ｓ級ＳＴＲ'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'S級白虎賞',
+        stageByWebSite: ['Ｓ級白虎賞'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'S級青龍賞',
+        stageByWebSite: ['Ｓ級青龍賞'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'S級日本競輪選手会理事長杯',
+        stageByWebSite: ['Ｓ級日競杯'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'S級ローズカップ',
+        stageByWebSite: ['Ｓ級ローズ'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'L級ティアラカップ',
+        stageByWebSite: ['Ｌ級ティア'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'L級ガールズ決勝',
+        stageByWebSite: ['Ｌ級ガ決勝', 'Ｌ級ガ決Ａ', 'Ｌ級ガ決Ｂ'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'L級ガールズ準決勝',
+        stageByWebSite: ['Ｌ級ガ準決', 'Ｌ級西ガ準', 'Ｌ級東ガ準'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'L級ガールズドリームレース',
+        stageByWebSite: ['Ｌ級ＤＲＭ'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'L級ガールズアルテミス賞',
+        stageByWebSite: ['Ｌ級ＡＲＴ'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'L級ガールズコレクション',
+        stageByWebSite: ['Ｌ級Ｇコレ'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'L級ガールズフレッシュクイーン',
+        stageByWebSite: ['Ｌ級ＧＦＱ'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'L級ガールズ予選',
+        stageByWebSite: [
+            'Ｌ級ガ予選',
+            'Ｌ級ガ予１',
+            'Ｌ級ガ予２',
+            'Ｌ級予１Ａ',
+            'Ｌ級予１Ｂ',
+            'Ｌ級予２Ａ',
+            'Ｌ級予２Ｂ',
+        ],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'S級二次予選',
+        stageByWebSite: [
+            'Ｓ級二予戦',
+            'Ｓ級二予',
+            'Ｓ級二予Ａ',
+            'Ｓ級二予Ｂ',
+            'Ｓ級東二予',
+            'Ｓ級西二予',
+            'Ｓ級二予選',
+        ],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'S級一次予選',
+        stageByWebSite: [
+            'Ｓ級一予戦',
+            'Ｓ級一予',
+            'S級一予1',
+            'Ｓ級一予2',
+            'Ｓ級西予１',
+            'Ｓ級西予２',
+            'Ｓ級東予１',
+            'Ｓ級東予２',
+            'Ｓ級一予選',
+        ],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'S級毘沙門天賞',
+        stageByWebSite: ['Ｓ級毘沙門'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'S級アルタイル賞',
+        stageByWebSite: ['Ｓ級ＡＬＴ'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'S級順位決定',
+        stageByWebSite: ['Ｓ級順位決'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'S級特別優秀',
+        stageByWebSite: ['Ｓ級特秀'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'S級優秀',
+        stageByWebSite: ['Ｓ級優秀'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'S級特選',
+        stageByWebSite: ['Ｓ級特選'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'S級選抜',
+        stageByWebSite: ['Ｓ級選抜', 'Ｓ級選抜一', 'Ｓ級選抜二'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'S級特一般',
+        stageByWebSite: ['Ｓ級特一般'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'S級一般',
+        stageByWebSite: ['Ｓ級一般'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'S級予選',
+        stageByWebSite: ['Ｓ級予選'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'S級スーパープロピストレーサー賞',
+        stageByWebSite: ['ＳＰＲ', 'Ｓ級ＳＰＲ'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'S級ダイナミックステージ',
+        stageByWebSite: ['ＤＳ', 'Ｓ級ＤＳ'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'S級ワンダーステージ',
+        stageByWebSite: ['ＷＳ', 'Ｓ級ＷＳ'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'L級ガールズ選抜',
+        stageByWebSite: ['Ｌ級ガ選抜'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'L級ガールズ特選',
+        stageByWebSite: ['Ｌ級ガ特選'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'L級ガールズ一般',
+        stageByWebSite: ['Ｌ級ガ一般', 'Ｌ級ガ般Ａ', 'Ｌ級ガ般Ｂ'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'A級特選',
+        stageByWebSite: ['Ａ級特選'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'A級選抜',
+        stageByWebSite: ['Ａ級選抜'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'A級一般',
+        stageByWebSite: ['Ａ級一般', 'Ａ級般Ａ', 'Ａ級般Ｂ'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'A級決勝',
+        stageByWebSite: ['Ａ級決勝'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'A級準決勝',
+        stageByWebSite: ['Ａ級準決勝'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'A級予選',
+        stageByWebSite: ['Ａ級予選'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'A級初日特別選抜',
+        stageByWebSite: ['Ａ級初特選'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'A級特一般',
+        stageByWebSite: ['Ａ級特一般'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'A級特別予選',
+        stageByWebSite: ['Ａ級特予選'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'A級チャレンジ決勝',
+        stageByWebSite: ['Ａ級チ決勝'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'A級チャレンジ準決勝',
+        stageByWebSite: ['Ａ級チ準決'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'A級チャレンジ一般',
+        stageByWebSite: ['Ａ級チ一般'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'A級チャレンジ選抜',
+        stageByWebSite: ['Ａ級チ選抜'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'A級チャレンジ予選',
+        stageByWebSite: ['Ａ級チ予選'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'A級レインボーカップチャレンジファイナル',
+        stageByWebSite: ['Ａ級チ・Ｆ'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'A級男子新人戦予選',
+        stageByWebSite: ['Ａ級男予２', 'Ａ級男予１'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'A級男子新人アドバンス一般',
+        stageByWebSite: ['Ａ級男ア般'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'A級男子新人アドバンス決勝',
+        stageByWebSite: ['Ａ級男ア決'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'SA混合男子予選１',
+        stageByWebSite: ['ＳＡ混合男予１'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'SA混合男子予選２',
+        stageByWebSite: ['ＳＡ混合男予２'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'SA混合男子決勝',
+        stageByWebSite: ['ＳＡ混合男決勝', 'ＳＡ混合男決'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'SA男子新人アドバンス予選１',
+        stageByWebSite: ['ＳＡ男ア予１'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'SA男子新人アドバンス予選２',
+        stageByWebSite: ['ＳＡ男ア予２'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'SA男子新人アドバンス決勝',
+        stageByWebSite: ['ＳＡ男ア決', 'ＳＡ混合男ア決'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'S級アドバンス決勝',
+        stageByWebSite: ['Ｓ級ア決勝'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'S級アドバンス一般',
+        stageByWebSite: ['Ｓ級ア一般'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'S級アドバンス予選１',
+        stageByWebSite: ['Ｓ級ア予１'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'S級アドバンス予選２',
+        stageByWebSite: ['Ｓ級ア予２'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'A級アドバンス決勝',
+        stageByWebSite: ['Ａ級ア決勝'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'A級アドバンス特選',
+        stageByWebSite: ['Ａ級ア特選'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'A級アドバンス特別一般',
+        stageByWebSite: ['Ａ級ア特般'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'A級アドバンス予選１',
+        stageByWebSite: ['Ａ級ア予１'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'A級アドバンス予選２',
+        stageByWebSite: ['Ａ級ア予２'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'A級ファイナル',
+        stageByWebSite: ['Ａ級Ａ級Ｆ', 'Ａ級Ｆ'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'L級ワールドガールズケイリン',
+        stageByWebSite: ['Ｌ級Wガル'],
+        raceType: RaceType.KEIRIN,
+    },
+    {
+        stage: 'L級ガールズルーキー企画レース',
+        stageByWebSite: ['Ｌ級ガル企'],
+        raceType: RaceType.KEIRIN,
+    },
+];
+
+/** KEIRIN の (grade, stage) 単位の優先度一覧。 */
+export const KEIRIN_STAGE_PRIORITY_LIST: readonly StagePriorityEntry[] = [
+    {
+        grade: ['GP'],
+        stage: 'S級グランプリ',
+        raceType: RaceType.KEIRIN,
+        priority: 10,
+        description:
+            '競輪の最高峰レース。SS級選手が集結し、年間の頂点を決める。',
+    },
+    {
+        grade: ['GP'],
+        stage: 'L級ガールズグランプリ',
+        raceType: RaceType.KEIRIN,
+        priority: 10,
+        description:
+            '女子競輪の最高峰レース。L級ガールズ選手が集結し、年間の頂点を決める。',
+    },
+    {
+        grade: ['GⅡ'],
+        stage: 'SA混合ヤンググランプリ',
+        raceType: RaceType.KEIRIN,
+        priority: 8,
+        description:
+            'GⅡレースの若手のグランプリ。若手選手が集結し、将来を担う選手を発掘するレース。',
+    },
+    {
+        grade: ['GⅠ'],
+        stage: 'S級決勝',
+        raceType: RaceType.KEIRIN,
+        priority: 9,
+        description:
+            'GⅠの最終日に行われる決勝レース。優勝すると、その年のグランプリ出場権を得る。',
+    },
+    {
+        grade: ['GⅠ'],
+        stage: 'S級準決勝',
+        raceType: RaceType.KEIRIN,
+        priority: 8,
+        description: 'GⅠの準決勝レース。決勝進出を目指す重要なレース。',
+    },
+    {
+        grade: ['GⅠ'],
+        stage: 'S級準々決勝',
+        raceType: RaceType.KEIRIN,
+        priority: 8,
+        description: 'GⅠの準々決勝レース。準決勝進出を目指す重要なレース。',
+    },
+    {
+        grade: ['GⅠ'],
+        stage: 'S級初日特別選抜',
+        raceType: RaceType.KEIRIN,
+        priority: 8,
+        description:
+            'GⅠの初日特別選抜レース。2次予選のシード選手が出場する特別なレース。',
+    },
+    {
+        grade: ['GⅠ'],
+        stage: 'S級特別選抜予選',
+        raceType: RaceType.KEIRIN,
+        priority: 8,
+        description:
+            'GⅠ初日の特別選抜予選レース。特別な選手たちが出場し、2日目のシードレースを決定する重要なレース。',
+    },
+    {
+        grade: ['GⅠ'],
+        stage: 'S級ゴールデンレーサー賞',
+        raceType: RaceType.KEIRIN,
+        priority: 8,
+        description:
+            'GⅠオールスター競輪の特別なレース。準決勝のシード選手が出場する特別なレース。',
+    },
+    {
+        grade: ['GⅠ'],
+        stage: 'S級ダイヤモンドレース',
+        raceType: RaceType.KEIRIN,
+        priority: 8,
+        description:
+            'GⅠ競輪祭の特別なレース。準決勝のシード選手が出場する特別なレース。',
+    },
+    {
+        grade: ['GⅠ'],
+        stage: 'S級ドリームレース',
+        raceType: RaceType.KEIRIN,
+        priority: 8,
+        description:
+            'GⅠオールスター競輪の特別なレース。ファン投票で選ばれたトップ9選手が出場する特別なレース。',
+    },
+    {
+        grade: ['GⅠ'],
+        stage: 'S級オリオン賞',
+        raceType: RaceType.KEIRIN,
+        priority: 8,
+        description:
+            'GⅠオールスター競輪の特別なレース。ファン投票で選ばれたトップ選手が出場する特別なレース。',
+    },
+    {
+        grade: ['GⅠ'],
+        stage: 'S級シャイニングスター賞',
+        raceType: RaceType.KEIRIN,
+        priority: 8,
+        description:
+            'GⅠオールスター競輪の特別なレース。準決勝のシード選手が出場する特別なレース。',
+    },
+    {
+        grade: ['GⅠ'],
+        stage: 'S級スタールビー賞',
+        raceType: RaceType.KEIRIN,
+        priority: 8,
+        description:
+            'GⅠ全日本選抜競輪の特別なレース。準決勝のシード選手が出場する特別なレース。',
+    },
+    {
+        grade: ['GⅠ'],
+        stage: 'S級白虎賞',
+        raceType: RaceType.KEIRIN,
+        priority: 8,
+        description:
+            'GⅠ高松宮記念杯競輪の西日本のシードレース。準決勝のシード選手が出場する特別なレース。',
+    },
+    {
+        grade: ['GⅠ'],
+        stage: 'S級青龍賞',
+        raceType: RaceType.KEIRIN,
+        priority: 8,
+        description:
+            'GⅠ高松宮記念杯競輪の東日本のシードレース。準決勝のシード選手が出場する特別なレース。',
+    },
+    {
+        grade: ['GⅠ'],
+        stage: 'S級日本競輪選手会理事長杯',
+        raceType: RaceType.KEIRIN,
+        priority: 8,
+        description:
+            'GⅠ寬仁親王牌の初日特別選抜予選レース。特別な選手たちが出場し、2日目のシードレースを決定する重要なレース。',
+    },
+    {
+        grade: ['GⅠ'],
+        stage: 'S級ローズカップ',
+        raceType: RaceType.KEIRIN,
+        priority: 8,
+        description:
+            'GⅠ寬仁親王杯競輪の特別なレース。準決勝のシード選手が出場する特別なレース。',
+    },
+    {
+        grade: ['GⅠ'],
+        stage: 'L級ティアラカップ',
+        raceType: RaceType.KEIRIN,
+        priority: 8,
+        description:
+            'GⅠオールガールズクラシックの特別なレース。準決勝のシード選手が出場する特別なレース。',
+    },
+    {
+        grade: ['GⅠ'],
+        stage: 'L級ガールズ決勝',
+        raceType: RaceType.KEIRIN,
+        priority: 8,
+        description:
+            'GⅠガールズ競輪の最終日に行われる決勝レース。優勝すると、その年のガールズグランプリ出場権を得る。',
+    },
+    {
+        grade: ['GⅠ'],
+        stage: 'L級ガールズ準決勝',
+        raceType: RaceType.KEIRIN,
+        priority: 7,
+        description:
+            'ガールズ競輪の準決勝レース。決勝進出を目指す重要なレース。',
+    },
+    {
+        grade: ['GⅠ', 'FⅡ'],
+        stage: 'L級ガールズドリームレース',
+        raceType: RaceType.KEIRIN,
+        priority: 7,
+        description:
+            'オールスター女子競輪の特別なレース。ファン投票で選ばれたトップ選手が出場する特別なレース。',
+    },
+    {
+        grade: ['GⅠ', 'FⅡ'],
+        stage: 'L級ガールズアルテミス賞',
+        raceType: RaceType.KEIRIN,
+        priority: 6,
+        description: 'オールスター女子競輪の特別なレース。',
+    },
+    {
+        grade: ['GⅠ', 'FⅡ'],
+        stage: 'L級ガールズコレクション',
+        raceType: RaceType.KEIRIN,
+        priority: 6,
+        description: 'ガールズ競輪の特別なレース。',
+    },
+    {
+        grade: ['GⅡ', 'GⅢ', 'FⅠ', 'FⅡ'],
+        stage: 'L級ガールズフレッシュクイーン',
+        raceType: RaceType.KEIRIN,
+        priority: 3,
+        description:
+            'ガールズフレッシュクイーン。新鋭ガールズ選手によるG2・F1・F2併催の特別レース。',
+    },
+    {
+        grade: ['GⅠ'],
+        stage: 'L級ガールズ予選',
+        raceType: RaceType.KEIRIN,
+        priority: 4,
+        description:
+            'ガールズ競輪の予選レース。選手たちが決勝進出を目指して競い合う。',
+    },
+    {
+        grade: ['GⅠ'],
+        stage: 'S級二次予選',
+        raceType: RaceType.KEIRIN,
+        priority: 4,
+        description:
+            'GⅠの二次予選レース。選手たちが決勝進出を目指して競い合う。',
+    },
+    {
+        grade: ['GⅠ'],
+        stage: 'S級一次予選',
+        raceType: RaceType.KEIRIN,
+        priority: 2,
+        description:
+            'GⅠの一次予選レース。選手たちが決勝進出を目指して競い合う。',
+    },
+    {
+        grade: ['GⅡ'],
+        stage: 'S級決勝',
+        raceType: RaceType.KEIRIN,
+        priority: 8,
+        description:
+            'GⅡの最終日に行われる決勝レース。高額賞金が用意され、競輪の中でも重要なレースの一つ。',
+    },
+    {
+        grade: ['GⅡ'],
+        stage: 'S級準決勝',
+        raceType: RaceType.KEIRIN,
+        priority: 7,
+        description: 'GⅡの準決勝レース。決勝進出を目指す重要なレース。',
+    },
+    {
+        grade: ['GⅡ'],
+        stage: 'S級毘沙門天賞',
+        raceType: RaceType.KEIRIN,
+        priority: 8,
+        description:
+            'GⅡウィナーズカップのシードレース。準決勝のシード選手が出場する特別なレース。',
+    },
+    {
+        grade: ['GⅡ'],
+        stage: 'S級アルタイル賞',
+        raceType: RaceType.KEIRIN,
+        priority: 8,
+        description:
+            'GⅡレース・サマーナイトフェスティバルの2日目に行われるレース。準決勝のシード選手が出場する特別なレース。',
+    },
+    {
+        grade: ['GⅡ'],
+        stage: 'S級二次予選',
+        raceType: RaceType.KEIRIN,
+        priority: 4,
+        description:
+            'GⅡの二次予選レース。選手たちが決勝進出を目指して競い合う。',
+    },
+    {
+        grade: ['GⅡ'],
+        stage: 'S級一次予選',
+        raceType: RaceType.KEIRIN,
+        priority: 2,
+        description:
+            'GⅡの一次予選レース。選手たちが決勝進出を目指して競い合う。',
+    },
+    {
+        grade: ['GⅡ'],
+        stage: 'S級特別選抜予選',
+        raceType: RaceType.KEIRIN,
+        priority: 7,
+        description:
+            'GⅡ初日の特別選抜予選レース。特別な選手たちが出場し、2日目のシードレースを決定する重要なレース。',
+    },
+    {
+        grade: ['GⅢ'],
+        stage: 'S級決勝',
+        raceType: RaceType.KEIRIN,
+        priority: 8,
+        description:
+            'GⅢの最終日に行われる決勝レース。そこそこ賞金が高く、競輪の中でも重要なレースの一つ。',
+    },
+    {
+        grade: ['GⅢ'],
+        stage: 'S級準決勝',
+        raceType: RaceType.KEIRIN,
+        priority: 6,
+        description: 'GⅢの準決勝レース。決勝進出を目指す重要なレース。',
+    },
+    {
+        grade: ['GⅢ'],
+        stage: 'S級二次予選',
+        raceType: RaceType.KEIRIN,
+        priority: 3,
+        description:
+            'GⅢの二次予選レース。選手たちが決勝進出を目指して競い合う。',
+    },
+    {
+        grade: ['GⅢ'],
+        stage: 'S級一次予選',
+        raceType: RaceType.KEIRIN,
+        priority: 1,
+        description:
+            'GⅢの一次予選レース。選手たちが決勝進出を目指して競い合う。',
+    },
+    {
+        grade: ['GⅢ'],
+        stage: 'S級初日特別選抜',
+        raceType: RaceType.KEIRIN,
+        priority: 6,
+        description:
+            'GⅢの初日特別選抜レース。2次予選のシード選手が出場する特別なレース。',
+    },
+    {
+        grade: ['GⅠ', 'GⅡ', 'GⅢ', 'FⅠ'],
+        stage: 'S級順位決定',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: '順位決定レース。負け戦。',
+    },
+    {
+        grade: ['GⅠ', 'GⅡ', 'GⅢ', 'FⅠ'],
+        stage: 'S級特別優秀',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: '特別優秀レース。負け戦。',
+    },
+    {
+        grade: ['GⅠ', 'GⅡ', 'GⅢ', 'FⅠ'],
+        stage: 'S級優秀',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: '優秀レース。負け戦。',
+    },
+    {
+        grade: ['GⅠ', 'GⅡ', 'GⅢ', 'FⅠ'],
+        stage: 'S級特選',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: '特選レース。負け戦。',
+    },
+    {
+        grade: ['GⅠ', 'GⅡ', 'GⅢ', 'FⅠ'],
+        stage: 'S級選抜',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: '選抜レース。負け戦',
+    },
+    {
+        grade: ['GⅠ', 'GⅡ', 'GⅢ', 'FⅠ'],
+        stage: 'S級特一般',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: '特一般レース。負け戦。',
+    },
+    {
+        grade: ['GⅠ', 'GⅡ', 'GⅢ', 'FⅠ'],
+        stage: 'S級一般',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: '一般レース。負け戦。',
+    },
+    {
+        grade: ['FⅠ'],
+        stage: 'S級決勝',
+        raceType: RaceType.KEIRIN,
+        priority: 4,
+        description:
+            'FⅠの最終日に行われる決勝レース。ウィナーズカップの出場権に近づく。',
+    },
+    {
+        grade: ['FⅠ'],
+        stage: 'S級準決勝',
+        raceType: RaceType.KEIRIN,
+        priority: 3,
+        description: 'FⅠの準決勝レース。決勝進出を目指す重要なレース。',
+    },
+    {
+        grade: ['FⅠ'],
+        stage: 'S級予選',
+        raceType: RaceType.KEIRIN,
+        priority: 1,
+        description: 'FⅠの予選レース。選手たちが決勝進出を目指して競い合う。',
+    },
+    {
+        grade: ['FⅠ'],
+        stage: 'S級初日特別選抜',
+        raceType: RaceType.KEIRIN,
+        priority: 2,
+        description:
+            'FⅠの初日特別選抜レース。準決勝のシード選手が出場する特別なレース。',
+    },
+    {
+        grade: ['FⅡ'],
+        stage: 'S級スーパープロピストレーサー賞',
+        raceType: RaceType.KEIRIN,
+        priority: 7,
+        description: '全プロ競輪の特別なレース。最終日のメインレース。',
+        specifiedOverride: true,
+    },
+    {
+        grade: ['FⅡ'],
+        stage: 'S級ダイナミックステージ',
+        raceType: RaceType.KEIRIN,
+        priority: 4,
+        description: '全プロ競輪の特別なレース。',
+        specifiedOverride: true,
+    },
+    {
+        grade: ['FⅡ'],
+        stage: 'S級ワンダーステージ',
+        raceType: RaceType.KEIRIN,
+        priority: 4,
+        description: '全プロ競輪の特別なレース。',
+        specifiedOverride: true,
+    },
+    {
+        grade: ['FⅡ'],
+        stage: 'S級優秀',
+        raceType: RaceType.KEIRIN,
+        priority: 4,
+        description:
+            '全プロ記念競輪のS級優秀レース。FⅡ開催でのイレギュラーな上位レース。',
+        specifiedOverride: true,
+    },
+    {
+        grade: ['FⅡ'],
+        stage: 'S級特別優秀',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: '全プロ競輪の特別優秀レース',
+        specifiedOverride: true,
+    },
+    {
+        grade: ['FⅡ'],
+        stage: 'S級特選',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: '全プロ競輪の特選レース',
+        specifiedOverride: true,
+    },
+    {
+        grade: ['FⅡ'],
+        stage: 'S級選抜',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: '全プロ競輪の選抜レース',
+        specifiedOverride: true,
+    },
+    {
+        grade: ['GⅢ', 'FⅠ', 'FⅡ'],
+        stage: 'L級ガールズ決勝',
+        raceType: RaceType.KEIRIN,
+        priority: 2,
+        description: 'ガールズ競輪の最終日に行われる決勝レース。',
+    },
+    {
+        grade: ['GⅢ', 'FⅠ', 'FⅡ'],
+        stage: 'L級ガールズ準決勝',
+        raceType: RaceType.KEIRIN,
+        priority: 1,
+        description:
+            'ガールズ競輪の準決勝レース。決勝進出を目指す重要なレース。',
+    },
+    {
+        grade: ['GⅢ', 'FⅠ', 'FⅡ'],
+        stage: 'L級ガールズ予選',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description:
+            'ガールズ競輪の予選レース。選手たちが決勝進出を目指して競い合う。',
+    },
+    {
+        grade: ['GⅢ', 'FⅠ', 'FⅡ'],
+        stage: 'L級ガールズ選抜',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: 'ガールズ競輪の選抜レース。負け戦。',
+    },
+    {
+        grade: ['GⅢ', 'FⅠ', 'FⅡ'],
+        stage: 'L級ガールズ特選',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: 'ガールズ競輪の特選レース。負け戦。',
+    },
+    {
+        grade: ['GⅢ', 'FⅠ', 'FⅡ'],
+        stage: 'L級ガールズ一般',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: 'ガールズ競輪の一般レース。負け戦。',
+    },
+    {
+        grade: ['FⅠ', 'FⅡ'],
+        stage: 'A級特選',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: '特選レース。負け戦。',
+    },
+    {
+        grade: ['FⅠ', 'FⅡ'],
+        stage: 'A級選抜',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: '選抜レース。負け戦',
+    },
+    {
+        grade: ['FⅠ', 'FⅡ'],
+        stage: 'A級一般',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: '一般レース。負け戦。',
+    },
+    {
+        grade: ['FⅠ', 'FⅡ'],
+        stage: 'A級決勝',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: 'FⅠの最終日に行われる決勝レース。',
+    },
+    {
+        grade: ['FⅠ', 'FⅡ'],
+        stage: 'A級準決勝',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: 'FⅠの準決勝レース。決勝進出を目指す重要なレース。',
+    },
+    {
+        grade: ['FⅠ', 'FⅡ'],
+        stage: 'A級予選',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: 'FⅠの予選レース。選手たちが決勝進出を目指して競い合う。',
+    },
+    {
+        grade: ['FⅠ', 'FⅡ'],
+        stage: 'A級初日特別選抜',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description:
+            'FⅠの初日特別選抜レース。準決勝のシード選手が出場する特別なレース。',
+    },
+    {
+        grade: ['FⅠ', 'FⅡ'],
+        stage: 'A級特一般',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: '特別一般レース。負け戦。',
+    },
+    {
+        grade: ['FⅠ', 'FⅡ'],
+        stage: 'A級特別予選',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: 'A級特別予選レース。',
+    },
+    {
+        grade: ['FⅠ', 'FⅡ'],
+        stage: 'A級チャレンジ決勝',
+        raceType: RaceType.KEIRIN,
+        priority: 1,
+        description: 'A級チャレンジシリーズの決勝レース。',
+    },
+    {
+        grade: ['FⅠ', 'FⅡ'],
+        stage: 'A級チャレンジ準決勝',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: 'A級チャレンジシリーズの準決勝レース。決勝進出を目指す。',
+    },
+    {
+        grade: ['FⅠ', 'FⅡ'],
+        stage: 'A級チャレンジ一般',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: 'A級チャレンジシリーズの一般レース。',
+    },
+    {
+        grade: ['FⅠ', 'FⅡ'],
+        stage: 'A級チャレンジ選抜',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: 'A級チャレンジシリーズの選抜レース。',
+    },
+    {
+        grade: ['FⅠ', 'FⅡ'],
+        stage: 'A級チャレンジ予選',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: 'A級チャレンジシリーズの予選レース。',
+    },
+    {
+        grade: ['GⅢ'],
+        stage: 'A級レインボーカップチャレンジファイナル',
+        raceType: RaceType.KEIRIN,
+        priority: 1,
+        description: 'A級レインボーカップチャレンジシリーズの決勝レース。',
+    },
+    {
+        grade: ['FⅠ', 'FⅡ'],
+        stage: 'A級男子新人戦予選',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: 'A級男子新人戦のルーキーシリーズ予選レース。',
+    },
+    {
+        grade: ['FⅠ', 'FⅡ'],
+        stage: 'A級男子新人アドバンス一般',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: 'A級男子新人アドバンスの一般レース。',
+    },
+    {
+        grade: ['FⅠ', 'FⅡ'],
+        stage: 'A級男子新人アドバンス決勝',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: 'A級男子新人アドバンスの決勝レース。',
+    },
+    {
+        grade: ['FⅡ'],
+        stage: 'SA混合男子予選１',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: 'S級・A級混合男子戦の予選１レース。',
+    },
+    {
+        grade: ['FⅡ'],
+        stage: 'SA混合男子予選２',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: 'S級・A級混合男子戦の予選２レース。',
+    },
+    {
+        grade: ['FⅡ'],
+        stage: 'SA混合男子決勝',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: 'S級・A級混合男子戦の決勝レース。',
+    },
+    {
+        grade: ['FⅡ'],
+        stage: 'SA男子新人アドバンス予選１',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: 'S級・A級混合の男子新人アドバンスの予選１レース。',
+    },
+    {
+        grade: ['FⅡ'],
+        stage: 'SA男子新人アドバンス予選２',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: 'S級・A級混合の男子新人アドバンスの予選２レース。',
+    },
+    {
+        grade: ['FⅡ'],
+        stage: 'SA男子新人アドバンス決勝',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: 'S級・A級混合の男子新人アドバンスの決勝レース。',
+    },
+    {
+        grade: ['FⅠ'],
+        stage: 'S級アドバンス決勝',
+        raceType: RaceType.KEIRIN,
+        priority: 4,
+        description: 'S級アドバンスの決勝レース。',
+    },
+    {
+        grade: ['FⅠ'],
+        stage: 'S級アドバンス一般',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: 'S級アドバンスの一般レース。',
+    },
+    {
+        grade: ['FⅠ'],
+        stage: 'S級アドバンス予選１',
+        raceType: RaceType.KEIRIN,
+        priority: 1,
+        description: 'S級アドバンスの予選１レース。',
+    },
+    {
+        grade: ['FⅠ'],
+        stage: 'S級アドバンス予選２',
+        raceType: RaceType.KEIRIN,
+        priority: 1,
+        description: 'S級アドバンスの予選２レース。',
+    },
+    {
+        grade: ['FⅠ', 'FⅡ'],
+        stage: 'A級アドバンス決勝',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: 'A級アドバンスの決勝レース。',
+    },
+    {
+        grade: ['FⅠ', 'FⅡ'],
+        stage: 'A級アドバンス特選',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: 'A級アドバンスの特選レース。',
+    },
+    {
+        grade: ['FⅠ', 'FⅡ'],
+        stage: 'A級アドバンス特別一般',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: 'A級アドバンスの特別一般レース。',
+    },
+    {
+        grade: ['FⅠ', 'FⅡ'],
+        stage: 'A級アドバンス予選１',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: 'A級アドバンスの予選１レース。',
+    },
+    {
+        grade: ['FⅠ', 'FⅡ'],
+        stage: 'A級アドバンス予選２',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description: 'A級アドバンスの予選２レース。',
+    },
+    {
+        grade: ['FⅠ', 'FⅡ'],
+        stage: 'A級ファイナル',
+        raceType: RaceType.KEIRIN,
+        priority: 0,
+        description:
+            'A級ファイナル。このレースで好成績を収めたらS級に昇級する。',
+    },
+    {
+        grade: ['GⅢ'],
+        stage: 'L級ワールドガールズケイリン',
+        raceType: RaceType.KEIRIN,
+        priority: 3,
+        description:
+            'ワールドサイクリスト支援競輪等の最終日に行われる単発の特別レース。海外トップ選手を含むL級ガールズ選手が参戦する国際色の強いレース。',
+    },
+    {
+        grade: ['GⅠ'],
+        stage: 'L級ガールズルーキー企画レース',
+        raceType: RaceType.KEIRIN,
+        priority: 3,
+        description:
+            '女子オールスター競輪等の開催中に行われる、ルーキー（新人）ガールズ選手による企画レース。',
+    },
+];

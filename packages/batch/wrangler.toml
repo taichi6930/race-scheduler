@@ -1,0 +1,148 @@
+## wrangler.toml（テンプレート）
+## このファイルはCIで使用され、リポジトリにコミットされます。
+## - CI（deploy/test）では `envsubst` により変数が環境ごとの値に置換されます。
+## - GitHub Secrets に各シークレットが保存され、ワークフローで環境変数として設定されます。
+## - 実際のシークレットはここに保存しないでください。ローカルで必要な場合は `wrangler.effective.toml` を使用してください。
+
+name = "race-schedule-batch"
+account_id = "${CLOUDFLARE_ACCOUNT_ID}"
+workers_dev = true
+main = "src/index.ts"
+compatibility_date = "2026-01-01"
+# PERF-141対応（2026-08-02）: 約2年間据え置きだった2024-09-23から更新。
+# workerdのcompatibility flag一覧（cloudflare/workerd の compatibility-date.capnp）を
+# 確認し、2026-01-13以降にdefault-onになるフラグ群（textDecoderCjkDecoder等、
+# CJK文字列を多く扱う本アプリのスクレイピング処理への影響を確認しきれない）は
+# 避け、それより前の2026-01-01を選定した。次回更新時も同様に確認すること。
+#
+# nodejs_compat_populate_process_env（SEC-019対応）:
+# 2025-04-01以降はdefault-onのため本フラグ自体は冗長だが、明示しておいても
+# 無害（既定動作と同じ内容を重ねて指定するだけ）なため、意図の記録を兼ねて残す。
+# `sanitizeError`（packages/core/src/utilities/sanitizeLog.ts）の
+# `process.env.NODE_ENV === 'production'` 判定を含む複数箇所が `process.env` 経由で
+# 環境変数を参照しているため、本フラグ（またはdefault-on化）が無いと
+# [env.production.vars] に NODE_ENV を追加しても実行時には反映されない。
+compatibility_flags = [
+    "nodejs_compat",
+    "nodejs_compat_populate_process_env",
+    "global_fetch_strictly_public",
+]
+
+# Workers Logs / Analytics を有効化する（全環境共通、PERF-142対応）。
+# エラー監視・相関ID活用（SEC-035, OBS-011/012/018/019）の前提基盤。
+[observability]
+enabled = true
+
+[dev]
+port = 8787
+local_protocol = "http"
+
+# モノレポ内のワークスペースパッケージを解決するためのエイリアス設定
+
+[env.development]
+name = "race-schedule-batch-dev"
+
+[env.development.vars]
+# 開発環境の変数（シークレットはwrangler secretで登録）
+# SCRAPING_API_URL, MAIN_API_URL, CALENDAR_API_URL はシークレットとして登録
+# WORKER_NAME: appLogger のJSON構造化ログ（OBS-001）を有効化し、
+# `worker` フィールドへ埋め込む識別子
+WORKER_NAME = "batch"
+
+# CFARCH-01対応（2026-08-08）: [[ratelimits]]はnamed environmentへ継承されないため、
+# トップレベル定義だけでは`wrangler deploy --env production`後のWorkerに
+# バインディングが存在せず、rateLimitMiddleware.tsのフェイルオープン設計により
+# レート制限が無音のまま無効化されていた。環境ごとに複製して明示する。
+[[env.development.ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "1002"
+simple = { limit = 100, period = 60 }
+
+[env.test]
+name = "race-schedule-batch-test"
+
+[env.test.vars]
+# テスト環境の変数
+WORKER_NAME = "batch"
+
+# CFARCH-01対応: 環境ごとに複製（上記[env.development.ratelimits]のコメント参照）。
+[[env.test.ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "1002"
+simple = { limit = 100, period = 60 }
+
+# CICD-73対応（2026-08-05）: batch-all.yml のCloudflareネイティブ移行（Workflows案）。
+# カットオーバー完了（docs/tasks/cicd-73-batch-cron-migration.md §14）に伴い、
+# test環境もproductionと同様にネイティブ`schedules`へ一本化した
+# （batch-all.yml側のtest向けcron `0 12 * * *` と同一時刻）。
+[[env.test.workflows]]
+name = "batch-all-workflow-test"
+binding = "BATCH_ALL_WORKFLOW"
+class_name = "BatchAllWorkflow"
+schedules = ["0 12 * * *"]
+
+[env.production]
+name = "race-schedule-batch-prod"
+
+[env.production.secrets]
+# All environment variables are stored as secrets
+# Secrets are registered at deploy time via GitHub Actions
+# GITHUB_TOKEN（Workflow失敗時のGitHub Issue通知、CICD-73/OBS-014）:
+# fine-grained PAT（Issues read/write権限のみ、race-scheduleリポジトリ限定）。
+# GitHub Actions側のリポジトリシークレット名は`ISSUE_BOT_TOKEN`
+# （`GITHUB_TOKEN`はGitHub Actionsの予約名のためリポジトリシークレットとして
+# 作成できない）。apiのGITHUB_TOKEN（CICD-121）と同じシークレットを共有する。
+# 未設定でもWorker自体は正常に動作し、失敗通知だけがスキップされる
+# （graceful degradation、notifyBatchWorkflowFailure.ts参照）。
+
+[env.production.vars]
+# 本番環境の変数
+WORKER_NAME = "batch"
+# NODE_ENV（SEC-019対応）: sanitizeError（packages/core/src/utilities/sanitizeLog.ts）が
+# 本番環境向けにスタックトレースを先頭フレームのみへ切り詰めるために参照する。
+# nodejs_compat_populate_process_env（上記 compatibility_flags）と組み合わせて初めて
+# `process.env.NODE_ENV` として読み取れる。development/test 環境には設定しない
+# （'production' 以外の値では切り詰めを行わない設計のため）。
+#
+# 【DEP-004類似の修正、2026-08-03】: このキーは以前
+# `[[env.production.workflows]]`（PR #2259でこのブロックの直前に挿入された）の
+# 直後、テーブルヘッダを挟まずに置かれていたため、TOML的には誤って
+# `workflows` 配列テーブルの要素プロパティとして解釈され、実際には
+# `env.production.vars.NODE_ENV` として設定されていなかった（本番のログ
+# サニタイズが機能していなかった）。`[env.production.vars]` の直下へ戻す。
+NODE_ENV = "production"
+
+# CICD-73/CONC-03対応（2026-08-03）: production環境にもWorkflowを実装し、
+# batch-all.ymlと同じcronスケジュールでCloudflareネイティブのschedulesトリガーを
+# 登録する。batch-all.yml側のGitHub Actions schedule（.github/workflows/batch-all.yml）は
+# 並行稼働の検証期間として維持する（docs/tasks/cicd-73-batch-cron-migration.md
+# §7-6/§11参照）。両トリガーが同時刻に重なっても、Workflow自身が最初のstepで
+# 排他ロック（batch_run_lock）を取得し、取得できなければ即座に何もせず終了するため
+# （runBatchAllWorkflowのacquire-batch-lock step）、二重実行にはならない。
+# 検証期間終了後、batch-all.ymlの`schedule`トリガーのみを削除する（`workflow_dispatch`は残す）。
+[[env.production.workflows]]
+name = "batch-all-workflow-prod"
+binding = "BATCH_ALL_WORKFLOW"
+class_name = "BatchAllWorkflow"
+schedules = ["0 3,9,15,21 * * *"]
+
+# CFARCH-01対応: 環境ごとに複製（上記[env.development.ratelimits]のコメント参照）。
+[[env.production.ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "1002"
+simple = { limit = 100, period = 60 }
+
+# レート制限バインディング（トップレベル、`wrangler dev`専用のフォールバック、SEC-012対応）。
+# 仕様: Wrangler 4.36.0 以上で両フィールドが必須
+# - "name" フィールド: バインディング名（環境内でユニーク）
+# - "namespace_id": レート制限ネームスペースID（アカウント内でユニーク、数値文字列）。
+#   apiの1001と衝突しないよう1002を割り当てた
+# limit: 1分間に許可するリクエスト数（apiと同じ値を暫定採用。実際のミドルウェア実装
+# （SEC-011、現状バインディングのみで未使用）で知見が得られ次第、環境別の調整
+# （PERF-147）を検討する）
+# CFARCH-01対応（2026-08-08）: named environmentには継承されないため、[env.X]側にも
+# 複製した。このトップレベル定義は`wrangler dev`（env未指定）専用のフォールバック。
+[[ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "1002"
+simple = { limit = 100, period = 60 }

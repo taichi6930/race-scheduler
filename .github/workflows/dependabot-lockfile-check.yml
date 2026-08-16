@@ -1,0 +1,106 @@
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+name: Dependabot Lockfile Check
+
+# 非特権コンテキスト（pull_request、既定でcontents:readのみ・secretsアクセス無し）
+# でdependabotのPRブランチ内容をcheckoutしbun.lockを再生成する。ここで得た
+# 差分はartifactとしてのみ受け渡し、実際のPRブランチへのpushは
+# dependabot-automation.ymlのfix-lockfileジョブ（workflow_runトリガー）が
+# GitHub Contents API経由で行う。特権コンテキスト側は一切checkoutを行わない
+# ことで、「特権コンテキストでの未信頼コードcheckout」
+# （CodeQL: Checkout of untrusted code in a privileged context）を構造的に
+# 回避する。
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  # PRブランチへのsynchronizeはdependabot自身のpushとは限らない（例:
+  # リポジトリオーナーがGitHub UIの「Update branch」でmainを取り込んだ場合、
+  # マージコミットのactorはdependabotではなくオーナー自身になる）。
+  # そのためgithub.actorではなく、PRの作成者（=dependabotが開いたPRか）で判定する。
+  check-lockfile:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+        with:
+          filter: blob:none
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+
+      - name: Setup Bun cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      # dependabotがpackage.jsonのみ更新しbun.lockを追従させないため、
+      # `--frozen-lockfile`を付けずに再生成する。ライフサイクルスクリプトは
+      # 依存解決に不要かつ未信頼のためignore-scriptsで無効化する。
+      - name: Regenerate bun.lock
+        id: lockfile
+        # CILOG-008: --silentで依存木の逐次ログを抑制（エラー時のメッセージ・exit codeは
+        # 維持される。.github/actions/setup-workspace/action.ymlのCILOG-007と同じ確認済み）。
+        run: |
+          bun install --ignore-scripts --silent
+          if git diff --quiet -- bun.lock; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Save PR number
+        run: echo "${{ github.event.pull_request.number }}" > pr_number.txt
+
+      - name: Upload updated bun.lock
+        if: steps.lockfile.outputs.changed == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: bun-lock-fix
+          path: |
+            bun.lock
+            pr_number.txt
+          retention-days: 1
+
+      # SEC-025対応: dependabot-automation.ymlの自動マージ有効化（`gh pr merge --auto`）は
+      # 依存の脆弱性を一切見ずに実行されていた。scheduled-tests.ymlのauditジョブと同じ
+      # DEP-020のallowlist機構（docs/security/audit-allowlist.json）を再利用し、
+      # このPRの依存関係（再生成後のbun.lock）に対する監査結果をartifactで
+      # dependabot-automation.ymlへ受け渡す（非特権コンテキストで完結させる設計は
+      # fix-lockfileと同じ）。
+      - name: Check audit allowlist
+        id: allowlist
+        run: |
+          bun scripts/check-audit-allowlist.ts
+          echo "ignore-flags=$(bun scripts/check-audit-allowlist.ts --ignore-flags)" >> "$GITHUB_OUTPUT"
+
+      - name: Run dependency audit
+        id: audit
+        run: bun audit --audit-level moderate ${{ steps.allowlist.outputs.ignore-flags }}
+        continue-on-error: true
+
+      - name: Save audit result
+        run: echo "${{ steps.audit.outcome }}" > audit_result.txt
+
+      - name: Upload audit result
+        uses: actions/upload-artifact@v7
+        with:
+          name: dependabot-audit-result
+          path: |
+            audit_result.txt
+            pr_number.txt
+          retention-days: 1

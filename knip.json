@@ -1,0 +1,15 @@
+{
+    "$schema": "https://unpkg.com/knip@6/schema.json",
+    "ignoreDependencies": ["esbuild", "cloudflare"],
+    "ignoreBinaries": ["awk", "flutter", "checkSchemaDrift.ts"],
+    "ignoreExportsUsedInFile": true,
+    "ignore": [
+        "packages/api/src/di/index.ts",
+        "packages/api/scripts/generateVapidKeys.ts",
+        "packages/api/scripts/generatePushAuthEncryptionKey.ts",
+        "packages/api/scripts/checkSchemaDrift.ts",
+        "packages/scraping/scripts/backfillRaceFromCache.ts",
+        "packages/front/web/push-sw.js",
+        "packages/front/web/app-bootstrap.js"
+    ]
+}

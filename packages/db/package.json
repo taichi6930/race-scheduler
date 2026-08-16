@@ -1,0 +1,17 @@
+{
+    "name": "@race-schedule/db",
+    "version": "0.1.0",
+    "private": true,
+    "description": "Database migrations",
+    "scripts": {
+        "migrations:apply:local": "wrangler d1 migrations apply race-schedule-db --local --config ./wrangler.toml",
+        "migrations:apply:test": "wrangler d1 migrations apply race_schedule_db_test --remote --env test --config ./wrangler.toml",
+        "migrations:apply:production": "wrangler d1 migrations apply race_schedule_db_prod --remote --env production --config ./wrangler.toml",
+        "migrations:list:local": "wrangler d1 migrations list race-schedule-db --local --config ./wrangler.toml",
+        "migrations:list:test": "wrangler d1 migrations list race_schedule_db_test --remote --env test --config ./wrangler.toml",
+        "migrations:list:production": "wrangler d1 migrations list race_schedule_db_prod --remote --env production --config ./wrangler.toml",
+        "db:shell:local": "wrangler d1 execute race-schedule-db --local --config ./wrangler.toml",
+        "db:shell:test": "wrangler d1 execute race_schedule_db_test --remote --env test --config ./wrangler.toml",
+        "db:shell:production": "bun ../../scripts/confirm-production-access.ts race_schedule_db_prod && wrangler d1 execute race_schedule_db_prod --remote --env production --config ./wrangler.toml"
+    }
+}

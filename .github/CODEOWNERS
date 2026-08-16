@@ -1,0 +1,27 @@
+# CODEOWNERS
+#
+# デプロイ経路・シークレットに触れる設定（GitHub Actionsワークフロー・Cloudflare Workers
+# 設定）の変更に、通常のコード変更より一段高いレビューを要求するための指定（SEC-050対応）。
+#
+# 注意: このファイルはレビュー担当者の割り当てを機械的に強制するだけであり、実際に
+# 「承認必須」にするには、リポジトリの Settings > Branches > Branch protection rules で
+# 「Require review from Code Owners」を有効化する必要がある（BACKLOG.md §J-8 #1 参照。
+# 設定状況はダッシュボード側の確認が必要でコードからは判定できない）。
+
+# デプロイ・CI設定全般
+/.github/workflows/ @taichi6930
+/.github/actions/ @taichi6930
+/.github/CODEOWNERS @taichi6930
+
+# Cloudflare Workers 設定（wrangler.toml）
+/packages/api/wrangler.toml @taichi6930
+/packages/batch/wrangler.toml @taichi6930
+/packages/calendar/wrangler.toml @taichi6930
+/packages/db/wrangler.toml @taichi6930
+/packages/scraping/wrangler.toml @taichi6930
+
+# 依存関係の自動化設定
+/.github/dependabot.yml @taichi6930
+
+# IaC（実クラウドリソースを操作しうるため要オーナーレビュー）
+/infra/ @taichi6930

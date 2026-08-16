@@ -1,0 +1,195 @@
+// filterUpcomingFavoriteRaces / UpcomingFavoritesCache のデシジョンテーブル
+//
+// | ID   | 対象                    | 条件                                          | 期待                     |
+// | ---- | ----------------------- | --------------------------------------------- | -------------------------- |
+// | T-01 | filterUpcomingFavoriteRaces | お気に入り登録済み＋未発走                | 結果に含まれる            |
+// | T-02 | filterUpcomingFavoriteRaces | お気に入り登録済み＋発走済み（過去）      | 結果に含まれない          |
+// | T-03 | filterUpcomingFavoriteRaces | お気に入り未登録                          | 結果に含まれない          |
+// | T-04 | filterUpcomingFavoriteRaces | 複数のお気に入り                          | 発走時刻昇順で返る        |
+// | T-05 | UpcomingFavoritesCache      | races・favoriteIds同一・先頭の発走時刻未到達 | 同一インスタンスを再利用   |
+// | T-06 | UpcomingFavoritesCache      | racesが変化                               | 再計算される              |
+// | T-07 | UpcomingFavoritesCache      | favoriteIdsが変化                         | 再計算される              |
+// | T-08 | UpcomingFavoritesCache      | nowが結果先頭の発走時刻に到達             | 再計算される              |
+// | T-09 | UpcomingFavoritesCache      | 結果が空（該当お気に入り無し）            | nowが進んでも再利用される  |
+// | T-10 | filterUpcomingFavoriteRaces | isWatched=trueだがfavoriteIdsに未登録（KPLAYER-07） | 結果に含まれる |
+// | T-11 | filterUpcomingFavoriteRaces | isWatched=false・favoriteIdsにも未登録    | 結果に含まれない          |
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:front/domain/entities/race_entity.dart';
+import 'package:front/features/favorites/application/favorite_races_provider.dart';
+
+final _now = DateTime(2026, 4, 19, 15, 35);
+
+RaceEntity _race({
+  required String id,
+  required Duration offsetFromNow,
+  bool? isWatched,
+}) => RaceEntity(
+  raceId: id,
+  raceName: 'レース$id',
+  raceType: 'jra',
+  placeId: 'place-$id',
+  raceCourse: '中山',
+  datetime: _now.add(offsetFromNow).toIso8601String(),
+  raceNumber: 11,
+  isWatched: isWatched,
+);
+
+void main() {
+  group('filterUpcomingFavoriteRaces', () {
+    test('[T-01] お気に入り登録済み_未発走_結果に含まれる', () {
+      final upcoming = _race(
+        id: 'a',
+        offsetFromNow: const Duration(minutes: 5),
+      );
+
+      final result = filterUpcomingFavoriteRaces([upcoming], {'a'}, _now);
+
+      expect(result.map((r) => r.raceId), ['a']);
+    });
+
+    test('[T-02] お気に入り登録済み_発走済み_結果に含まれない', () {
+      final past = _race(id: 'a', offsetFromNow: const Duration(hours: -1));
+
+      final result = filterUpcomingFavoriteRaces([past], {'a'}, _now);
+
+      expect(result, isEmpty);
+    });
+
+    test('[T-03] お気に入り未登録_結果に含まれない', () {
+      final upcoming = _race(
+        id: 'a',
+        offsetFromNow: const Duration(minutes: 5),
+      );
+
+      final result = filterUpcomingFavoriteRaces([upcoming], {}, _now);
+
+      expect(result, isEmpty);
+    });
+
+    test('[T-04] 複数のお気に入り_発走時刻昇順で返る', () {
+      final later = _race(id: 'later', offsetFromNow: const Duration(hours: 2));
+      final sooner = _race(
+        id: 'sooner',
+        offsetFromNow: const Duration(minutes: 10),
+      );
+
+      final result = filterUpcomingFavoriteRaces(
+        [later, sooner],
+        {'later', 'sooner'},
+        _now,
+      );
+
+      expect(result.map((r) => r.raceId).toList(), ['sooner', 'later']);
+    });
+
+    test('[T-10] isWatched=trueだがfavoriteIdsに未登録_結果に含まれる', () {
+      final watched = _race(
+        id: 'w',
+        offsetFromNow: const Duration(minutes: 5),
+        isWatched: true,
+      );
+
+      final result = filterUpcomingFavoriteRaces([watched], {}, _now);
+
+      expect(result.map((r) => r.raceId), ['w']);
+    });
+
+    test('[T-11] isWatched=false_favoriteIdsにも未登録_結果に含まれない', () {
+      final plain = _race(
+        id: 'p',
+        offsetFromNow: const Duration(minutes: 5),
+        isWatched: false,
+      );
+
+      final result = filterUpcomingFavoriteRaces([plain], {}, _now);
+
+      expect(result, isEmpty);
+    });
+  });
+
+  group('UpcomingFavoritesCache', () {
+    test('[T-05] races_favoriteIds同一_先頭の発走時刻未到達_同一インスタンスを再利用する', () {
+      final races = [
+        _race(id: 'a', offsetFromNow: const Duration(minutes: 30)),
+      ];
+      final favoriteIds = {'a'};
+      final cache = UpcomingFavoritesCache();
+
+      final first = cache.resolve(races, favoriteIds, _now);
+      final second = cache.resolve(
+        races,
+        favoriteIds,
+        _now.add(const Duration(seconds: 30)),
+      );
+
+      expect(identical(first, second), isTrue);
+    });
+
+    test('[T-06] racesが変化_再計算される', () {
+      final racesA = [
+        _race(id: 'a', offsetFromNow: const Duration(minutes: 30)),
+      ];
+      final racesB = [
+        _race(id: 'a', offsetFromNow: const Duration(minutes: 30)),
+      ];
+      final favoriteIds = {'a'};
+      final cache = UpcomingFavoritesCache();
+
+      final first = cache.resolve(racesA, favoriteIds, _now);
+      final second = cache.resolve(racesB, favoriteIds, _now);
+
+      expect(identical(first, second), isFalse);
+    });
+
+    test('[T-07] favoriteIdsが変化_再計算される', () {
+      final races = [
+        _race(id: 'a', offsetFromNow: const Duration(minutes: 30)),
+        _race(id: 'b', offsetFromNow: const Duration(minutes: 40)),
+      ];
+      final cache = UpcomingFavoritesCache();
+
+      final first = cache.resolve(races, {'a'}, _now);
+      final second = cache.resolve(races, {'a', 'b'}, _now);
+
+      expect(identical(first, second), isFalse);
+      expect(second.map((r) => r.raceId), ['a', 'b']);
+    });
+
+    test('[T-08] nowが結果先頭の発走時刻に到達_再計算される', () {
+      final races = [
+        _race(id: 'a', offsetFromNow: const Duration(minutes: 5)),
+      ];
+      final favoriteIds = {'a'};
+      final cache = UpcomingFavoritesCache();
+
+      final first = cache.resolve(races, favoriteIds, _now);
+      final second = cache.resolve(
+        races,
+        favoriteIds,
+        _now.add(const Duration(minutes: 5, seconds: 1)),
+      );
+
+      expect(identical(first, second), isFalse);
+      expect(second, isEmpty); // 発走時刻を過ぎたため対象から外れる
+    });
+
+    test('[T-09] 結果が空_該当お気に入り無し_nowが進んでも再利用される', () {
+      final races = [
+        _race(id: 'other', offsetFromNow: const Duration(minutes: 5)),
+      ];
+      final favoriteIds = {'a'};
+      final cache = UpcomingFavoritesCache();
+
+      final first = cache.resolve(races, favoriteIds, _now);
+      final second = cache.resolve(
+        races,
+        favoriteIds,
+        _now.add(const Duration(days: 1)),
+      );
+
+      expect(identical(first, second), isTrue);
+      expect(first, isEmpty);
+    });
+  });
+}

@@ -1,0 +1,33 @@
+{
+    "name": "@race-schedule/api",
+    "version": "0.1.0",
+    "private": true,
+    "description": "Race Schedule API Service",
+    "main": "./dist/index.js",
+    "scripts": {
+        "type-check": "tsc --noEmit",
+        "build": "tsc --noEmit",
+        "dev": "wrangler dev --remote --env test",
+        "dev:local": "wrangler dev --local",
+        "dev:memory": "wrangler dev --local --env local",
+        "migrations:apply:local": "bunx wrangler d1 migrations apply race-schedule-db --local --config packages/api/wrangler.toml",
+        "deploy:local": "TZ=Asia/Tokyo wrangler dev --local --persist-to ../db",
+        "deploy:development": "TZ=Asia/Tokyo wrangler deploy --env development",
+        "deploy:test": "TZ=Asia/Tokyo wrangler deploy --env test",
+        "deploy:production": "TZ=Asia/Tokyo wrangler deploy --env production",
+        "test": "HTML_FETCH_DELAY_MS=0 bun test --path-ignore-patterns '**/test/integration/system/**'",
+        "test:watch": "HTML_FETCH_DELAY_MS=0 bun test --watch",
+        "lint": "eslint './src/**/*.ts'",
+        "lint:fix": "eslint --fix './src/**/*.ts'",
+        "check:schema-drift": "cd scripts && bun checkSchemaDrift.ts"
+    },
+    "dependencies": {
+        "@race-schedule/core": "workspace:*",
+        "@scalar/hono-api-reference": "^0.11.12",
+        "drizzle-orm": "^0.45.2",
+        "hono": "^4.12.32",
+        "reflect-metadata": "^0.2.2",
+        "tsyringe": "^4.10.0",
+        "zod": "^4.4.3"
+    }
+}

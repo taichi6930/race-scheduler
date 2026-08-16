@@ -1,0 +1,102 @@
+name: Deploy Widgetbook
+
+# Widgetbook（デザインシステムのウィジェットカタログ、packages/front/lib/widgetbook.dart）を
+# mainマージ時にCloudflare Pagesのproductionブランチへデプロイし、常時アクセス可能な
+# race-schedule-widgetbook.pages.dev を最新化する（ユーザー依頼、2026-08-09）。
+#
+# pull_request.ymlのwidgetbook-previewジョブ（PRブランチごとのプレビュー）とは別に、
+# deploy.yml（db/api/batch/admin/front Workerのデプロイ）とも
+# 依存関係を持たない完全に独立したワークフローとする（ユーザー依頼: 「storybookのデプロイは、
+# 他のデプロイとは別にしておいてください」）。他パッケージのデプロイ失敗・遅延の影響を
+# 受けず、逆にWidgetbookのビルド失敗が他パッケージのデプロイをブロックすることもない。
+#
+# トリガー条件はwidgetbook-previewジョブと同じ「デザインシステム本体（lib/design/**）・
+# カタログのentry point（widgetbook.dart）の変更時のみ」に揃える（front全体の変更に
+# 反応させると無関係な変更でも毎回重いFlutter webビルドが走ってしまうため、CICD-97と
+# 同様の理由）。
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - "packages/front/lib/design/**"
+      - "packages/front/lib/widgetbook.dart"
+      - ".github/workflows/deploy-widgetbook.yml"
+      - ".github/actions/setup-flutter-workspace/**"
+      - ".github/actions/setup-workspace/**"
+      - ".github/actions/validate-cf-secrets/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-widgetbook:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: production
+    defaults:
+      run:
+        working-directory: packages/front
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          filter: blob:none
+
+      - name: Setup Flutter workspace
+        uses: ./.github/actions/setup-flutter-workspace
+
+      - name: Build Widgetbook (web)
+        # PERF-151対応の最適化レベル明示をここでも踏襲する（deploy-front-reusable.yml参照）。
+        run: flutter build web --release -O4 -t lib/widgetbook.dart
+
+      # bunx wranglerはルートpackage.jsonでバージョン固定されたdevDependencyを使うため、
+      # ルートでのbun installが必要（deploy-front-reusable.ymlと同じ理由）。
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+        with:
+          bun-install-filter: ./packages/front
+
+      - name: "🔍 Validate Cloudflare Secrets"
+        uses: ./.github/actions/validate-cf-secrets
+        with:
+          cloudflare-api-token: ${{ secrets.CLOUDFLARE_PAGES_API_TOKEN }}
+          cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Ensure Cloudflare Pages project exists
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        # 初回のみプロジェクトが存在しないため作成する。2回目以降は
+        # 「already exists」エラーになるため `|| true` で無視する（widgetbook-previewジョブと同じ）。
+        run: |
+          bunx wrangler pages project create race-schedule-widgetbook \
+            --production-branch main \
+            || true
+
+      - name: Deploy Widgetbook to Cloudflare Pages (production)
+        id: deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        # productionブランチ（"main"）へデプロイすることで race-schedule-widgetbook.pages.dev
+        # のルートURLに反映される（wrangler pages projectの--production-branchと一致させる必要がある）。
+        run: |
+          bunx wrangler pages deploy build/web \
+            --project-name race-schedule-widgetbook \
+            --branch main | tee /tmp/wrangler-deploy-output.txt
+
+          DEPLOY_URL=$(grep -oE 'https://[a-zA-Z0-9.-]+\.pages\.dev[^[:space:]]*' /tmp/wrangler-deploy-output.txt | tail -1)
+          echo "deploy-url=$DEPLOY_URL" >> "$GITHUB_OUTPUT"
+
+      - name: "✅ Deployment Summary"
+        run: |
+          echo "=== Widgetbook Deployment Complete ==="
+          echo "Project : race-schedule-widgetbook"
+          echo "URL     : https://race-schedule-widgetbook.pages.dev"
+          echo "Preview : ${{ steps.deploy.outputs.deploy-url }}"

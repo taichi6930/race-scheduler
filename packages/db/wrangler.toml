@@ -1,0 +1,52 @@
+## wrangler.toml (D1 Database package template)
+## - This file is used by CI workflows and committed to the repository.
+## CI workflows use `envsubst` to replace `${DB_ID}` placeholder
+##   with actual DB IDs from GitHub Secrets before running migrations.
+
+name = "race-schedule-db"
+compatibility_date = "2026-01-01"
+# PERF-141対応（2026-08-02）: 他4パッケージと同じ日付に揃えた（このファイルは
+# デプロイされるWorkerを持たないため実際のランタイム挙動には影響しない）。
+# compatibility_flags / [observability] は未設定（意図的、PERF-142/143対応）:
+# このパッケージは `main` を持たず、デプロイされる Worker スクリプトが存在しない
+# （`wrangler d1 migrations` / `wrangler d1 execute` のCLI実行専用の設定ファイル）。
+# 両者ともWorkerランタイムの挙動・ログに関する設定のため、対象となるWorkerが無く適用不能。
+
+# トップレベルのD1バインディング（PERF-144対応・意図の明記）:
+# `wrangler d1 migrations ... --local`（envを指定しないローカル実行）専用の
+# フォールバック設定。database_id="preview" はローカルのみで有効なプレースホルダ。
+# 実際の環境（development/test/production）は下記の [env.X.d1_databases] が使われ、
+# envsubstでGitHub Secretsの実DB_IDに置換される。
+[[d1_databases]]
+binding = "DB"
+database_name = "race-schedule-db"
+database_id = "preview"
+migrations_dir = "./migrations"
+
+[env.development]
+name = "race-schedule-db-dev"
+
+[[env.development.d1_databases]]
+binding = "DB"
+database_name = "race-schedule-db-dev"
+database_id = "${DB_ID}"
+migrations_dir = "./migrations"
+
+[env.production]
+name = "race-schedule-db-prod"
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "race-schedule-db-prod"
+database_id = "${DB_ID}"
+migrations_dir = "./migrations"
+
+[env.test]
+name = "race-schedule-db-test"
+
+[[env.test.d1_databases]]
+binding = "DB"
+database_name = "race-schedule-db-test"
+database_id = "${DB_ID}"
+migrations_dir = "./migrations"
+

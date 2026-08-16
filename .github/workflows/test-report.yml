@@ -1,0 +1,340 @@
+name: Test Report
+
+# 「何がテストされているか」（UT/コンポーネント/sIT/UAT/front）と直近の実行結果を1枚のHTMLに
+# 集約する scripts/generate-test-report.ts を実行し、Cloudflare Pagesとして公開する
+# （Artifactとしても14日間保持する）。
+#
+# pull_request.yml のブロッキングジョブ（test-packages-*・call-component-test）とは別に、
+# 全パッケージ・全レイヤーを毎回まとめて再実行するため、PRごとに実行すると
+# 重複実行になる（ci-conventions.md §6）。そのため PR では実行せず、
+# main へのマージ（push）・月次スケジュール（CICD-101）・手動実行のみとする。
+#
+# front（Flutter）はこのリポジトリで初めてCI上で実行するテスト（他ワークフローに
+# flutter test は無い）。golden test はCIランナーの環境（フォント等）に依存して
+# 差分が出る可能性があるため、レイヤーの成否に関わらずレポート生成自体は継続する
+# （scripts/generate-test-report.ts run の設計どおり）。
+#
+# 公開先はCloudflare Pages（CICD-71対応、2026-08-01）。GitHub PagesはpublicリポジトリでのみFree/
+# 無制限で、private化すると個人アカウントのGitHub Freeプランでは利用できなくなる制約があった
+# ため移行した。プロジェクト名は `race-schedule-ci-report`（初回のみ`wrangler pages project
+# create`で自動作成、2回目以降は`|| true`で既存作成エラーを無視する）。`deploy-front-reusable.yml`
+# と同じ`bunx wrangler pages deploy`パターンを踏襲している。「test-report」という名前だと
+# Worker環境の`test` env（race-schedule-test等）と紛らわしいため、あえて「test」を含まない
+# `ci-report`とした。
+#
+# Allure Report（test-report/allure/）: 同じPages上に実行履歴・トレンドグラフ付きの
+# レポートを追加公開する。当初は bun test --reporter=junit の出力（フラット化した上で）を
+# そのまま allure-commandline の JUnit XML リーダーに渡していたが、このリーダーは
+# <testcase><properties> を Allure の label（epic/feature/story等、Behaviors/Packages
+# タブのグルーピングに使われる）ではなく「parameters」としてしか扱わないため、
+# Behaviors タブが常に空になることが実機検証で判明した。そのため
+# scripts/build-allure-results.ts が bun test の JUnit出力を直接 Allure ネイティブ結果
+# フォーマット（<uuid>-result.json、labels配列で epic/feature/story/suite/package を
+# 指定）に変換して test-report/allure-results/ へ書き出す（詳細は同スクリプト先頭コメント
+# 参照）。categories.json（scripts/allure-static/、失敗種別の分類）・environment.properties
+# （build-allure-environment.ts、Overviewタブ）・executor.json（build-allure-executor.ts、
+# 履歴の実行元表示）も同じ test-report/allure-results/ に配置してから allure generate に
+# 渡す。履歴（トレンドグラフ）は、直前に公開済みのPages上のhistory/*.jsonを取得できれば
+# 引き継ぐ（初回や取得失敗時は空のまま続行）。
+#
+# Allure結果の詳細化（CICD-64/65/66/67, aidlc-docs/inception/application-design/
+# allure-inspector-reporter-design.md）: `bun scripts/generate-test-report.ts run` は
+# 内部で bun の Inspector Protocol（--inspect-wait）にも接続し、実アサーションメッセージ・
+# テストケース単位の実時刻・severityの根拠となるイベントを test-report/raw/<layer>.events.jsonl
+# へ書き出す（scripts/lib/bunInspectorClient.ts・scripts/run-bun-layer-with-inspector.ts）。
+# build-allure-results.ts はこのJSONLがあれば優先して使い、無い・壊れている・JUnit XMLとの
+# 件数が一致しない場合は黙って（このコメント冒頭の）XML経由の経路にフォールバックする
+# （3段階フォールバック、詳細は設計書 §5）。挙動が変わるのは Categories の分類精度・
+# Timeline の実時刻・Suites の3階層化（parentSuite/suite/subSuite）・Graphs の severity分布
+# のみで、Behaviors/Packages/Overview の生成経路自体は変わらない。
+#
+# カバレッジ（test-report内の #coverage セクション）: 既存の test:gap:json
+# （bun test --coverage の実測、testing-conventions.md §7.5 の C0/C1 100%方針と
+# 同じ基準）をそのまま流用し、パッケージ別「100%達成ファイル数/対象ファイル数」を
+# 表示する。test:report:full 側の per-layer JUnit実行とは別に bun test --coverage を
+# もう一度フルで実行するため多少時間は伸びるが、本ワークフローはPRごとには実行しない
+# （main push・月次・手動のみ）ためコストは許容範囲。
+#
+# Spec Coverage（test-report内の #spec-coverage セクション）: これまで coverage-pr.yml が
+# PRのsticky commentとしてのみ投稿していた spec:coverage:json（scripts/spec-coverage.ts）の
+# 結果を、常設のCloudflare Pages上でも見られるようにする（PRがクローズ/マージされると
+# コメントも実質参照しづらくなるため）。トレーサビリティグラフはPRコメントと同じ
+# buildMermaidGraph() を再利用し、ブラウザ側でmermaid.js（CDN）を読み込んで描画する。
+#
+# report-test-failureジョブ（2026-08-02追加）: 本ワークフローはmain push・月次・手動でのみ
+# 実行される無人実行のため、UT/コンポーネント/front等いずれかのレイヤーが失敗しても
+# job summary/Allure Reportを人が見に行かない限り気づけない。scheduled-tests.ymlの
+# report-test-failuresジョブと同じ「GitHub App token + タイトルでdedupしたIssue、復旧したら
+# 自動Close」の作法で、generate-test-reportジョブの失敗をIssue化する（`test-failure`
+# ラベル、`.claude/docs/loop-engineering/backlog-contract.md`§2.3の`kind: 'ci-fix'`
+# 自動ソースに合流する）。generate-test-reportの各ステップは`if: always()`でレポート生成
+# 自体は継続するが、テスト実行ステップ（`bun run test:report:full`）自体には
+# continue-on-errorが無いため、テストが1つでも失敗すればジョブ全体はfailureになる。
+# concurrency（cancel-in-progress）によりRESULTが`cancelled`になった場合はテスト失敗
+# ではないため起票しない（2026-08-03、Issue #2268-#2309の11件連続誤起票を受けて対応）。
+# dedupは`gh issue list --label`ではなくタイトル一致で行う（同日判明: `gh issue create
+# --label`はこのジョブのGitHub Appトークンだとラベルが実際には付与されないまま成功する
+# ことがあり、ラベルに依存したdedupが機能せず同一内容のIssueが際限なく複製されていた）。
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# pathsフィルタ: 以前はフィルタが無く、docs/CI設定のみのmain pushでも毎回このワークフロー
+# 最重量の処理（全パッケージ・全レイヤーのテスト実行＋Flutter test＋Allure生成＋
+# カバレッジ／spec coverage計測、timeout 20分）が走っていた。テスト結果・カバレッジ・
+# spec coverageのいずれにも影響しない変更（.claude/docs/等のAI運用ドキュメントのみ、等）
+# ではレポート内容が変わらないため、対象ファイルが変わったときだけ起動する。
+# push トリガーは PR の required status check と異なり「対象外PRが永遠にステータス待ちに
+# なる」問題が起きないため、coverage-pr.yml と違いworkflow-levelのpathsを直接使ってよい。
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/**"
+      - "tests/**"
+      - "docs/specs/**"
+      - "scripts/generate-test-report.ts"
+      - "scripts/report-test-summary.ts"
+      - "scripts/build-allure-*.ts"
+      - "scripts/allure-static/**"
+      - "scripts/spec-coverage.ts"
+      - "scripts/run-bun-layer-with-inspector.ts"
+      - "scripts/lib/**"
+      - "scripts/flatten-junit-xml.ts"
+      - "package.json"
+      - "bun.lock"
+      - ".flutter-version"
+      - ".github/workflows/test-report.yml"
+  schedule:
+    # CICD-101対応（2026-08-01）: mainへのpushで既にレポートが更新され続けるため、
+    # 週次cronはpushが数日間発生しなかった場合の保険に過ぎず、通常運用では
+    # ほぼ無意味な重複実行になっていた。毎月1日 15:00 JST (06:00 UTC) の月次に
+    # 引き下げる（scheduled-tests.yml と同時刻だが別ワークフロー・別concurrency
+    # groupのため衝突しない）。
+    - cron: "0 6 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate-test-report:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # CLOUDFLARE_PAGES_API_TOKEN/CLOUDFLARE_ACCOUNT_IDがGitHub Environment（production等）に
+    # スコープされている場合に解決できるよう、他のデプロイ系ジョブと同様environmentを
+    # 明示する（front/api等のdeploy-*-reusable.ymlと同じ理由）。
+    environment: production
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+        with:
+          filter: blob:none
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+        with:
+          setup-node: 'false'
+
+      # QDEV-05対応: このジョブは`bun run test:report:full`内部で独自に
+      # `flutter pub get`/`flutter test`を呼ぶ構成で、pub get・build_runner
+      # コード生成・キャッシュまで行うsetup-flutter-workspaceとは手順が
+      # 異なるため、composite action化はせずバージョン文字列のみ
+      # `.flutter-version`（単一ソース）から読み取る。
+      - name: Read Flutter version
+        id: flutter-version
+        run: echo "version=$(cat .flutter-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          # DEP-023対応: バージョンを固定しないとstable更新のたびビルド環境が
+          # 無警告で変わりうる。既知動作を確認済みのバージョンを明示固定する。
+          flutter-version: ${{ steps.flutter-version.outputs.version }}
+
+      - name: Run test layers and build report
+        run: bun run test:report:full
+
+      - name: Write job summary
+        run: bun scripts/report-test-summary.ts >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run coverage analysis
+        if: always()
+        run: |
+          mkdir -p test-report/raw
+          bun run test:gap:json > test-report/raw/coverage.json
+
+      - name: Run spec coverage analysis
+        if: always()
+        run: |
+          mkdir -p test-report/raw
+          bun run spec:coverage:json > test-report/raw/spec-coverage.json
+
+      - name: Setup Java (for Allure)
+        if: always()
+        uses: actions/setup-java@v5.7.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Fetch previous Allure history (best-effort, enables trend graphs)
+        if: always()
+        run: |
+          mkdir -p test-report/allure-results/history
+          for f in history.json history-trend.json categories-trend.json duration-trend.json retry-trend.json; do
+            curl -sf -o "test-report/allure-results/history/$f" \
+              "https://race-schedule-ci-report.pages.dev/allure/history/$f" \
+              || rm -f "test-report/allure-results/history/$f"
+          done
+
+      - name: Generate Allure report
+        if: always()
+        run: bun run allure:generate
+
+      - name: Rebuild HTML report (to link the just-generated Allure report)
+        if: always()
+        run: bun scripts/generate-test-report.ts build
+
+      - name: Upload test report artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-report
+          path: test-report/
+          retention-days: 14
+
+      - name: "🔍 Validate Cloudflare Secrets"
+        if: always()
+        uses: ./.github/actions/validate-cf-secrets
+        with:
+          cloudflare-api-token: ${{ secrets.CLOUDFLARE_PAGES_API_TOKEN }}
+          cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Ensure Cloudflare Pages project exists
+        if: always()
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        # 初回のみプロジェクトが存在しないため作成する。2回目以降は
+        # 「already exists」エラーになるため `|| true` で無視する
+        # （`gh label create ... || true` と同じ冪等化パターン）。
+        run: |
+          bunx wrangler pages project create race-schedule-ci-report \
+            --production-branch main \
+            || true
+
+      - name: Deploy to Cloudflare Pages
+        if: always()
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          bunx wrangler pages deploy test-report/ \
+            --project-name race-schedule-ci-report \
+            --branch main
+
+  # generate-test-reportの失敗（=いずれかのテストレイヤーの失敗）をGitHub Issue化する
+  # （ワークフロー冒頭のコメント参照）。`if: always()`でneeds対象がfailureでもこのジョブ
+  # 自体は実行し、内部でresultごとに分岐する。
+  report-test-failure:
+    needs: generate-test-report
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      # create-github-app-token composite action はリポジトリ内のローカルファイルを
+      # 参照するため、呼び出し前に checkout が必須（CICD-89対応で発覚したリグレッション）。
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Create GitHub App Token
+        uses: ./.github/actions/create-github-app-token
+        id: app-token
+        with:
+          app-id: ${{ secrets.BOT_APP_ID }}
+          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
+
+      - name: Sync GitHub Issue for test-report failure
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RESULT: ${{ needs.generate-test-report.result }}
+        run: |
+          set -euo pipefail
+
+          title="[Test Failure] generate-test-report が失敗"
+          label="test-failure:test-report"
+
+          # cancelledはconcurrency（cancel-in-progress）による同時実行キャンセルであり、
+          # テスト自体の失敗ではない。skippedと同様に何もしない（既存Issueの状態も変えない）。
+          # mainへの頻繁なpushで直前の実行がcancelledになるのは正常挙動であり、これを
+          # 失敗として起票すると際限なくIssueが増える（2026-08-03、Issue #2268-#2309で
+          # 実際に11件のcancelled起票が発生し確認済み）。
+          if [ "$RESULT" = "cancelled" ]; then
+            echo "cancelled（同時実行によるキャンセルのため何もしません）"
+            exit 0
+          fi
+
+          gh label create "test-failure" --color "B60205" \
+            --description "テスト失敗の自動起票" >/dev/null 2>&1 || true
+          gh label create "$label" --color "B60205" \
+            --description "テスト失敗 (generate-test-report)" >/dev/null 2>&1 || true
+
+          # dedupはラベルではなくタイトルの完全一致で行う。`gh issue create --label`は
+          # このジョブのGitHub Appトークンだと稀にラベルが実際には付与されないまま
+          # 成功することがある（既知不具合。2026-08-03に作成されたIssue #2268-#2309は
+          # いずれもラベル無しで作成されており、`gh issue list --label`によるdedupが
+          # 常に空を返して同じ内容のIssueが際限なく複製されていた）。ラベル付与の成否に
+          # 依存しないタイトル一致で既存Issueを探す。
+          # 注意: `gh`の`--jq`は単一のjq式のみを受け付け、jq本体の`--arg`のような
+          # 追加フラグを渡すと`--jq`の値として`--arg`自体が飲み込まれ、残りが
+          # 未知の位置引数としてエラーになる（2026-08-04、Issue化ジョブ自体が
+          # `unknown arguments`で失敗するリグレッションを実機で確認）。変数展開が
+          # 必要な場合は`gh issue list --json`の出力を素の`jq`にパイプする。
+          existing=$(gh issue list --state open --json number,title \
+            | jq --arg t "$title" '[.[] | select(.title == $t)] | .[0].number // empty')
+
+          if [ "$RESULT" = "success" ]; then
+            if [ -n "$existing" ]; then
+              gh issue comment "$existing" --body "直近の実行（${RUN_URL}）でテストが成功したため、自動的にCloseします。再発した場合は新しいIssueが作成されます。"
+              gh issue close "$existing"
+              echo "復旧を確認し、Issue #$existing をCloseしました"
+            else
+              echo "成功。対象Issueもなし（何もしません）"
+            fi
+            exit 0
+          fi
+
+          body="## テストが失敗しました
+
+          - ワークフロー: \`test-report.yml\` / ジョブ: \`generate-test-report\`
+          - 実行結果: ${RESULT}
+          - 実行ログ: ${RUN_URL}
+
+          全パッケージ・全レイヤー（UT/コンポーネント/front等）のうちいずれかが失敗しています。
+          詳細は上記の実行ログ、または [Allure Report](https://race-schedule-ci-report.pages.dev/allure/#timeline) を確認してください。
+          テストが成功すれば次回チェック時に自動でCloseされます。
+
+          _このIssueは \`.github/workflows/test-report.yml\` により自動作成されました。_"
+
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+            target="$existing"
+            echo "既存Issue #$existing にコメントを追加しました"
+          else
+            issue_url=$(gh issue create --title "$title" --body "$body")
+            target="${issue_url##*/}"
+            echo "新規Issue #$target を作成しました"
+          fi
+
+          # ラベル付与はベストエフォート。dedupはタイトルで行うため成否に依存しないが、
+          # `.claude/docs/loop-engineering/backlog-contract.md`§2.3のci-fix自動ソースが
+          # test-failureラベルを見に行くため、失敗時は警告として可視化する。
+          gh issue edit "$target" --add-label "$label" --add-label "test-failure" \
+            || echo "::warning::Issue #$target へのラベル付与に失敗しました"

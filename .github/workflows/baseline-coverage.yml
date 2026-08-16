@@ -1,0 +1,53 @@
+name: Coverage Baseline
+
+# mainのC0/C1 100%ベースライン維持を保証するsentinel（CICD-05）。
+# Codecovには依存せず、test-gap-analysis.ts の実測データのみで判定する。
+# PRでは実行しない（push:mainのみ）。
+#
+# pathsフィルタ: 以前はフィルタが無く、docs/CI設定のみのmain pushでも毎回フルの
+# カバレッジ測定（`bun run check:coverage-baseline`、実質フルテスト実行、timeout 15分）が
+# 走っていた。coverage-pr.yml の detect-changes ジョブと同じ「対象ファイル」定義を
+# 流用する（push トリガーは PR の required status check と異なり「対象外PRが永遠に
+# ステータス待ちになる」問題が起きないため、coverage-pr.yml と違いここでは
+# workflow-level の paths を直接使ってよい）。
+
+on:
+    push:
+        branches: [main]
+        paths:
+            - "packages/**"
+            - "tests/**"
+            - "scripts/test-gap-analysis.ts"
+            - "scripts/check-coverage-baseline.ts"
+            - "package.json"
+            - ".github/workflows/baseline-coverage.yml"
+
+permissions:
+    contents: read
+
+concurrency:
+    group: coverage-baseline-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    coverage-baseline-sentinel:
+        runs-on: ubuntu-24.04
+        timeout-minutes: 15
+        env:
+            NODE_ENV: ci_github_actions
+            CI: "true"
+            TZ: jst
+            HTML_FETCH_DELAY_MS: "0"
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v7
+              with:
+                  filter: blob:none
+
+            - name: Setup workspace
+              uses: ./.github/actions/setup-workspace
+              with:
+                  setup-node: 'false'
+
+            - name: Check coverage baseline (C0/C1 100%)
+              run: bun run check:coverage-baseline

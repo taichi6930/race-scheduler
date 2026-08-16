@@ -1,0 +1,185 @@
+name: Deploy Front (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+        description: "Deployment environment (development, test, production)"
+    secrets:
+      CLOUDFLARE_PAGES_API_TOKEN:
+        required: true
+      CLOUDFLARE_ACCOUNT_ID:
+        required: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  deploy-front:
+    runs-on: ubuntu-24.04
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Deploy prelude (env + secrets check)
+        uses: ./.github/actions/deploy-prelude
+        with:
+          cloudflare-api-token: ${{ secrets.CLOUDFLARE_PAGES_API_TOKEN }}
+          cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: "🔍 Validate Frontend Deployment Configuration"
+        run: |
+          echo "=== Cloudflare Pages Configuration ==="
+          echo "Environment: ${{ inputs.environment }}"
+
+          [ -z "${{ vars.PAGES_PROJECT_NAME }}" ] && echo "❌ PAGES_PROJECT_NAME: NOT SET" || echo "✅ PAGES_PROJECT_NAME: SET (${{ vars.PAGES_PROJECT_NAME }})"
+
+          echo ""
+          echo "=== API Configuration ==="
+          [ -z "${{ vars.MAIN_API_URL }}" ] && echo "⚠️  MAIN_API_URL: NOT SET (will use empty string)" || echo "✅ MAIN_API_URL: SET"
+
+          echo ""
+          echo "=== Web Push Configuration ==="
+          [ -z "${{ vars.VAPID_PUBLIC_KEY }}" ] && echo "⚠️  VAPID_PUBLIC_KEY: NOT SET (Web Push will stay disabled)" || echo "✅ VAPID_PUBLIC_KEY: SET"
+
+      # QDEV-05対応: Flutter SDKセットアップ〜pub get〜コード生成は
+      # setup-flutter-workspaceと完全に同一の手順だったため、複製をやめて
+      # 共有composite actionへ委譲する（バージョン文字列の重複も解消される）。
+      - name: Setup Flutter workspace
+        uses: ./.github/actions/setup-flutter-workspace
+
+      - name: Select environment-specific app icons
+        working-directory: packages/front/web
+        run: |
+          # 環境ごとに色分けされたアイコン（web/icons/env/<environment>/）を
+          # ビルド前に既定のアイコン（favicon.png, icons/Icon-*.png）へ上書きする。
+          # リポジトリに直接コミットされているアイコンは開発時の既定値（local相当）のため、
+          # デプロイ時は必ずここで対象環境のものへ差し替える。
+          SRC="icons/env/${{ inputs.environment }}"
+          cp "$SRC/favicon.png" favicon.png
+          cp "$SRC/icons/Icon-192.png" icons/Icon-192.png
+          cp "$SRC/icons/Icon-512.png" icons/Icon-512.png
+          cp "$SRC/icons/Icon-maskable-192.png" icons/Icon-maskable-192.png
+          cp "$SRC/icons/Icon-maskable-512.png" icons/Icon-maskable-512.png
+
+      - name: Build Flutter web
+        working-directory: packages/front
+        env:
+          API_BASE_URL: ${{ vars.MAIN_API_URL }}
+          VAPID_PUBLIC_KEY: ${{ vars.VAPID_PUBLIC_KEY }}
+          DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
+        # PERF-151対応: 最適化レベルを暗黙のデフォルト任せにせず明示する（-O4が
+        # リリースビルドの既定値と同等であることをこのFlutterバージョンで確認済みだが、
+        # 将来のデフォルト変更に影響されないよう明示しておく）。
+        #
+        # レンダラー選択（--wasm）は明示的に付けていない。実測（2026-07-29、Flutter 3.44.8）
+        # では --wasm 有効時、`main.dart.js`（フォールバック用）と`main.dart.wasm`が両方
+        # 出力され build/web の総サイズはむしろ増加（68MB→71MB）し、支配的なのは
+        # canvaskit（37MB）・assets（27MB、フォント等）でレンダラー選択の影響を受けない。
+        # Flutter公式も「本番投入前に詳細を理解すること」と明記している新機能のため、
+        # ブラウザ互換性・配信ヘッダ要件の検証（PERF-154）なしに切り替えるのは見送った。
+        run: |
+          # admin Workerはproduction/testのみ存在する（Cloudflare Access保護、
+          # admin-package-design.md §2.4）ため、development向けビルドでは空文字を
+          # 渡す。front側（lib/core/config/admin_config.dart）が空文字時にtest環境の
+          # URLへフォールバックする。
+          case "$DEPLOY_ENVIRONMENT" in
+            production) ADMIN_BASE_URL="https://race-schedule-admin-prod.tn-product.workers.dev" ;;
+            test) ADMIN_BASE_URL="https://race-schedule-admin-test.tn-product.workers.dev" ;;
+            *) ADMIN_BASE_URL="" ;;
+          esac
+          # QSET-05: 設定画面「このアプリについて」に表示するビルド識別子。
+          # pubspec.yamlのversionはリリースタグ運用と連動していないため、
+          # デプロイ時のコミットSHA先頭7文字を代わりに埋め込む。
+          flutter build web --release -O4 \
+            --dart-define=API_BASE_URL="${API_BASE_URL:-}" \
+            --dart-define=VAPID_PUBLIC_KEY="${VAPID_PUBLIC_KEY:-}" \
+            --dart-define=ADMIN_BASE_URL="$ADMIN_BASE_URL" \
+            --dart-define=APP_VERSION="${GITHUB_SHA:0:7}"
+
+      - name: Inject API base URL into push-sw.js (QNTF-04)
+        working-directory: packages/front
+        env:
+          API_BASE_URL: ${{ vars.MAIN_API_URL }}
+        # push-sw.jsは純粋な静的JSファイルでFlutterのdart-defineの対象外のため、
+        # pushsubscriptionchange時の再購読POST先をビルド成果物へ直接埋め込む。
+        run: |
+          sed -i "s|__PUSH_SW_API_BASE_URL__|${API_BASE_URL:-}|" build/web/push-sw.js
+
+      - name: Inject front origin into index.html (QMETA-01/02)
+        working-directory: packages/front
+        env:
+          PAGES_PROJECT_NAME: ${{ vars.PAGES_PROJECT_NAME }}
+        # og:image/twitter:image/og:url/canonicalは絶対URLが必要（OGP仕様上、
+        # 相対パスはクローラーに解決されない）。実際のデプロイ先ホスト名は環境ごとに
+        # 異なる（PAGES_PROJECT_NAME）ため、push-sw.jsと同じsed置換方式で埋め込む。
+        run: |
+          sed -i "s|__FRONT_ORIGIN__|https://${PAGES_PROJECT_NAME}.pages.dev|g" build/web/index.html
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+        with:
+          bun-install-filter: ./packages/front
+
+      - name: Strip HTML comments (production only)
+        if: inputs.environment == 'production'
+        # index.html には二重管理箇所の警告等、開発者向けの注記コメントが多数
+        # 残っているが、production配信物としてユーザーに見せる必要は無い。
+        # test/developmentではそのまま残す（デバッグ・確認用途で有用なため）。
+        run: bun scripts/strip-html-comments.ts packages/front/build/web/index.html
+
+      - name: Deploy to Cloudflare Pages
+        id: deploy
+        working-directory: packages/front
+        # SEC-041対応: ref名（ブランチ/タグ名）はPR作成者が制御できる値のため、`run:` の
+        # スクリプト本文へ直接展開せず env: 経由でシェル変数として渡す。
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          # タグ push（v* 形式）の場合は Cloudflare Pages のプロダクションブランチ "main" として
+          # デプロイする。そうしないとプレビューデプロイ扱いになり
+          # <project>.pages.dev に反映されない。
+          REF="$REF_NAME"
+          if [[ "$REF" == v* ]]; then
+            DEPLOY_BRANCH="main"
+          else
+            DEPLOY_BRANCH="$REF"
+          fi
+          # wranglerはルートpackage.jsonでバージョン固定されたdevDependencyを使う
+          # （`npm install -g wrangler` は毎回最新版を取得し直しキャッシュも効かないため）。
+          bunx wrangler pages deploy build/web \
+            --project-name "${{ vars.PAGES_PROJECT_NAME }}" \
+            --branch "$DEPLOY_BRANCH" | tee /tmp/wrangler-deploy-output.txt
+
+          # wrangler の出力（"✨ Deployment complete! Take a peek over at
+          # https://<hash>.<project>.pages.dev"）から実際のデプロイURLを拾う。
+          # ブランチ名のサニタイズ規則を手元で再現するより、wrangler が実際に
+          # 報告したURLをそのまま使う方が確実なため。
+          DEPLOY_URL=$(grep -oE 'https://[a-zA-Z0-9.-]+\.pages\.dev[^[:space:]]*' /tmp/wrangler-deploy-output.txt | tail -1)
+          echo "deploy-url=$DEPLOY_URL" >> "$GITHUB_OUTPUT"
+
+      - name: "✅ Deployment Summary"
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          DEPLOY_URL: ${{ steps.deploy.outputs.deploy-url || format('https://{0}.pages.dev', vars.PAGES_PROJECT_NAME) }}
+        run: |
+          echo "=== Frontend Deployment Complete ==="
+          echo "Environment : ${{ inputs.environment }}"
+          echo "Project     : ${{ vars.PAGES_PROJECT_NAME }}"
+          echo "Branch      : $REF_NAME"
+          echo "URL         : $DEPLOY_URL"
+
+      - name: Comment deployment URL on PR
+        if: github.event_name == 'pull_request' && steps.deploy.outputs.deploy-url != ''
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+        with:
+          header: front-deploy-${{ inputs.environment }}
+          message: |
+            🚀 Front (${{ inputs.environment }}) をデプロイしました: ${{ steps.deploy.outputs.deploy-url }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

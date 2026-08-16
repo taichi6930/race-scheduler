@@ -1,0 +1,10 @@
+{
+    "extends": "../../tsconfig.base.json",
+    "include": [
+        "src/**/*",
+        "test/**/*",
+        "scripts/**/*",
+        "../core/test/MockInterface.ts"
+    ],
+    "exclude": ["node_modules"]
+}

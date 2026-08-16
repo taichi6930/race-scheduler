@@ -1,0 +1,84 @@
+name: Backfill Release Notes
+
+# 過去のGitHub Release本文を、新しい更新履歴カテゴリ形式（🔧バックエンドのみ／📱フロントの変更／
+# ✨新しく取れる情報／🎉改善／📝その他。scripts/release/releaseNoteCategories.ts と完全一致）へ
+# 遡って書き換えるための手動トリガー専用ワークフロー（docs/tasks/BACKLOG.md CICD-124）。
+#
+# このワークフロー自体はAI判断を一切行わない。対象タグの選定・対象PRの洗い出し・カテゴリ分類は
+# 呼び出し側（Claude Codeのルーティンセッション）が行い、完成済みのMarkdown本文を inputs.body として
+# 渡すだけの機械的な書き込み処理に限定する（外部APIキー不使用の方針を踏襲。auto-releaseジョブと
+# 同じGitHub Appトークンで認証する）。
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: '更新対象のリリースタグ（例: v1.2.3）'
+        required: true
+        type: string
+      body:
+        description: '書き込む本文（Markdown、カテゴリ見出し形式）'
+        required: true
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  update-release-body:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      # create-github-app-token composite action はリポジトリ内のローカルファイルを
+      # 参照するため、呼び出し前に checkout が必須（CICD-89対応で発覚したリグレッション）。
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Create GitHub App Token
+        uses: ./.github/actions/create-github-app-token
+        id: app-token
+        with:
+          app-id: ${{ secrets.BOT_APP_ID }}
+          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
+
+      - name: Update release body
+        uses: actions/github-script@v9
+        env:
+          RELEASE_TAG: ${{ inputs.tag_name }}
+          RELEASE_BODY: ${{ inputs.body }}
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const { owner, repo } = context.repo;
+            const tagName = process.env.RELEASE_TAG;
+            const body = process.env.RELEASE_BODY;
+
+            if (!body || body.trim().length === 0) {
+              core.setFailed('body が空のため中断します');
+              return;
+            }
+
+            const release = await github.rest.repos.getReleaseByTag({
+              owner,
+              repo,
+              tag: tagName,
+            });
+
+            if (release.data.draft || release.data.prerelease) {
+              core.setFailed(`"${tagName}" はdraft/prereleaseのため対象外です`);
+              return;
+            }
+
+            await github.rest.repos.updateRelease({
+              owner,
+              repo,
+              release_id: release.data.id,
+              body,
+            });
+            core.info(`Updated release "${tagName}" (id=${release.data.id})`);

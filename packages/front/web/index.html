@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <!--
+    QPWA-09: このdescriptionはmanifest.jsonの"description"と同文で二重管理している
+    （JSONはコメントを書けないためこちらにのみ注記する）。文言を変える場合は両方直すこと。
+  -->
+  <meta name="description" content="公営競技のレーススケジュールを管理するアプリ">
+  <meta name="theme-color" content="#EBEEE9" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0C100D" media="(prefers-color-scheme: dark)">
+
+  <!--
+    QMETA-01/02: og:image・twitter:image・og:url・canonicalは絶対URLが必要
+    （OGPの仕様上、相対パスはクローラーに解決されない）。ホスト名はビルド時に
+    push-sw.js（QNTF-04）と同じ仕組みで__FRONT_ORIGIN__を実際のCloudflare Pages
+    URLへsed置換する（deploy-front-reusable.yml参照）。値を変更する場合は
+    両方直すこと。
+  -->
+  <!-- OGP / Twitter Card -->
+  <meta property="og:title" content="開催盤">
+  <meta property="og:description" content="公営競技のレーススケジュールを管理するアプリ">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="開催盤">
+  <meta property="og:locale" content="ja_JP">
+  <meta property="og:url" content="__FRONT_ORIGIN__/">
+  <meta property="og:image" content="__FRONT_ORIGIN__/icons/Icon-512.png">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="開催盤">
+  <meta name="twitter:description" content="公営競技のレーススケジュールを管理するアプリ">
+  <meta name="twitter:image" content="__FRONT_ORIGIN__/icons/Icon-512.png">
+  <link rel="canonical" href="__FRONT_ORIGIN__/">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="開催盤">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <!--
+    QCOPY-10: アプリ名「開催盤」は manifest.json（name/short_name）・このファイル
+    （title/apple-mobile-web-app-title、og:title/twitter:title含む）・
+    lib/app.dart（MaterialApp.router の title）の3ファイル5箇所以上にハードコードされ、
+    同期の仕組みが無い。変更する場合は全箇所を直すこと。
+  -->
+  <title>開催盤</title>
+  <link rel="manifest" href="manifest.json">
+
+  <!--
+    QWEB-10: flutter_bootstrap.js の読み込み〜Flutter初期化が完了するまでの間、
+    <body> が空だと白画面になる（低速回線では数秒無反応に見える）。
+    アプリ名＋スピナーの最小限の起動フィードバックをここに用意し、
+    main.dart が最初のフレームを描画したタイミングで #loading-splash を除去する
+    （lib/main.dart 参照）。
+  -->
+  <style>
+    #loading-splash {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      background: #EBEEE9;
+      font-family: sans-serif;
+      color: #1E6E4C;
+    }
+    @media (prefers-color-scheme: dark) {
+      #loading-splash {
+        background: #0C100D;
+        color: #EBEEE9;
+      }
+    }
+    #loading-splash .spinner {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 3px solid currentColor;
+      border-top-color: transparent;
+      animation: loading-splash-spin 0.8s linear infinite;
+    }
+    @keyframes loading-splash-spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /*
+      QSHARE-09: 印刷時のスタイル。実際のアプリUI（ナビゲーション・フィルタ・
+      タイムライン等）はFlutter WebがCanvasKit/HTMLレンダラーで<body>へ動的に
+      挿入するcanvas/DOMホスト要素（flutter-view等、ビルド成果物であり
+      このHTMLファイルには存在しない）に描画されるため、このファイル内の
+      CSSセレクタで直接非表示にすることはできない。ここで静的に存在する
+      唯一のUI要素である#loading-splash（起動完了後は通常JS側で除去済みだが、
+      JS失敗時等に残存しうる）だけを印刷対象から除外する。
+    */
+    @media print {
+      #loading-splash {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="loading-splash">
+    <div class="spinner"></div>
+    <span>開催盤を読み込み中…</span>
+  </div>
+
+  <!--
+    You can customize the "flutter_bootstrap.js" script.
+    This is useful to provide a custom configuration to the Flutter loader
+    or to give the user feedback during the initialization process.
+
+    For more details:
+    * https://docs.flutter.dev/platform-integration/web/initialization
+  -->
+  <!--
+    PERF-155対応: PWAキャッシュ戦略はFlutterのデフォルト（flutter_bootstrap.jsが自動生成する
+    flutter_service_worker.jsによる、アプリシェル＝JS/フォント等静的アセットのcache-first・
+    バックグラウンド更新）を意図的に維持している。理由:
+    - レース/開催スケジュールなどの実データはService Workerの対象外（Dio経由でCloudflare
+      Workers APIへ直接fetchしており、キャッシュ層を経由しない）。本アプリで「鮮度」が
+      重要なのはこの実データであり、PWAキャッシュ戦略はその鮮度に影響しない
+    - push-sw.js（Web Push用、scope: /push/）も同様にAPIレスポンスをキャッシュしない
+    - アプリシェル（コード本体）側は「初回はキャッシュから即座に起動でき、新バージョンは
+      バックグラウンドで取得し次回起動時に反映される」という一般的なPWAの挙動で、
+      本アプリのオフライン対応・起動速度の要件と矛盾しない
+    独自のService Worker実装（fetchイベントを横取りしAPIレスポンスをキャッシュする等）へ
+    変更する場合は、実機・実ブラウザでの検証を伴う別タスクとして扱うこと。
+  -->
+  <script src="flutter_bootstrap.js" async></script>
+
+  <!--
+    QWEB-10: Flutterが最初のフレームを描画したら`flutter-first-frame`イベントが
+    windowに発火する（Flutter公式のWeb初期化ガイドに記載の仕組み）ので、それを
+    合図に#loading-splashを取り除く。イベントが何らかの理由で発火しない場合に備え、
+    10秒のフォールバックタイマーも用意する（splashが永久に残り続けるのを防ぐ）。
+  -->
+  <!--
+    SEC-055: CSPのscript-srcに'unsafe-inline'を許可しないため、旧来ここにあった
+    起動時スプラッシュ除去・push-sw登録のインラインscriptをapp-bootstrap.jsへ切り出した。
+  -->
+  <script src="app-bootstrap.js"></script>
+</body>
+</html>

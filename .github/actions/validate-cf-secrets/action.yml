@@ -1,0 +1,22 @@
+name: 'Validate Cloudflare Secrets'
+description: 'Validate that a Cloudflare API token and CLOUDFLARE_ACCOUNT_ID are set (deploy-*-reusable ワークフロー共通のCloudflare認証情報チェック。呼び出し元ごとに用途で絞ったトークン secret を渡す — CLOUDFLARE_WORKERS_API_TOKEN / CLOUDFLARE_PAGES_API_TOKEN / CLOUDFLARE_D1_API_TOKEN 等)'
+
+inputs:
+  cloudflare-api-token:
+    description: 'Cloudflare API token'
+    required: true
+  cloudflare-account-id:
+    description: 'Cloudflare account ID'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Validate Cloudflare secrets
+      shell: bash
+      env:
+        CF_API_TOKEN: ${{ inputs.cloudflare-api-token }}
+        CF_ACCOUNT_ID: ${{ inputs.cloudflare-account-id }}
+      run: |
+        [ -z "$CF_API_TOKEN" ] && echo "❌ Cloudflare API Token: NOT SET" || echo "✅ Cloudflare API Token: SET"
+        [ -z "$CF_ACCOUNT_ID" ] && echo "❌ CLOUDFLARE_ACCOUNT_ID: NOT SET" || echo "✅ CLOUDFLARE_ACCOUNT_ID: SET"

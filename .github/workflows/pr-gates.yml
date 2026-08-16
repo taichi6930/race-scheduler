@@ -1,0 +1,119 @@
+name: PR Gates
+
+# 従来 check-semver-label.yml / release-note-heading-check.yml / check-large-markdown.yml /
+# check-db-er-diagram.yml / check-secret-wiring.yml / secret-scan.yml として6個の独立した
+# ワークフローに分かれていた軽量PRゲート（いずれも数秒〜十数秒で終わる単一スクリプトの
+# 実行のみ）を1ワークフロー・1ジョブへ統合する。
+#
+# 【統合の理由】GitHub Actionsはジョブ単位で最低1分に切り上げ課金される。6個の別ジョブに
+# 分かれていると、実処理が数秒でも6分課金されるが、1ジョブに畳めば checkout・
+# setup-workspaceの重複も含めて1〜2分に収まる（実測: このクラスタだけで月あたり
+# 約1,211分課金のうち大半が切り上げによる水増し）。
+#
+# 【pull_request.ymlへ統合しなかった理由】check-semver-label.ymlはlabeled/unlabeled、
+# release-note-heading-check.ymlはeditedイベントでも再実行する必要がある
+# （PRを再pushせずラベルだけ付け直した/本文だけ編集した場合でもチェックを再評価するため）。
+# これらのイベントをpull_request.yml本体のon.pull_request.typesに追加すると、
+# call-static-checks/call-test-packages等の重いジョブまで巻き込んで余計に再実行されて
+# しまう（ワークフロー単位でtypesが共有されるため）。軽量チェックだけを隔離することで
+# この巻き込みを避ける。
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled, edited, ready_for_review]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  call-pr-gates:
+    # draft中はCIを起動せずGitHub Actionsの消費を抑える（task-workflow.md参照）。
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          # check-large-markdown.yml/secret-scan.ymlがdiff検出・gitleaksのcommit-range
+          # スキャンにフル履歴を要求するため、ジョブ全体でfetch-depth: 0にする
+          # （CICD-105/106の知見: shallow clone + merge ref上でのrange展開は誤検出の
+          # 原因になりうるため据え置きが正攻法）。
+          fetch-depth: 0
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+        with:
+          setup-node: 'false'
+
+      # 元: check-semver-label.yml
+      # dependabot PRはsemver:*ラベル運用の対象外（auto-semver-release-requirements.md §3.1）。
+      - name: Verify a semver:* label is attached
+        if: github.event.pull_request.user.login != 'dependabot[bot]'
+        run: |
+          has_semver=$(jq '[.pull_request.labels[].name | select(startswith("semver:"))] | length' "$GITHUB_EVENT_PATH")
+          if [ "$has_semver" -eq 0 ]; then
+            echo "::error::semverラベル未設定です。.claude/docs/task-workflow.md 5c を参照して付与してください。"
+            exit 1
+          fi
+          echo "✅ semver ラベルが付与されています"
+
+      # 元: release-note-heading-check.yml
+      - name: Check release note heading levels
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: echo "$PR_BODY" | bun scripts/release/detectNearMissHeadings.ts
+
+      # 元: check-large-markdown.yml
+      - name: List changed files
+        run: |
+          git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" > changed-files.txt
+
+      - name: Check large Markdown files
+        # CILOG-016: $GITHUB_STEP_SUMMARY（要約表）に加え、--json出力から
+        # ::warning file=...:: annotationも出す。PRのFiles changedタブに直接
+        # 表示されるようになり、Summaryタブを開かなくても気づける。
+        run: |
+          bun scripts/check-large-markdown.ts changed-files.txt | tee -a "$GITHUB_STEP_SUMMARY"
+          bun scripts/check-large-markdown.ts changed-files.txt --json \
+            | jq -r '.largeFiles[] | "::warning file=\(.file)::20KB超のMarkdownファイルです（\((.sizeBytes / 1024) | floor) KB）。分割を検討してください（TOK-041）"'
+
+      # 元: check-db-er-diagram.yml
+      - name: Check migrations/README.md ER diagram drift
+        run: bun run check:db-er-diagram-drift
+
+      # 元: check-secret-wiring.yml
+      - name: Check secret wiring
+        run: bun scripts/check-secret-wiring.ts
+
+      # 元: secret-scan.yml
+      - name: Install gitleaks (pinned version + checksum verification)
+        env:
+          GITLEAKS_VERSION: '8.30.1'
+          GITLEAKS_SHA256: '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb'
+        run: |
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -fsSLO "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${archive}"
+          echo "${GITLEAKS_SHA256}  ${archive}" | sha256sum -c -
+          tar xzf "${archive}" gitleaks
+
+      - name: Scan PR commits for leaked credentials
+        id: gitleaks
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          ./gitleaks detect --source . --log-opts="${BASE_SHA}..${HEAD_SHA}" --redact --no-banner \
+            --report-format=json --report-path=gitleaks-report.json
+
+      - name: Upload gitleaks report
+        if: always() && steps.gitleaks.outcome == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: gitleaks-report
+          path: gitleaks-report.json
+          retention-days: 7

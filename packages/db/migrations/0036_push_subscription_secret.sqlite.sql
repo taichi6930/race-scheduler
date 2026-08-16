@@ -1,0 +1,12 @@
+-- Migration 0036: push_subscription へ所有権シークレットのハッシュ列を追加
+-- （push-ownership-design.md §2.3 / SECPUSH-02, P-1）
+-- 購読の所有権（endpointを知っているだけでは操作できないこと）を証明するための
+-- シークレットのSHA-256ハッシュを保持する。シークレット平文はサーバに保存しない。
+--
+-- NULL許容にする理由: 既存行にはシークレットが無いため。P-1時点ではこの列は
+-- POST /push/subscription でのシークレット発行にのみ使い、他4エンドポイントの
+-- 検証はまだ有効化しない（本番挙動への影響は無い、push-ownership-design.md §3）。
+--
+-- ROLLBACK: 本マイグレーションは列追加のみ（UPDATEを伴わない）ため、
+--   ALTER TABLE push_subscription DROP COLUMN secret_hash; で単純に巻き戻せる。
+ALTER TABLE push_subscription ADD COLUMN secret_hash TEXT;

@@ -1,0 +1,27 @@
+#!/bin/sh
+# 各チェックの生ログはファイルへ逃がし、成功時は1行サマリのみ表示する。
+# 失敗時だけログ全体を表示する（aidlc-docs/token-efficiency-tasks.md TOK-054）。
+set -e
+
+LOG_DIR="${TMPDIR:-/tmp}/claude-pre-commit"
+mkdir -p "$LOG_DIR"
+
+run_check() {
+  label="$1"
+  log_file="$2"
+  shift 2
+
+  if "$@" >"$log_file" 2>&1; then
+    echo "✅ ${label}"
+  else
+    echo "❌ ${label} failed — log: ${log_file}"
+    cat "$log_file"
+    exit 1
+  fi
+}
+
+run_check "type-check" "$LOG_DIR/type-check.log" bun run type-check
+run_check "lint:check" "$LOG_DIR/lint-check.log" bun run lint:check
+run_check "format:check" "$LOG_DIR/format-check.log" bun run format:check
+
+echo "✅ All pre-commit checks passed!"

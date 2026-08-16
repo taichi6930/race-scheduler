@@ -1,0 +1,18 @@
+/**
+ * 機能フラグ管理画面のfavicon（環境ごとに視覚的に区別するため）。
+ *
+ * `packages/front`が既に持つ環境別アイコン
+ * （`packages/front/web/icons/env/{test,production}/favicon.png`）をそのまま
+ * base64化して埋め込む。admin Workerはビルドパイプラインを持たない単一HTML文字列
+ * 構成のため、front側のような「デプロイ時にファイルを差し替える」方式ではなく、
+ * 実行時（Workerのリクエスト処理時）に`isProductionAdmin()`の結果で
+ * 出し分ける（featureFlagsController.ts参照）。
+ */
+
+/** front の `web/icons/env/test/favicon.png` と同一画像（16x16）。 */
+export const TEST_FAVICON_DATA_URI =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAACAklEQVR4nIxTTWsTURQ9k0yaUlsygigak42bSkGCYtWV/oCg9WNZEHfiJoIioouCYKkfoCvBRdGNC6kgQl0Igh8FFS2iiMRaaJumhX7RNm3TNE3fvb3zJpPOpC3tgeG+d+eeM/eeec+EINqeSUKt3ARzE5GywAQiQsp6itTOTngxRzs4W9wz35tvfHzlRldbMNY+2MKK3gg5LuRal2zHb4sJiYzjdb8qAmGjZOwOzYQTdf0nYydO1wYbTqWeSfF+IcMhK01y91/zh2DAFvmNaoSMUsKUooNu8ff+RwgODmEjFA/HED6S9eWiNRP1ppAjbtubkW0s/Yw7I3hEImYBpnfmrbCRiOmdee+Xd9gO7ty9hOv7uvQ6YJO57ME6zI2hb3IBS1Xp+yMX8GDkvLcDckR8WEbf+05cfp5H8vYtXDtWX3nDUn8ve07HgEvmqg5m091oe/gJP/714lVP1tcFE+mnI3MGAS57YCfWsIA/bz+iZ0oM29WI5ij8Y7gdSzSZHTVfB8VpZAbGkdPrGhxtPgDLw68cOlYiQJSTTcTnQTiO1icv0YpNQJUTmwuAVNpV/D86ja2QHp7EmvEracO6+rlFJF/bSV4ugEoFxxMle5COQPlu6EwQhhmS78qe1FnDVm1IfUgacp3FhyZ5LP1Xyr44UTlts87PCvEvAx3qxcXuVQAAAP//AzeYuwAAAAZJREFUAwBEFWDCqG4NpAAAAABJRU5ErkJggg==';
+
+/** front の `web/icons/env/production/favicon.png` と同一画像（16x16）。 */
+export const PRODUCTION_FAVICON_DATA_URI =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABs0lEQVR4nIxTPUsDQRB9d55aSVJoIeIH2ChiqZ3/wMKUQsDCRrDQLnZ2IYVopZ2lhSCkiaAg+BEQ/OhEYhRMoghKJCYSiMbbXWf3cueeRJMHx9zc7ZudmTdjgdATzU2C2UsQYoRzFoTg4JzDsUxZoawAZ3aRnGsBEXtbnUgYvdHMFGcirh92yZIkfJZ7vvwPW4QsIkf85NpNv24WWlDvnCEiFjnD7uHzuzW0ZLL4D/ZAP0a7pp1gjA+bRA64aTciS1jZnCpDnqc8A5Zec7MQWnmWXnP36X5zAeb3KH0mM4DpNIjVz+D9Gel8GR91MnBVkT34kcaHKtIHm5ibjWL9rOwPIBw55aWmrreOYiqB5ZVjXNxcYif56MtCzQN3pDR9Onso42r3CMlXoL1zCOM98JehzYOlT5iHzwJy9y8oqfc2jI0PIqjxvaETpAKRS+QEfD1o70N4Yxth/AHuTWzJpO1IuRFvnwpohNRDXhtzO2UEF0+mKGRcqVGtgH9VnJ7UdJYWqO2G+tICw2qle8nnLGTIqB0Lh5MGrTP1YYSeoFLF2zxpmZO2UN+LRKR1RoxtzSS+AQAA//8b/LGuAAAABklEQVQDAANDpgLAWI1aAAAAAElFTkSuQmCC';

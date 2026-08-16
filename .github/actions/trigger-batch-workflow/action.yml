@@ -1,0 +1,132 @@
+name: Trigger Batch Workflow
+
+description: >
+  batch Worker の POST /batch/trigger を呼び出し、Cloudflare Workflow インスタンスを
+  トリガーする（CICD-73/CONC-03）。
+
+# CICD-73/CONC-03対応（2026-08-03）:
+# batch-all（cron）・batch-race/place/calendar（手動）の4ワークフローが個別に持っていた
+# 「packages/batch WorkerへのHTTPリクエスト」ロジックを1箇所へ統合する。
+#
+# 背景: 旧`POST /batch`は同期実行（batch Worker内でCLI相当の処理を完了させてから
+# 結果を返す）だったため、各ワークフローがraceType単位でmatrix/バックグラウンド並列実行し、
+# 成功/失敗件数をレスポンスから直接読み取っていた。CICD-73でCloudflare Workflowsへ移行し、
+# 実行本体（place→race→calendarのraceType単位ループ）をWorkflow内へ移したことで、
+# 各ワークフローはraceTypes/targets/日付レンジをまとめて1回POSTするだけでよくなった
+# （raceType単位のmatrix/並列curlは不要になった）。
+#
+# 排他制御: `/batch/trigger`はapi Worker側のD1ロック（batch_run_lock）を取得できた
+# 場合のみWorkflowインスタンスを作成し、取得できなければ409を返す
+# （CONC-03: 旧来はGitHub Actionsの`concurrency:`グループが担っていた4ワークフロー間の
+# 相互排他を、D1ロックへ一本化した）。409はまれな一時的な競合のため、本actionは
+# 30秒待って1回だけ自動リトライする。
+#
+# 実行結果の可観測性についての既知のトレードオフ: 本actionが検知できるのは
+# 「トリガー（Workflowインスタンス作成）が成功したか」までであり、Workflow内部での
+# 実際のplace/race/calendar処理の成功/失敗は非同期実行のためこのジョブでは分からない
+# （旧`POST /batch`は同期実行だったため、成功/失敗件数をこのジョブ内で検知できていた）。
+# 実行結果の監視は、Cloudflare Workers LogsおよびWorkflow失敗時のGitHub Issue通知
+# （docs/tasks/cicd-73-batch-cron-migration.md §9 ロードマップ #5、未実装）に委ねる。
+
+inputs:
+  environment:
+    description: 'デプロイ環境（test/production）'
+    required: true
+  service-auth-token:
+    description: 'サービス間認証トークン（SERVICE_AUTH_TOKEN）'
+    required: true
+  race-types-json:
+    description: '対象レース種別のJSON配列文字列（例: ["jra","nar"]）。省略時はbatch Worker側の既定値（全種別）を使う'
+    required: false
+    default: ''
+  targets-json:
+    description: '対象ターゲットのJSON配列文字列（例: ["place"]）。省略時はbatch Worker側の既定値（place/race/calendar全て）を使う'
+    required: false
+    default: ''
+  start-date:
+    description: '開始日（YYYY-MM-DD）。finish-dateとセットで指定した場合のみ使う'
+    required: false
+    default: ''
+  finish-date:
+    description: '終了日（YYYY-MM-DD）。start-dateとセットで指定した場合のみ使う'
+    required: false
+    default: ''
+
+outputs:
+  instance-id:
+    description: '作成されたWorkflowインスタンスID'
+    value: ${{ steps.trigger.outputs.instance-id }}
+
+runs:
+  using: composite
+  steps:
+    - name: POST /batch/trigger（409時は30秒後に1回だけ再試行）
+      id: trigger
+      shell: bash
+      env:
+        SERVICE_AUTH_TOKEN: ${{ inputs.service-auth-token }}
+        ENVIRONMENT_INPUT: ${{ inputs.environment }}
+        RACE_TYPES_JSON: ${{ inputs.race-types-json }}
+        TARGETS_JSON: ${{ inputs.targets-json }}
+        START_DATE_INPUT: ${{ inputs.start-date }}
+        FINISH_DATE_INPUT: ${{ inputs.finish-date }}
+      run: |
+        set -uo pipefail
+
+        if [ "$ENVIRONMENT_INPUT" = "production" ]; then
+          host_env="prod"
+        else
+          host_env="test"
+        fi
+        batch_url="https://race-schedule-batch-${host_env}.tn-product.workers.dev/batch/trigger"
+
+        body=$(jq -n \
+          --argjson raceTypes "${RACE_TYPES_JSON:-null}" \
+          --argjson targets "${TARGETS_JSON:-null}" \
+          --arg startDate "$START_DATE_INPUT" \
+          --arg finishDate "$FINISH_DATE_INPUT" \
+          '
+          {}
+          + (if $raceTypes != null then {raceTypes: $raceTypes} else {} end)
+          + (if $targets != null then {targets: $targets} else {} end)
+          + (if $startDate != "" then {startDate: $startDate} else {} end)
+          + (if $finishDate != "" then {finishDate: $finishDate} else {} end)
+          ')
+
+        echo "Batch URL: $batch_url"
+        echo "Request body: $body"
+
+        do_request() {
+          curl -sS -w '\n%{http_code}' -X POST "$batch_url" \
+            -H "Content-Type: application/json" \
+            -H "X-Service-Auth-Token: $SERVICE_AUTH_TOKEN" \
+            -d "$body"
+        }
+
+        response=$(do_request)
+        http_status=$(echo "$response" | tail -n1)
+        response_body=$(echo "$response" | sed '$d')
+
+        if [ "$http_status" = "409" ]; then
+          echo "::warning::他のbatch実行が進行中のためロック取得に失敗しました（HTTP 409）。30秒後に1回だけ再試行します。"
+          sleep 30
+          response=$(do_request)
+          http_status=$(echo "$response" | tail -n1)
+          response_body=$(echo "$response" | sed '$d')
+        fi
+
+        echo "HTTP Status: $http_status"
+        echo "$response_body" | jq . || echo "$response_body"
+
+        if [ "$http_status" != "202" ]; then
+          echo "::error::batch Workflowのトリガーに失敗しました（HTTP ${http_status}）"
+          exit 1
+        fi
+
+        instance_id=$(echo "$response_body" | jq -r '.instanceId // empty')
+        echo "instance-id=$instance_id" >> "$GITHUB_OUTPUT"
+
+        {
+          echo "### Batch Workflow Triggered"
+          echo "Instance ID: \`${instance_id}\`"
+        } >> "$GITHUB_STEP_SUMMARY"

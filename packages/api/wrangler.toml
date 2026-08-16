@@ -1,0 +1,238 @@
+## wrangler.toml（テンプレート）
+## このファイルはCIで使用され、リポジトリにコミットされます。
+## - CI（deploy/test）では `envsubst` により `${DB_ID}` が環境ごとの DB ID に置換されます。
+## - GitHub Secrets に DB_ID が保存され、ワークフローで環境変数として設定されます。
+## - 実際のDB IDはここに保存しないでください。ローカルで必要な場合は `wrangler.effective.toml` を使用してください。
+
+name = "race-schedule-api"
+account_id = "${CLOUDFLARE_ACCOUNT_ID}"
+main = "src/index.ts"
+compatibility_date = "2026-01-01"
+# PERF-141対応（2026-08-02）: 約2年間据え置きだった2024-09-23から更新。
+# workerdのcompatibility flag一覧（cloudflare/workerd の compatibility-date.capnp）を
+# 確認し、2026-01-13以降にdefault-onになるフラグ群（textDecoderCjkDecoder等、
+# CJK文字列を多く扱う本アプリのスクレイピング処理への影響を確認しきれない）は
+# 避け、それより前の2026-01-01を選定した。次回更新時も同様に確認すること。
+#
+# nodejs_compat_populate_process_env（SEC-019対応）:
+# 2025-04-01以降はdefault-onのため本フラグ自体は冗長だが、明示しておいても
+# 無害（既定動作と同じ内容を重ねて指定するだけ）なため、意図の記録を兼ねて残す。
+# `sanitizeError`（packages/core/src/utilities/sanitizeLog.ts）の
+# `process.env.NODE_ENV === 'production'` 判定を含む複数箇所が `process.env` 経由で
+# 環境変数を参照しているため、本フラグ（またはdefault-on化）が無いと
+# [env.production.vars] に NODE_ENV を追加しても実行時には反映されない。
+#
+# global_fetch_strictly_public（Uptime監視404バグ修正、Issue #2336/#2337/#2338/#2339）:
+# batch/calendar/scraping の wrangler.toml には元から付いているが、api だけ無かった
+# （docs/tasks/cloudflare-optimization-backlog.md F-5で既知の差異として記録済み）。
+# CICD-126（scheduled.ts の runUptimeCheck）で api Worker が初めて他Worker
+# （batch/calendar/scraping自身を含む）の `*.workers.dev` へ `fetch()` する経路が
+# 追加された際、このフラグが無いことで同一アカウント内のWorker宛fetchがCloudflare側の
+# 内部ルーティングに乗り、公開インターネット経由の場合と異なり404を返す事象が発生した
+# （GitHub Actions版 uptime-check.ymlは同じURLを外部から叩いており終始200で成功していた
+# ため、api Worker内部からのfetch固有の問題と特定）。
+# 公式ドキュメント（developers.cloudflare.com/workers/configuration/compatibility-flags/）
+# の記述: 本フラグはグローバル`fetch()`を常に公開インターネット経由の宛先解決に
+# 強制する（未設定時は同一アカウント宛リクエストがCloudflare内部の高速経路に
+# ルーティングされうる）。付与することでbatch/calendar/scrapingと同じ公開経路になり、
+# 疎通確認（curl等）と同じ挙動に揃う。
+compatibility_flags = [
+    "nodejs_compat",
+    "nodejs_compat_populate_process_env",
+    "global_fetch_strictly_public",
+]
+
+# Workers Logs / Analytics を有効化する（全環境共通、PERF-142対応）。
+# エラー監視・相関ID活用（SEC-035, OBS-011/012/018/019）の前提基盤。
+[observability]
+enabled = true
+
+# モノレポ内のワークスペースパッケージを解決するためのエイリアス設定
+
+# トップレベルのD1バインディング（PERF-144対応・意図の明記）:
+# `wrangler dev`（envを指定しないローカル開発）専用のフォールバック設定。
+# database_id="preview" はローカルのみで有効なプレースホルダで、実データベースには
+# 接続しない。実際のデプロイ（test/development/production）は下記の
+# [env.X.d1_databases] が使われ、envsubstでGitHub Secretsの実DB_IDに置換される。
+[[d1_databases]]
+binding = "DB"
+database_name = "race-schedule-db"
+database_id = "preview"
+migrations_dir = "../db/migrations"
+
+[env.production]
+name = "race-schedule-prod"
+
+# Web Push の期限到来分を配信する（毎分）。web-push-design.md §5 参照。
+# 2つ目のcronは本番データの鮮度チェック（CICD-121、毎日 14:00 JST = 05:00 UTC）。
+# 元は`.github/workflows/health-check-data-freshness.yml`がGitHub Actions側で
+# 実行していたが、api Worker自身が既にscheduledハンドラを持つため同じ仕組みに
+# 相乗りさせた（`src/scheduled.ts`のDATA_FRESHNESS_CRONと完全に一致させること）。
+# カットオーバー済み（2026-08-05）のため、GitHub Actions側は既に削除している。
+# 3・4つ目のcronはCloudflareエラー監視（CICD-122、元は`.github/workflows/
+# error-monitor.yml`が毎時+apiのみ毎時30分で実行していた）。`src/scheduled.ts`の
+# ERROR_MONITOR_FULL_CRON/ERROR_MONITOR_API_ONLY_CRONと完全に一致させること。
+# 5つ目のcronはUptime監視（元は`.github/workflows/uptime-check.yml`が15分おきで
+# 実行していた）。`src/scheduled.ts`のUPTIME_CHECK_CRONと完全に一致させること。
+# production環境のみに追加する（元のワークフローも本番Worker専用だったため）。
+# GitHub Actions側は並行稼働の確認がとれるまで維持する（頻度はいずれも
+# バックストップ用途に縮小済み）。
+[env.production.triggers]
+crons = ["* * * * *", "0 5 * * *", "0 * * * *", "30 * * * *", "*/15 * * * *"]
+
+[env.production.secrets]
+# All environment variables are stored as secrets
+# Secrets are registered at deploy time via GitHub Actions
+# apiはGoogle Calendarへ直接アクセスしない（calendar Workerが担う）ため、
+# Google Calendar関連のシークレットは不要
+# GITHUB_TOKEN（CICD-121/122）: データ鮮度チェック・Cloudflareエラー監視の
+# GitHub Issue作成/更新に使う fine-grained PAT（Issues read/write権限のみ、
+# race-scheduleリポジトリ限定）。GitHub Actions側のリポジトリシークレット名は
+# `ISSUE_BOT_TOKEN`（`GITHUB_TOKEN`はGitHub Actionsの予約名のためリポジトリ
+# シークレットとして作成できない）。未設定でもWorker自体は正常に動作し、
+# 各チェックの通知だけがスキップされる（graceful degradation）。
+# CLOUDFLARE_ANALYTICS_API_TOKEN（CICD-122）: Cloudflareエラー監視が
+# GraphQL Analytics APIを呼ぶためのトークン。Account Analytics:Read権限のみの
+# fine-grainedトークン（デプロイ用CLOUDFLARE_API_TOKENとはスコープが異なるため
+# 別トークンとして発行する）。未設定でもWorker自体は正常に動作し、
+# エラー監視だけがスキップされる（graceful degradation、errorMonitorCheck.ts参照）。
+# CLOUDFLARE_ACCOUNT_ID: 上記トークンと組み合わせてGraphQL APIのaccountTagとして
+# 使う。デプロイ用のGitHub Actionsシークレットと同じ値をそのまま渡す
+# （秘匿性の高い値ではないため専用シークレットは設けない）。
+
+[env.production.vars]
+# WORKER_NAME: appLogger のJSON構造化ログ（OBS-001）を有効化し、
+# `worker` フィールドへ埋め込む識別子
+WORKER_NAME = "api"
+# NODE_ENV（SEC-019対応）: sanitizeError（packages/core/src/utilities/sanitizeLog.ts）が
+# 本番環境向けにスタックトレースを先頭フレームのみへ切り詰めるために参照する。
+# nodejs_compat_populate_process_env（上記 compatibility_flags）と組み合わせて初めて
+# `process.env.NODE_ENV` として読み取れる。development/test 環境には設定しない
+# （'production' 以外の値では切り詰めを行わない設計のため）。
+NODE_ENV = "production"
+# FEATURE_ANNOUNCEMENT_BANNER_ENABLED（feature-flag-design.md）: 起動時お知らせバナーの
+# 既定値。D1（feature_flag テーブル）に行が無いキーはこの値にフォールバックする。
+# D1側は GET /admin/flags の管理画面から環境ごとに個別に上書きできるため、通常この
+# 既定値自体を書き換える必要はない（初回導入時のフォールバックとして "false" のまま）。
+FEATURE_ANNOUNCEMENT_BANNER_ENABLED = "false"
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "race-schedule-db-prod"
+database_id = "${DB_ID}"
+migrations_dir = "../db/migrations"
+
+# CFARCH-01対応（2026-08-08）: [[ratelimits]]はnamed environmentへ継承されないため、
+# トップレベル定義だけでは`wrangler deploy --env production`後のWorkerに
+# バインディングが存在せず、rateLimitMiddleware.tsのフェイルオープン設計により
+# レート制限が無音のまま無効化されていた。環境ごとに複製して明示する。
+[[env.production.ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "1001"
+simple = { limit = 100, period = 60 }
+
+[[env.production.ratelimits]]
+name = "RATE_LIMITER_WRITE"
+namespace_id = "1005"
+simple = { limit = 30, period = 60 }
+
+[env.development]
+name = "race-schedule-dev"
+
+# Web Push の期限到来分を配信する（毎分）。web-push-design.md §5 参照。
+[env.development.triggers]
+crons = ["* * * * *"]
+
+[env.development.secrets]
+# All environment variables are stored as secrets
+# Secrets are registered at deploy time via GitHub Actions
+# apiはGoogle Calendarへ直接アクセスしない（calendar Workerが担う）ため、
+# Google Calendar関連のシークレットは不要
+
+[env.development.vars]
+# WORKER_NAME: appLogger のJSON構造化ログ（OBS-001）を有効化し、
+# `worker` フィールドへ埋め込む識別子
+WORKER_NAME = "api"
+
+[[env.development.d1_databases]]
+binding = "DB"
+database_name = "race-schedule-db-test"
+database_id = "${DB_ID}"
+migrations_dir = "../db/migrations"
+
+# CFARCH-01対応: 環境ごとに複製（上記[env.production.ratelimits]のコメント参照）。
+[[env.development.ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "1001"
+simple = { limit = 100, period = 60 }
+
+[[env.development.ratelimits]]
+name = "RATE_LIMITER_WRITE"
+namespace_id = "1005"
+simple = { limit = 30, period = 60 }
+
+[env.test]
+name = "race-schedule-test"
+
+# Web Push の期限到来分を配信する（毎分）。web-push-design.md §5 参照。
+[env.test.triggers]
+crons = ["* * * * *"]
+
+[env.test.secrets]
+# All environment variables are stored as secrets
+# Secrets are registered at deploy time via GitHub Actions
+# apiはGoogle Calendarへ直接アクセスしない（calendar Workerが担う）ため、
+# Google Calendar関連のシークレットは不要
+
+[env.test.vars]
+# WORKER_NAME: appLogger のJSON構造化ログ（OBS-001）を有効化し、
+# `worker` フィールドへ埋め込む識別子
+WORKER_NAME = "api"
+
+[[env.test.d1_databases]]
+binding = "DB"
+database_name = "race-schedule-db-test"
+database_id = "${DB_ID}"
+migrations_dir = "../db/migrations"
+
+# CFARCH-01対応: 環境ごとに複製（上記[env.production.ratelimits]のコメント参照）。
+[[env.test.ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "1001"
+simple = { limit = 100, period = 60 }
+
+[[env.test.ratelimits]]
+name = "RATE_LIMITER_WRITE"
+namespace_id = "1005"
+simple = { limit = 30, period = 60 }
+
+# レート制限バインディング（トップレベル、`wrangler dev`専用のフォールバック）
+# 仕様: Wrangler 4.36.0 以上で両フィールドが必須
+# - "name" フィールド: バインディング名（環境内でユニーク）
+# - "namespace_id": 再利用料制限ナームスペースID（アカウント内でユニーク、数値文字列）
+# limit: 1分間に許可するリクエスト数
+#
+# SEC-013: GET（閲覧）とPOST/PUT/DELETE（書き込み）で同じ緩さの制限をかけるのは
+# 適切でない（書き込みの方がDBへの永続化・悪用リスクが高い）ため、用途別に
+# バインディングを分割する。namespace_idはapi=1001と衝突しないよう1005を割当
+# （batch/scraping/calendarは1002〜1004を使用済み、SEC-012参照）。
+# - RATE_LIMITER: 読み取り系（GET/HEAD等）向け。従来どおり limit=100/period=60。
+# - RATE_LIMITER_WRITE: 書き込み系（POST/PUT/DELETE）向け。読み取りの3割程度
+#   （limit=30/period=60）に絞る。書き込みはDB更新・Web Push購読登録など
+#   読み取りより単価が高く悪用時の影響も大きいため、SEC-012で揃えた
+#   既存の100/60という基準値からの相対値として厳しめに倒す。
+# CFARCH-01対応（2026-08-08）: named environmentには継承されないため、[env.X]側にも
+# 複製した。このトップレベル定義は`wrangler dev`（env未指定）専用のフォールバック。
+[[ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "1001"
+simple = { limit = 100, period = 60 }
+
+[[ratelimits]]
+name = "RATE_LIMITER_WRITE"
+namespace_id = "1005"
+simple = { limit = 30, period = 60 }
+
+[env.local]
+name = "race-schedule-local"
+vars = { USE_IN_MEMORY_DB = "true" }

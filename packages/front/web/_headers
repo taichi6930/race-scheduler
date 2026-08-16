@@ -1,0 +1,37 @@
+# Cloudflare Pages のレスポンスヘッダー設定（CFCACHE-04）
+#
+# 実際に `flutter build web --release` した build/web/ を確認したところ、
+# main.dart.js だけでなく assets/* や canvaskit/* を含む全ファイルが
+# コンテンツハッシュ付きファイル名になっていない（Flutter Web の既定のビルド
+# 出力はファイル名バージョニングを行わない）。そのため「ハッシュ付きは長期
+# キャッシュ・それ以外はno-cache」という一般的な使い分けができず、デプロイの
+# たびに同じファイル名で中身だけが変わりうる。ここで長期キャッシュを設定すると
+# 再デプロイ後も古いJS/wasmが配信され続ける実害があるため、全パスに対して
+# 「毎回サーバーへ検証する」no-cache（no-storeとは異なり、変化が無ければ
+# 304で再利用されるためキャッシュ自体は無効化しない）を既定にする。
+#
+# セキュリティヘッダーはapi側（packages/core/src/http/securityHeadersMiddleware.ts、
+# SEC-031）と方針を揃える。
+#
+# CSP（SEC-055）: ヘッドレスChromiumでビルド成果物を実際に配信し検証した上で決定した
+# （`default-src 'self'`だけでは起動不可）。
+# - script-src/connect-src に www.gstatic.com が要る: CanvasKitレンダラーは
+#   build/web/canvaskit/ にwasmを同梱しているが、実行時は既定でGoogle CDN
+#   （www.gstatic.com/flutter-canvaskit/...）からcanvaskit.js/.wasmを取得する
+#   （PERF-133調査時の「外部CDN依存0件」という結論はDart側コードのみを見ており、
+#   Flutter Web エンジン自体のこの既定動作は含まれていなかった）。
+# - connect-src/font-src に fonts.gstatic.com が要る: Roboto等のWebフォントを
+#   Google Fonts CDNから直接fetchする（<link>ではなくFlutter Web内部からのfetchのため
+#   style-srcではなくconnect-srcの対象）。
+# - script-src に 'unsafe-inline' を含めない: index.html のインラインscript
+#   （起動スプラッシュ除去・push-sw登録）は app-bootstrap.js（同一オリジン）へ切り出し済み。
+# - script-src に 'wasm-unsafe-eval' が要る: CanvasKitのWebAssembly実行に必要
+#   （Flutter公式のWeb CSP対応ガイドが推奨する設定）。
+# - style-src の 'unsafe-inline' は維持: Flutterがアクセシビリティのセマンティクスツリー等で
+#   要素へ動的にインラインstyleを注入するため、外すと画面が壊れるリスクがある
+#   （本検証は初回起動のみで全画面のE2E検証はしていないため、安全側に倒した）。
+/*
+  Cache-Control: no-cache
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://*.tn-product.workers.dev https://www.gstatic.com https://fonts.gstatic.com; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'

@@ -1,0 +1,527 @@
+name: Scheduled Tests (UAT smoke + sIT + audit)
+
+# PRごとには実行しない、重い/外部依存のテストレイヤーをまとめて定期実行する。
+#
+# - uat-smoke: デプロイ済み test 環境 Worker（api）への疎通確認。
+#   .github/workflows/deploy.yml の post-deploy-verify ジョブと同じ手法
+#   （1970年の未実在データで副作用なく usecase 層まで到達させる）を、
+#   独立した bun:test として走らせる。実インフラへのリクエストを伴うため
+#   PRごとに毎回叩くのは不適切。
+# - sit: miniflare（実D1/実R2）を起動するsIT。起動コストがあり、PR毎の
+#   coverage測定（coverage-pr.yml・scripts/test-gap-analysis.ts）からは
+#   --path-ignore-patterns で除外している。ここで定期的に実行を保証する。
+# - audit: 依存関係の脆弱性スキャン（CICD-36）。continue-on-error のため
+#   どんな結果でも CI は緑になり、PR ごとに runner を使う意味が無かった。
+#   結果を確認する目的だけなら定期実行で十分なため、ここへ移した。
+# - audit-front: Flutter（pub.dev）側の依存関係脆弱性スキャン（SEC-026）。TypeScript側の
+#   audit ジョブに相当するチェックが packages/front には存在しなかったため追加。
+#   pub.dev/Dartエコシステムには bun audit 相当の一発コマンドが無いため、OSV.dev
+#   （Google運営の複数エコシステム横断の脆弱性データベース）を pubspec.lock に対して
+#   直接問い合わせる osv-scanner CLI を使う。audit ジョブと同じ思想で continue-on-error。
+# - license-check: TypeScript/npm依存パッケージのライセンス機械チェック（OPS-03）。
+#   目視確認では現状GPL系混入なしを確認済みだが継続保証の仕組みが無かったため追加。
+#   scripts/check-licenses.ts がルート+各TSパッケージのnode_modulesを
+#   `license-checker`で走査し、GPL系（コピーレフト）ライセンスやUNKNOWNライセンスを
+#   検出する。新規導入の検知ロジックのため、audit/audit-frontと同じ思想で
+#   continue-on-error（まずは結果の可視化を優先し、ブロッキング化は別途判断）。
+#   Flutter（pub.dev）側のライセンス機械チェックは対象外（現時点では横断的な
+#   OSSツールが無く、audit-frontのようなロックファイル問い合わせでは代替できない
+#   ため今回のスコープでは見送り、BACKLOG.md OPS-03に注記）。
+# - web-push-web-platform: SettingsScreenのWeb Push操作フロー（BEHAV-040/041、
+#   `if (kIsWeb) ...`でガードされた「テスト通知を送信」ボタン等）は
+#   `flutter test`（VMターゲット）では`kIsWeb`が常にfalseになり検証できない。
+#   `flutter test --platform chrome`が必要だが、Chrome起動コストがあり
+#   機能の重要度に対してPRごとに毎回実行するには重いため、ここで定期実行する
+#   （対象は`@TestOn('chrome')`を付けた専用テストファイルのみ）。
+#
+# いずれも pull_request では実行しない（スケジュール + 手動実行のみ）。
+#
+# CICD-99対応（2026-08-01）: audit/audit-frontは`continue-on-error:true`で結果を
+# 握り潰すだけの非緊急チェックであり、依存の脆弱性DB更新頻度を踏まえると毎日実行する
+# 必要性が薄い。uat-smoke/sitは検知の鮮度が重要なため毎日のまま維持しつつ、
+# audit/audit-frontのみdependabot.ymlと同じ月曜（週次）に絞り、ジョブ実行回数を
+# 1/7に削減する（check-dayジョブで曜日判定し、月曜以外はskip=成功扱いにする）。
+#
+# CICD-100対応（2026-08-01）: web-push-web-platformはFlutter SDK+build_runner+Chrome起動を
+# 伴う本ワークフロー最重量のジョブだが、変更頻度の低いWeb Push機能に対して毎日実行して
+# いた。`packages/front/**`への実際の変更をpushトリガー（paths限定）で即座に検知しつつ、
+# 変更が無い週は月曜の週次バックストップ（check-dayジョブのis-monday判定を再利用）のみに
+# 縮小する。新設したpushトリガーは他のジョブ（uat-smoke/sit/audit/audit-front/
+# license-check）には無関係なため、各ジョブのif条件で`github.event_name != 'push'`を
+# 明示し誤発火を防ぐ。
+#
+# report-test-failuresジョブ（2026-08-02追加）: uat-smoke/sit/web-push-web-platformは
+# 定期実行・無人実行のため、失敗してもActionsのRun一覧を人が見に行かない限り気づけない。
+# error-monitor.yml/uptime-check.ymlと同じ「GitHub App token + タイトルでdedupしたIssue、
+# 復旧したら自動Close」の作法で、失敗を検知したジョブ単位でIssueを自動起票する
+# （2026-08-03: `gh issue create --label`がこのジョブのGitHub Appトークンだとラベルを
+# 実際には付与しないまま成功することがある既知不具合が判明したため、dedupの基準を
+# ラベルからタイトル一致に変更した。ラベル自体はci-fixバックログ連携のためベストエフォート
+# で付与し続ける。詳細はtest-report.ymlのreport-test-failureジョブのコメント参照）。
+# audit-front/license-check/widgetbook-build-checkは元々continue-on-errorで
+# 「結果を握り潰す非緊急チェック」という設計のため対象外（前述のコメント参照）。
+# auditジョブのみSEC-024対応（2026-08-02）でこのジョブの監視対象に追加した:
+# `bun audit --audit-level moderate`はセキュリティ脆弱性という他と性質が異なる
+# 重要度のため、continue-on-errorのままでも検出結果自体は能動的にIssue化する
+# （job outputでcontinue-on-errorの影響を受けないaudit stepのoutcomeを公開し判定）。
+# 起票されたIssue（`test-failure`ラベル）は`.claude/docs/loop-engineering/backlog-contract.md`
+# §2.3が定義する`kind: 'ci-fix'`タスクの自動ソースとしてバックログに合流する
+# （`security-audit`ラベルのIssueは対象外・別途手動でトリアージする）。
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/front/**"
+  schedule:
+    # 毎日 15:00 JST (06:00 UTC)。health-check-data-freshness.yml（14:00 JST）の後。
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # CICD-99: audit/audit-frontを月曜のみ実行するための曜日判定。workflow_dispatch
+  # （手動実行）のときは曜日に関わらず常に実行する。
+  check-day:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    outputs:
+      is-monday: ${{ steps.day.outputs.is-monday }}
+    steps:
+      - name: Determine day of week (UTC)
+        id: day
+        run: |
+          if [ "$(date -u +%u)" = "1" ]; then
+            echo "is-monday=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is-monday=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  uat-smoke:
+    # CICD-100対応: web-push-web-platform用に追加したpushトリガーでは実行不要。
+    if: github.event_name != 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    # SERVICE_AUTH_TOKEN は test 環境用の GitHub Environment secrets に登録されているため、
+    # secrets コンテキストから参照するには対象 Environment を明示する必要がある。
+    environment: test
+    env:
+      MAIN_API_URL: https://race-schedule-test.tn-product.workers.dev
+      SERVICE_AUTH_TOKEN: ${{ secrets.SERVICE_AUTH_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          filter: blob:none
+
+      # CICD-78対応: Setup Bun/`bun install`のベタ書き・キャッシュ無しをやめ、
+      # 他ジョブと同じ`setup-workspace`（hashFilesベースの安定キャッシュキー内蔵）に統一。
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+        with:
+          setup-node: 'false'
+
+      - name: Run UAT smoke tests
+        run: bun run test:uat
+
+  sit:
+    # CICD-100対応: web-push-web-platform用に追加したpushトリガーでは実行不要。
+    if: github.event_name != 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          filter: blob:none
+
+      # CICD-78対応: Setup Bun/`bun install`のベタ書き・キャッシュ無しをやめ、
+      # 他ジョブと同じ`setup-workspace`（hashFilesベースの安定キャッシュキー内蔵）に統一。
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+        with:
+          setup-node: 'false'
+
+      - name: Run sIT (miniflare)
+        # CILOG-002: miniflare起動ログ含む出力を折りたたむ（bun testはパッケージ横断で
+        # 1コマンド実行のため、シナリオ単位ではなく全体を1グループに統合する）。
+        run: |
+          echo "::group::sIT output (miniflare)"
+          bun run test:sit
+          echo "::endgroup::"
+
+  audit:
+    needs: check-day
+    # CICD-100対応: web-push-web-platform用に追加したpushトリガーでは実行不要
+    # なため、明示的にscheduleイベント時のみis-monday判定を見る。
+    if: (github.event_name == 'schedule' && needs.check-day.outputs.is-monday == 'true') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # SEC-024対応: `continue-on-error: true`により本ジョブのresultは脆弱性検出時も
+    # 常に'success'になり、report-test-failuresジョブの既存判定（needs.*.result）では
+    # 検知できない。auditステップ自身のoutcome（continue-on-errorの影響を受けない）を
+    # job outputとして公開し、report-test-failures側で能動的に判定できるようにする。
+    outputs:
+      vulnerability-found: ${{ steps.audit.outcome == 'failure' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+
+      - name: Install dependencies
+        # TOK-057: 他ジョブ（setup-workspace）と同様に--silentで出力行数を抑える。
+        run: bun install --frozen-lockfile --silent
+
+      - name: Check audit allowlist
+        id: allowlist
+        run: |
+          bun scripts/check-audit-allowlist.ts
+          echo "ignore-flags=$(bun scripts/check-audit-allowlist.ts --ignore-flags)" >> "$GITHUB_OUTPUT"
+
+      - name: Run dependency audit
+        id: audit
+        # DEP-020: docs/security/audit-allowlist.json（対応不要と判断した既知の
+        # 脆弱性の追跡台帳）に登録されたGHSA IDを--ignoreで除外する。既定は空配列
+        # のため通常は無視フラグ無し（従来どおり全件検出）。
+        run: bun audit --audit-level moderate ${{ steps.allowlist.outputs.ignore-flags }}
+        continue-on-error: true
+
+  audit-front:
+    needs: check-day
+    # CICD-100対応: auditジョブと同じ理由でscheduleイベント時のみis-monday判定を見る。
+    if: (github.event_name == 'schedule' && needs.check-day.outputs.is-monday == 'true') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # google/osv-scanner-action は SARIF出力 + Code Scanningタブ連携を前提にした
+      # reusable workflow（job-levelの`uses:`で呼ぶ形）のみを提供しており、
+      # 「checkout → セットアップ → 実行（continue-on-error）」という他ジョブと
+      # 同じstepベースの形にはそぐわない。そのためCLIバイナリを直接取得して実行する。
+      # バージョンはDEP-024と同様の理由（再現性）で明示固定し、更新はdependabotではなく
+      # 手動判断（Node/compatibility_dateと同様、定期リマインダでの確認を検討）に委ねる。
+      # SEC-038と同じ理由（サプライチェーン対策）でSHA256チェックサム検証を行う
+      # （`sha256sum -c`が失敗すればジョブごと落ちる設計。値はv2.4.0のリリース
+      # バイナリを実際にダウンロードして算出した実測値）。
+      - name: Install osv-scanner
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -sSL -o "$HOME/.local/bin/osv-scanner" \
+            "https://github.com/google/osv-scanner/releases/download/v2.4.0/osv-scanner_linux_amd64"
+          echo "15314940c10d26af9c6649f150b8a47c1262e8fc7e17b1d1029b0e479e8ed8a0  $HOME/.local/bin/osv-scanner" | sha256sum -c -
+          chmod +x "$HOME/.local/bin/osv-scanner"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Run dependency audit (Flutter / pub.dev)
+        run: osv-scanner scan --lockfile=packages/front/pubspec.lock
+        continue-on-error: true
+
+  # SEC-034対応: 依存関係の全体像を機械可読な形で持てていない問題への対応。
+  # 外部SBOM専用ツールの新規導入は避け、license-check済みの`license-checker`出力を
+  # 流用した簡易SBOM（名前・バージョン・ライセンスのJSON一覧）をartifact化する。
+  # audit/audit-frontと同じ思想でaudit/監査目的のため週次（月曜）のみ実行する。
+  sbom:
+    needs: check-day
+    if: (github.event_name == 'schedule' && needs.check-day.outputs.is-monday == 'true') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+
+      - name: Install dependencies
+        # TOK-057: 他ジョブ（setup-workspace）と同様に--silentで出力行数を抑える。
+        run: bun install --frozen-lockfile --silent
+
+      - name: Generate SBOM
+        run: bun run sbom:generate > sbom.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: sbom
+          path: sbom.json
+          retention-days: 90
+
+  license-check:
+    # CICD-100対応: web-push-web-platform用に追加したpushトリガーでは実行不要。
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+
+      - name: Install dependencies
+        # TOK-057: 他ジョブ（setup-workspace）と同様に--silentで出力行数を抑える。
+        run: bun install --frozen-lockfile --silent
+
+      - name: Check dependency licenses (TypeScript/npm, OPS-03)
+        run: bun run check:licenses
+        continue-on-error: true
+
+  # DEP-015対応: widgetbook（デザインカタログ、`front:widgetbook`スクリプトでのみ
+  # 手動起動される別entry point）はPR CIのtest-packages-front（`flutter test`）の
+  # 対象外で、本体メジャー更新時に連動して壊れても検知できていなかった。
+  # ビルドが通ることだけを週次で確認する（情報提供のみ、continue-on-error）。
+  widgetbook-build-check:
+    needs: check-day
+    if: (github.event_name == 'schedule' && needs.check-day.outputs.is-monday == 'true') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          filter: blob:none
+
+      - name: Setup Flutter workspace
+        uses: ./.github/actions/setup-flutter-workspace
+
+      - name: Build widgetbook (web)
+        working-directory: packages/front
+        run: flutter build web -t lib/widgetbook.dart --release
+        continue-on-error: true
+
+  web-push-web-platform:
+    needs: check-day
+    # CICD-100対応: packages/front/**への実際の変更（push、paths限定）は即座に、
+    # それ以外は月曜の週次バックストップ（check-dayのis-monday）のみ実行する。
+    # workflow_dispatch（手動実行）は曜日に関わらず常に実行する。
+    if: |
+      github.event_name == 'push' ||
+      (github.event_name == 'schedule' && needs.check-day.outputs.is-monday == 'true') ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    concurrency:
+      group: scheduled-tests-web-push-web-platform-${{ github.ref }}
+      cancel-in-progress: false
+    defaults:
+      run:
+        working-directory: packages/front
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          filter: blob:none
+
+      # QDEV-05対応: Flutter SDKセットアップ〜pub get〜コード生成は
+      # setup-flutter-workspaceと完全に同一の手順だったため、複製をやめて
+      # 共有composite actionへ委譲する（バージョン文字列の重複も解消される）。
+      # このジョブの`defaults.run.working-directory: packages/front`は
+      # composite action内部の各stepが持つ明示的な`working-directory`
+      # （リポジトリルート基準の相対パス）を上書きしない。
+      - name: Setup Flutter workspace
+        uses: ./.github/actions/setup-flutter-workspace
+
+      # BEHAV-040/041: `@TestOn('chrome')` を付けた専用テストファイルのみを
+      # Chrome プラットフォームで実行する。通常の`flutter test`（VMターゲット、
+      # test-packages-frontジョブ）ではこれらのファイル自体がスキップされる。
+      - name: Run Web Push tests (Chrome platform)
+        run: |
+          flutter test --platform chrome \
+            test/unittest/features/settings/presentation/settings_screen_web_push_test.dart
+
+  # 失敗を検知したジョブごとにGitHub Issueを自動起票/自動Closeする（ワークフロー冒頭の
+  # コメント参照）。対象は実アサーションを行うジョブに加え、SEC-024対応でauditジョブの
+  # 脆弱性検出も対象化した（audit-front/license-check/widgetbook-build-checkは引き続き
+  # 対象外。前述のコメント参照）。`if: always()`でneeds対象がskip/failureいずれでも
+  # このジョブ自体は実行し、内部でresultごとに分岐する。
+  report-test-failures:
+    needs: [uat-smoke, sit, web-push-web-platform, audit]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      # create-github-app-token composite action はリポジトリ内のローカルファイルを
+      # 参照するため、呼び出し前に checkout が必須（CICD-89対応で発覚したリグレッション）。
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Create GitHub App Token
+        uses: ./.github/actions/create-github-app-token
+        id: app-token
+        with:
+          app-id: ${{ secrets.BOT_APP_ID }}
+          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
+
+      - name: Sync GitHub Issues for failed test jobs
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RESULT_UAT_SMOKE: ${{ needs.uat-smoke.result }}
+          RESULT_SIT: ${{ needs.sit.result }}
+          RESULT_WEB_PUSH: ${{ needs.web-push-web-platform.result }}
+          RESULT_AUDIT: ${{ needs.audit.result }}
+          AUDIT_VULNERABLE: ${{ needs.audit.outputs.vulnerability-found }}
+        run: |
+          set -uo pipefail
+
+          # 対象1件分の同期。サブシェル関数として定義し、内部で`set -euo pipefail`を
+          # 有効にすることで、1対象で想定外のエラー（gh CLI失敗等）が起きても呼び出し元の
+          # ループやスクリプト全体を止めず、他対象の同期を継続できるようにしている
+          # （error-monitor.yml/uptime-check.ymlと同じ設計）。
+          report_target() (
+            set -euo pipefail
+            target_key="$1"
+            job_name="$2"
+            result="$3"
+
+            # skipped（曜日/pathsトリガー条件で今回は対象外）・cancelled（concurrency
+            # cancel-in-progressによる同時実行キャンセル）はどちらもテスト失敗ではないため、
+            # 既存Issueの状態も変えずに何もしない（test-report.ymlで2026-08-03に
+            # cancelledを誤起票し続けたバグの再発防止、Issue #2268-#2309参照）。
+            if [ "$result" = "skipped" ] || [ "$result" = "cancelled" ]; then
+              echo "[$target_key] $result（対象外のため何もしません）"
+              exit 0
+            fi
+
+            title="[Test Failure] ${job_name} が失敗"
+            label="test-failure:${target_key}"
+
+            gh label create "test-failure" --color "B60205" \
+              --description "テスト失敗の自動起票" >/dev/null 2>&1 || true
+            gh label create "$label" --color "B60205" \
+              --description "テスト失敗 (${job_name})" >/dev/null 2>&1 || true
+
+            # dedupはラベルではなくタイトルの完全一致で行う。`gh issue create --label`は
+            # このジョブのGitHub Appトークンだと稀にラベルが実際には付与されないまま
+            # 成功することがあり（test-report.ymlで2026-08-03に実証済みの既知不具合）、
+            # ラベルに依存したdedupは信頼できない。
+            # 注意: `gh`の`--jq`は単一のjq式のみを受け付け、jq本体の`--arg`を
+            # 追加で渡すと`--jq`の値として`--arg`が飲み込まれ、残りが未知の
+            # 位置引数としてエラーになる（2026-08-04、test-report.ymlの同一
+            # パターンで実機確認済みのリグレッション）。素の`jq`にパイプする。
+            existing=$(gh issue list --state open --json number,title \
+              | jq --arg t "$title" '[.[] | select(.title == $t)] | .[0].number // empty')
+
+            if [ "$result" = "success" ]; then
+              if [ -n "$existing" ]; then
+                gh issue comment "$existing" --body "直近の実行（${RUN_URL}）でテストが成功したため、自動的にCloseします。再発した場合は新しいIssueが作成されます。"
+                gh issue close "$existing"
+                echo "[$target_key] 復旧を確認し、Issue #$existing をCloseしました"
+              else
+                echo "[$target_key] 成功。対象Issueもなし（何もしません）"
+              fi
+              exit 0
+            fi
+
+            body="## テストが失敗しました
+
+          - ワークフロー: \`scheduled-tests.yml\` / ジョブ: \`${job_name}\`
+          - 実行結果: ${result}
+          - 実行ログ: ${RUN_URL}
+
+          詳細は上記の実行ログ、または [Allure Report](https://race-schedule-ci-report.pages.dev/allure/#timeline) を確認してください。
+          テストが成功すれば次回チェック時に自動でCloseされます。
+
+          _このIssueは \`.github/workflows/scheduled-tests.yml\` により自動作成されました。_"
+
+            if [ -n "$existing" ]; then
+              gh issue comment "$existing" --body "$body"
+              target="$existing"
+              echo "[$target_key] 既存Issue #$existing にコメントを追加しました"
+            else
+              issue_url=$(gh issue create --title "$title" --body "$body")
+              target="${issue_url##*/}"
+              echo "[$target_key] 新規Issue #$target を作成しました"
+            fi
+
+            # ラベル付与はベストエフォート（dedupはタイトルで行うため成否に依存しないが、
+            # backlog-contract.md§2.3のci-fix自動ソースがtest-failureラベルを見に行く）。
+            gh issue edit "$target" --add-label "$label" --add-label "test-failure" \
+              || echo "::warning::[$target_key] Issue #$target へのラベル付与に失敗しました"
+          )
+
+          # SEC-024: auditジョブはcontinue-on-errorのためresultが常に'success'になり、
+          # report_targetの判定（resultベース）では検知できない。auditステップ自身の
+          # outcomeから公開したvulnerability-found job outputを見て別途判定する。
+          report_audit() (
+            set -euo pipefail
+            result="$1"
+            vulnerable="$2"
+
+            if [ "$result" = "skipped" ] || [ "$result" = "cancelled" ]; then
+              echo "[audit] $result（対象外のため何もしません）"
+              exit 0
+            fi
+
+            title="[Security] 依存関係に moderate 以上の脆弱性が検出されました"
+            label="security-audit"
+            gh label create "$label" --color "B60205" \
+              --description "bun audit で moderate 以上の脆弱性を検知" >/dev/null 2>&1 || true
+
+            # dedupはラベルではなくタイトルの完全一致で行う（report_targetと同じ理由、
+            # `gh issue create --label`のラベル未付与既知不具合を参照）。
+            # 注意: `gh`の`--jq`は単一のjq式のみを受け付け、jq本体の`--arg`を
+            # 追加で渡すと`--jq`の値として`--arg`が飲み込まれ、残りが未知の
+            # 位置引数としてエラーになる（2026-08-04、test-report.ymlの同一
+            # パターンで実機確認済みのリグレッション）。素の`jq`にパイプする。
+            existing=$(gh issue list --state open --json number,title \
+              | jq --arg t "$title" '[.[] | select(.title == $t)] | .[0].number // empty')
+
+            if [ "$vulnerable" != "true" ]; then
+              if [ -n "$existing" ]; then
+                gh issue comment "$existing" --body "直近の実行（${RUN_URL}）で脆弱性が検出されなくなったため、自動的にCloseします。再検出された場合は新しいIssueが作成されます。"
+                gh issue close "$existing"
+                echo "[audit] 復旧を確認し、Issue #$existing をCloseしました"
+              else
+                echo "[audit] 脆弱性なし。対象Issueもなし（何もしません）"
+              fi
+              exit 0
+            fi
+
+            body="## 依存関係に moderate 以上の脆弱性が検出されました
+
+          - ワークフロー: \`scheduled-tests.yml\` / ジョブ: \`audit\`
+          - 実行結果: \`bun audit --audit-level moderate\` が検出あり
+          - 実行ログ: ${RUN_URL}
+
+          詳細は上記の実行ログを確認してください。解消されれば次回チェック時に自動でCloseされます。
+
+          _このIssueは \`.github/workflows/scheduled-tests.yml\` により自動作成されました。_"
+
+            if [ -n "$existing" ]; then
+              gh issue comment "$existing" --body "$body"
+              target="$existing"
+              echo "[audit] 既存Issue #$existing にコメントを追加しました"
+            else
+              issue_url=$(gh issue create --title "$title" --body "$body")
+              target="${issue_url##*/}"
+              echo "[audit] 新規Issue #$target を作成しました"
+            fi
+
+            gh issue edit "$target" --add-label "$label" \
+              || echo "::warning::[audit] Issue #$target へのラベル付与に失敗しました"
+          )
+
+          overall_status=0
+          report_target "uat-smoke" "uat-smoke" "$RESULT_UAT_SMOKE" || overall_status=1
+          report_target "sit" "sit" "$RESULT_SIT" || overall_status=1
+          report_target "web-push-web-platform" "web-push-web-platform" "$RESULT_WEB_PUSH" || overall_status=1
+          report_audit "$RESULT_AUDIT" "$AUDIT_VULNERABLE" || overall_status=1
+
+          exit "$overall_status"

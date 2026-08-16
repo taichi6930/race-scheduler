@@ -1,0 +1,750 @@
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+name: Pull Request CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  # 変更されたパッケージを検出
+  # dorny/paths-filterを使用（gh api --paginateの手書きページングより堅牢で、
+  # API失敗時に「変更なし」へ静かにフォールバックしてテストが全部スキップされる
+  # 危険もない）。core依存の伝播のみ明示し、api→batchのような
+  # 依存関係の無いパッケージへの過剰伝播はしない（各packageのpackage.jsonの
+  # dependenciesを確認済み：admin/api/batchはいずれも@race-schedule/core
+  # のみに依存し、互いには依存しない）。
+  detect-changed-packages:
+    # draft中はCIを起動せずGitHub Actionsの消費を抑える（task-workflow.md参照）。
+    # このjobがskipされると、needsで連鎖する全ジョブのif条件
+    # （needs.detect-changed-packages.outputs.xxx == 'true'）もfalseとなり
+    # 連鎖的にskipされる（skippedはブランチ保護の必須チェック判定ではsuccess扱い）。
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    # 元label-changed-packagesジョブ（pkg:*ラベル同期）を統合したためpull-requests: write
+    # が必要（SEC-052対応: 未指定スコープは'none'になるため、契約読み取りに使うcontents: read
+    # も明示する）。
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      run-admin: ${{ steps.combine.outputs.admin }}
+      run-api: ${{ steps.combine.outputs.api }}
+      run-batch: ${{ steps.combine.outputs.batch }}
+      run-core: ${{ steps.filter.outputs.core }}
+      run-front: ${{ steps.filter.outputs.front }}
+      run-workflows: ${{ steps.filter_other.outputs.workflows }}
+      run-widgetbook-design: ${{ steps.filter_other.outputs['widgetbook-design'] }}
+      run-code: ${{ steps.combine.outputs.code }}
+    steps:
+      # CICD-68: 各パッケージの `*.md`（README/SETUP等）のみの変更ではテスト/lintを
+      # 起動しない。
+      #
+      # 【CICD-69で修正した罠】dorny/paths-filterの predicate-quantifier は既定で 'some'
+      # （パターンのいずれか1つにマッチすればそのファイルを採用）。この既定のまま
+      # `'!packages/xxx/**/*.md'` のような除外パターンを使うと、否定パターンが独立した
+      # OR条件として評価され「xxx配下のmdファイルではない」＝ほぼ全ファイルにマッチして
+      # しまい、無関係な変更（例: 別packageのドキュメントやワークフローファイルのみの変更）
+      # でも全フィルタがtrueになるバグを踏んでいた（実際にPR #2246/#2248で発生・検知）。
+      # `predicate-quantifier: 'every'`（全パターンを満たす必要がある＝ファイル単位でAND評価）
+      # にすると除外は正しく機能するが、1フィルタ内の複数の positive パターン（例:
+      # 「core変更 OR api変更 OR migrations変更」）まで全部ANDされてしまい別の形で壊れる。
+      # そのため「1 positive + !*.md 除外」という単純な形にフィルタを分割し（このステップ）、
+      # OR合成が必要な部分は後続のcombineステップでbashにより明示的に行う。
+      - name: Detect changed files (path + exclude-markdown filters)
+        id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          predicate-quantifier: 'every'
+          filters: |
+            core:
+              - 'packages/core/**'
+              - '!packages/core/**/*.md'
+            admin-own:
+              - 'packages/admin/**'
+              - '!packages/admin/**/*.md'
+            api-own:
+              - 'packages/api/**'
+              - '!packages/api/**/*.md'
+            batch-own:
+              - 'packages/batch/**'
+              - '!packages/batch/**/*.md'
+            db-own:
+              - 'packages/db/**'
+              - '!packages/db/**/*.md'
+            # PERF-148対応: frontはDart/Flutterの独立したコードベースでTypeScript側の
+            # coreパッケージには依存しないため、coreの伝播は付けない。
+            front:
+              - 'packages/front/**'
+              - '!packages/front/**/*.md'
+            # CICD-92対応: front(Dart/Flutter)のみの変更ではBiome/ESLint/tsc/circular/
+            # unused-code/gate-commandsのいずれも対象コードを持たないため、
+            # packages/front/**自体をこのフィルタから除外する（front側の検証は
+            # test-packages-front/front-bundle-sizeジョブが別途担う）。
+            packages-own:
+              - 'packages/**'
+              - '!packages/**/*.md'
+              - '!packages/front/**'
+
+      # 除外パターンを使わない単純なOR一致のフィルタ（predicate-quantifierは既定のsomeのままでよい）。
+      - name: Detect changed files (plain OR filters)
+        id: filter_other
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            # DEP-026対応: マイグレーション変更時にschema.tsとのドリフトチェック
+            # （call-test-packagesジョブのschema-driftチェック）を確実に起動するため対象に含める。
+            db-migrations:
+              - 'packages/db/migrations/**'
+            workflows:
+              - '.github/workflows/**'
+            # widgetbook-previewジョブ向け: デザインシステム本体（lib/design/**）と
+            # カタログのentry point（widgetbook.dart）の変更時のみ自動でプレビューデプロイする
+            # （front全体の変更に反応させるとCICD-97同様、無関係な変更でも毎回重いFlutter web
+            # ビルドが走ってしまうため）。それ以外のfront変更でプレビューが見たい場合は
+            # `widgetbook:preview`ラベルで手動オプトインする。
+            widgetbook-design:
+              - 'packages/front/lib/design/**'
+              - 'packages/front/lib/widgetbook.dart'
+            # CICD-48/CICD-49対応: Biome/ESLint/型チェック/循環依存/未使用コード/ゲートコマンド検証
+            # （call-static-checks）が判定対象とする実ファイル群のうち、`packages/**`（除外markdown
+            # 込み）以外の部分。ドキュメントのみの変更（aidlc-docs/、.claude/docs/配下のtask-workflow.md
+            # 等）ではこれらの静的チェックが何も検知できないため、下記のいずれかにマッチした場合のみ
+            # 起動する。check:gate-commandsが読む`.claude/docs/loop-engineering/`のドキュメント2点のみ
+            # 例外的に対象へ含める（このチェックだけがドキュメントの中身を検査するため）。
+            code-other:
+              - 'tests/**'
+              - 'scripts/**'
+              - '.claude/docs/loop-engineering/**'
+              - '.github/actions/**'
+              - '.github/workflows/**'
+              - 'package.json'
+              - 'bun.lock'
+              - 'bunfig.toml'
+              - 'biome.json'
+              - 'eslint.config.mjs'
+              - 'eslint-rules/**'
+              - 'tsconfig*.json'
+              - 'knip.json'
+
+      # coreの変更はadmin/api/batchへ伝播させる（admin/api/batchは
+      # いずれも@race-schedule/coreに依存するため、core変更時もそれぞれのテストを回して
+      # 破壊的変更を検知する必要がある）。dorny/paths-filterの単一quantifier制約により
+      # 「core変更 OR 自package変更」というOR-of-AND構造を1フィルタ内で表現できないため、
+      # bashで明示的に合成する。
+      - name: Combine core-propagation and OR logic
+        id: combine
+        env:
+          CORE: ${{ steps.filter.outputs.core }}
+          ADMIN_OWN: ${{ steps.filter.outputs['admin-own'] }}
+          API_OWN: ${{ steps.filter.outputs['api-own'] }}
+          BATCH_OWN: ${{ steps.filter.outputs['batch-own'] }}
+          PACKAGES_OWN: ${{ steps.filter.outputs['packages-own'] }}
+          DB_MIGRATIONS: ${{ steps.filter_other.outputs['db-migrations'] }}
+          CODE_OTHER: ${{ steps.filter_other.outputs['code-other'] }}
+        run: |
+          or() {
+            for v in "$@"; do
+              [ "$v" = "true" ] && { echo true; return; }
+            done
+            echo false
+          }
+          {
+            echo "admin=$(or "$CORE" "$ADMIN_OWN")"
+            echo "api=$(or "$CORE" "$API_OWN" "$DB_MIGRATIONS")"
+            echo "batch=$(or "$CORE" "$BATCH_OWN")"
+            echo "code=$(or "$PACKAGES_OWN" "$CODE_OTHER")"
+          } >> "$GITHUB_OUTPUT"
+
+      # 元label-changed-packagesジョブ。PRがどのパッケージ（レイヤー）を変更したか
+      # 一目でわかるよう、変更されたパッケージに対応する `pkg:*` ラベルを自動的に
+      # 付け外しする（ユーザー依頼、2026-08-05: front/api/batchのように
+      # 「どこで何の変更があったか」を見えるようにしたい）。同一条件・needsなしで
+      # detect-changed-packagesと並存していた別ジョブだったため、ジョブ単位の
+      # 最低1分課金が二重にかかっていた。上のfilterステップが計算した「自package
+      # 自身の変更のみ」（core伝播を含まない）の値をそのまま使う。run-*（コンテキスト
+      # 上部のjob outputs、core伝播込みの合成値）を使うと、coreのみの変更でも
+      # pkg:apiが付いてしまい実態と食い違うため。
+      # 更新履歴（release note）側でも、この`pkg:*`ラベルを`scripts/release/packageLabels.ts`
+      # 経由で読み取り、各PR由来の箇条書き先頭に`[api]`のように表示する
+      # （`scripts/release/generateReleaseSummary.ts`参照）。
+      # チェックアウト・bun installは不要（ghコマンドのみで完結する）。
+      - name: Sync pkg:* labels with changed packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          WANT_ADMIN: ${{ steps.filter.outputs['admin-own'] }}
+          WANT_API: ${{ steps.filter.outputs['api-own'] }}
+          WANT_BATCH: ${{ steps.filter.outputs['batch-own'] }}
+          WANT_CORE: ${{ steps.filter.outputs.core }}
+          WANT_DB: ${{ steps.filter.outputs['db-own'] }}
+          WANT_FRONT: ${{ steps.filter.outputs.front }}
+        run: |
+          set -euo pipefail
+
+          declare -A WANT=(
+            [admin]="$WANT_ADMIN"
+            [api]="$WANT_API"
+            [batch]="$WANT_BATCH"
+            [core]="$WANT_CORE"
+            [db]="$WANT_DB"
+            [front]="$WANT_FRONT"
+          )
+          # PACKAGE_LAYERS（scripts/release/packageLabels.ts）と手動で同期させること。
+          declare -A COLOR=(
+            [admin]="5C2D91"
+            [api]="1D76DB"
+            [batch]="5319E7"
+            [core]="C2E0C6"
+            [db]="BFD4F2"
+            [front]="F9D0C4"
+          )
+
+          current_labels=$(gh pr view "$PR_NUMBER" --json labels --jq '.labels[].name')
+
+          for pkg in admin api batch core db front; do
+            label="pkg:$pkg"
+            gh label create "$label" --color "${COLOR[$pkg]}" \
+              --description "packages/${pkg} の変更を含むPR" >/dev/null 2>&1 || true
+
+            has_label=false
+            if grep -qx "$label" <<< "$current_labels"; then
+              has_label=true
+            fi
+
+            if [ "${WANT[$pkg]}" = "true" ] && [ "$has_label" = "false" ]; then
+              gh pr edit "$PR_NUMBER" --add-label "$label"
+            elif [ "${WANT[$pkg]}" != "true" ] && [ "$has_label" = "true" ]; then
+              gh pr edit "$PR_NUMBER" --remove-label "$label"
+            fi
+          done
+
+  # Biome/ESLint/型チェック/循環依存/未使用コード/ゲートコマンド検証をまとめて実行する統合ジョブ
+  # （CICD-48対応）。以前は6個の独立ジョブに分かれており、1回のPR実行のたびにcheckout +
+  # `bun install`（setup-workspace）がそれぞれのジョブでフルに走っていた（同じ依存関係
+  # インストールが6回重複）。setup-workspaceを1回だけにして重複を無くす。
+  # ドキュメントのみの変更（run-code=false）ではこのジョブ自体を丸ごとスキップする（CICD-49対応）。
+  call-static-checks:
+    needs: [detect-changed-packages]
+    if: needs.detect-changed-packages.outputs.run-code == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+        with:
+          filter: blob:none
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+        with:
+          setup-node: 'false'
+      - name: Setup ESLint cache
+        uses: actions/cache@v6
+        with:
+          path: .eslintcache
+          key: ${{ runner.os }}-eslintcache-${{ hashFiles('bun.lock', 'eslint.config.mjs', 'eslint-rules/**') }}
+          restore-keys: |
+            ${{ runner.os }}-eslintcache-
+      - name: Setup knip cache
+        uses: actions/cache@v6
+        with:
+          path: node_modules/.cache/knip
+          key: ${{ runner.os }}-knipcache-${{ hashFiles('bun.lock', 'knip.json') }}
+          restore-keys: |
+            ${{ runner.os }}-knipcache-
+      - name: Run Biome check
+        run: bunx biome ci --reporter=github .
+      - name: Run ESLint check
+        run: bun run lint:check
+      - name: Check types
+        run: bun run type-check
+      - name: Check circular dependencies in core package
+        run: bun run check:circular
+      - name: Check for unused files, exports and dependencies
+        run: bun run check:unused
+      - name: Check loop-engineering gate commands exist in package.json
+        run: bun run check:gate-commands
+      - name: Check deploy working directories have wrangler.toml
+        run: bun run check:deploy-working-dirs
+      - name: Check wrangler.toml for non-inherited binding warnings
+        run: bun run check:wrangler-config
+
+  # ワークフロー変更時のジョブ数・timeout-minutes・キャッシュ有無をレポート（CICD-56）
+  # + actionlintによる設定ミス検知（CICD-57、hashFilesの存在しないファイル参照や
+  # 存在しないneeds参照のような静かに壊れる設定ミスを検出する）
+  call-workflow-hygiene-check:
+    needs: [detect-changed-packages]
+    if: needs.detect-changed-packages.outputs.run-workflows == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      ACTIONLINT_VERSION: '1.7.12'
+      ACTIONLINT_SHA256: '8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8'
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+        with:
+          filter: blob:none
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+        with:
+          setup-node: 'false'
+      - name: Cache actionlint binary
+        id: actionlint-cache
+        uses: actions/cache@v6
+        with:
+          path: ./actionlint
+          key: ${{ runner.os }}-actionlint-${{ env.ACTIONLINT_VERSION }}
+      - name: Install actionlint (pinned version + checksum verification)
+        # SEC-038対応: 従来は`main`ブランチ（可変参照）のスクリプトをcurl|bashで
+        # 実行しており、上流が侵害されると全PRのCIで任意コードが実行されうる
+        # 状態だった。releaseタグ（不変）から直接バイナリをダウンロードし、
+        # ワークフロー自体に埋め込んだSHA256チェックサム（GitHub Releaseの
+        # `actionlint_${ACTIONLINT_VERSION}_checksums.txt`より、2026-07-27時点で
+        # 検証済み）と突合してから展開する。バージョン更新時はチェックサムも
+        # 合わせて更新すること。CICD-81: キャッシュキーにバージョンを含めているため、
+        # バージョン更新時は自動的にキャッシュミスして再ダウンロード・再検証される。
+        if: steps.actionlint-cache.outputs.cache-hit != 'true'
+        run: |
+          archive="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl -fsSLO "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${archive}"
+          echo "${ACTIONLINT_SHA256}  ${archive}" | sha256sum -c -
+          tar xzf "${archive}" actionlint
+      - name: Run actionlint
+        # -shellcheck= でshellcheck統合を無効化する。有効にすると全ワークフローの
+        # run:スクリプトがshellcheckにかけられ、このタスクの範囲外にある既存の
+        # 軽微な指摘（SC2086/SC2129等、style/info級）まで大量に検出しブロッキング化
+        # してしまう（ローカル環境にshellcheckが無かったため導入時に見逃していた。
+        # CI runnerにはshellcheckがプリインストールされている）。actionlint本来の
+        # 目的（hashFilesの存在しないファイル参照・存在しないneeds参照等の構文/意味
+        # エラー検出）はshellcheck無しでも果たされる。
+        # CILOG-014対応: 従来の `-color` はANSIエスケープシーケンスがログUI上に
+        # そのまま表示され読みにくかったため撤去し、JSON出力から GitHub Actions
+        # annotation（::error file=...,line=...,col=...::message）を生成する方式に
+        # 変更した（PRのFiles changedタブに直接表示される）。
+        # CILOG-041対応: 指摘の全文はログへ逐次出力せず`actionlint-results.json`へ
+        # まとめ、ログ本文には件数のみのサマリを出す（詳細は次のUploadステップで
+        # artifact化する）。exit codeは従来通り指摘があれば非ゼロを維持する。
+        id: actionlint
+        run: |
+          set +e
+          ./actionlint -shellcheck= -format '{{json .}}' > actionlint-results.json
+          status=$?
+          set -e
+          count=$(jq 'length' actionlint-results.json)
+          jq -r '.[] | "::error file=" + .filepath + ",line=" + (.line|tostring) + ",col=" + (.column|tostring) + "::" + .message' actionlint-results.json
+          echo "actionlint: ${count} 件の指摘"
+          exit "${status}"
+      - name: Upload actionlint results
+        if: always() && steps.actionlint.outcome == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: actionlint-results
+          path: actionlint-results.json
+          retention-days: 7
+      - name: Report workflow job count / timeout-minutes / cache coverage
+        run: bun run check:workflow-hygiene
+
+  # パッケージ別テスト(core/admin/api/batch)をまとめて実行する統合ジョブ（CICD-12関連の
+  # 別案）。以前は変更パッケージの数だけ独立ジョブが並び、それぞれがcheckout+setup-workspace
+  # （bun install）をフルに払っていた。setup-workspaceを1回にし、各パッケージのテストは
+  # バックグラウンド実行で並列化することでセットアップの重複だけを削減する。
+  # 注意（トレードオフ）: GitHub Actionsの標準ランナーは2vCPUのため、変更パッケージが
+  # 3つ以上重なる場合はジョブを分けていた頃よりCPUを取り合い、体感のwall timeが伸びる
+  # 可能性がある（削減できるのはrunner課金分数であって実行時間そのものではない）。
+  # また5ジョブ→1ジョブへの統合により、PRのChecks一覧の粒度は落ちる
+  # （どのパッケージが落ちたかはログかdorny/test-reporterの結果を開いて確認する）。
+  call-test-packages:
+    needs: [detect-changed-packages]
+    if: |
+      needs.detect-changed-packages.outputs.run-core == 'true' ||
+      needs.detect-changed-packages.outputs.run-admin == 'true' ||
+      needs.detect-changed-packages.outputs.run-api == 'true' ||
+      needs.detect-changed-packages.outputs.run-batch == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      checks: write
+    env:
+      NODE_ENV: ci_github_actions
+      HTML_FETCH_DELAY_MS: "0"
+      TZ: jst
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+        with:
+          filter: blob:none
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+        with:
+          setup-node: 'false'
+
+      # 変更のあったパッケージだけをバックグラウンドで並列実行し、全パッケージの完了を待ってから
+      # 1つでも失敗があればジョブ自体を失敗させる（各パッケージの終了コードを一時ファイルに退避）。
+      - name: Run package tests in parallel
+        env:
+          RUN_CORE: ${{ needs.detect-changed-packages.outputs.run-core }}
+          RUN_ADMIN: ${{ needs.detect-changed-packages.outputs.run-admin }}
+          RUN_API: ${{ needs.detect-changed-packages.outputs.run-api }}
+          RUN_BATCH: ${{ needs.detect-changed-packages.outputs.run-batch }}
+        run: |
+          set -o pipefail
+          mkdir -p /tmp/test-results
+          declare -a PACKAGES=()
+          [ "$RUN_CORE" = "true" ] && PACKAGES+=(core)
+          [ "$RUN_ADMIN" = "true" ] && PACKAGES+=(admin)
+          [ "$RUN_API" = "true" ] && PACKAGES+=(api)
+          [ "$RUN_BATCH" = "true" ] && PACKAGES+=(batch)
+
+          # CILOG-001: 背景実行中は複数パッケージの出力が1本のログへ交互に混ざり
+          # 読みづらいため、いったんパッケージ別ファイルへ退避し、完了後に
+          # ::group::<package> でパッケージ単位に折りたためる形でまとめて出力する。
+          for pkg in "${PACKAGES[@]}"; do
+            (
+              cd "packages/$pkg"
+              bun run test -- --reporter=junit --reporter-outfile=junit-raw.xml \
+                > "/tmp/test-results/$pkg.log" 2>&1
+              echo $? > "/tmp/test-results/$pkg.exit"
+            ) &
+          done
+          wait
+
+          fail=0
+          for pkg in "${PACKAGES[@]}"; do
+            code=$(cat "/tmp/test-results/$pkg.exit")
+            echo "::group::${pkg} (exit=${code})"
+            cat "/tmp/test-results/$pkg.log"
+            echo "::endgroup::"
+            [ "$code" != "0" ] && fail=1
+          done
+          exit $fail
+
+      # DEP-026対応: マイグレーションSQL（正）とDrizzleスキーマ定義の手動同期が
+      # ドリフトしていないかを検証する（api単体の軽い検証のため並列化はせず直列で実行）。
+      - name: Check migrations/schema.ts drift
+        if: needs.detect-changed-packages.outputs.run-api == 'true'
+        run: cd packages/api && bun run check:schema-drift
+
+      # bun test --reporter=junit はdescribeのネストをそのままネストした<testsuite>として
+      # 出力し、dorny/test-reporterが前提とするフラット構造と合わないため、
+      # flatten-junit-xml.tsで一度フラット化してから渡す（詳細はスクリプト先頭コメント参照）。
+      # CICD-116対応: 変更パッケージ数に応じて最大5回別々に呼んでいたdorny/test-reporterを
+      # 1回のglob呼び出しに統合し、GitHub Checks APIへの投稿・Check一覧の項目数を削減する
+      # （個別パッケージの結果はPublish Test Resultsの実行ログから確認できる）。
+      - name: Flatten JUnit XML for test-reporter
+        if: always()
+        run: |
+          for f in packages/*/junit-raw.xml; do
+            [ -e "$f" ] || continue
+            pkg="$(dirname "$f")"
+            bun scripts/flatten-junit-xml.ts "$f" "$pkg/junit.xml"
+          done
+
+      # 含むテスト: BOATRACE 複数グレード（SG/PG1、G1/G2、G3、MASTERS）パーサーテスト
+      - name: Publish Test Results
+        if: always()
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
+        with:
+          name: Test Results (packages)
+          path: 'packages/*/junit.xml'
+          reporter: java-junit
+          fail-on-error: false
+
+  # パッケージ別テスト: packages/front（Flutter Web）
+  # PERF-148対応: 従来frontの変更を検証するジョブがpull_request.ymlに存在せず、
+  # デプロイ時（deploy-front-reusable.yml）まで壊れていることに気づけなかった。
+  test-packages-front:
+    needs: [detect-changed-packages]
+    if: needs.detect-changed-packages.outputs.run-front == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: packages/front
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+        with:
+          filter: blob:none
+
+      # Atomic Designのレイヤー規約チェック（bunのみで完結する静的検査のため、
+      # 重いFlutter SDKセットアップより前に置いて早期に失敗させる）。
+      # `call-static-checks` に相乗りしないのは、同ジョブの起動条件 `run-code` が
+      # `packages/front/**` を除外しており（detect-changed-packagesの
+      # `packages-own` フィルタ参照）front単独変更では起動しないため。
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+        with:
+          setup-node: 'false'
+      - name: Check Atomic Design layer rules
+        working-directory: ${{ github.workspace }}
+        run: bun run check:design-layers
+
+      # CICD-85対応: test-packages-frontとfront-bundle-sizeで完全重複していた
+      # Flutter SDK/pub/build_runnerセットアップをcomposite actionへ集約。
+      - name: Setup Flutter workspace
+        uses: ./.github/actions/setup-flutter-workspace
+
+      # DEP-028対応: 静的解析（flutter analyze）がPR CIに存在せず、デプロイ時まで
+      # 検知できていなかった。テスト実行前に静的解析でブロッキングする。
+      - name: Run flutter analyze
+        run: flutter analyze
+
+      - name: Run packages/front tests
+        run: flutter test
+
+  # PERF-149対応: PERF-012（フォント23MB問題）のような回帰をPR時点で検知できるよう、
+  # frontのWebリリースビルドのバンドルサイズを計測しPRコメントで可視化する。
+  # test-packages-frontとは別ジョブにして、テスト結果（合否）とビルドサイズ（情報提供）の
+  # 責務を分離し、並行実行できるようにしている。ブロッキングはしない（情報提供のみ）。
+  # CICD-97対応（2026-08-01）: 非ブロッキングの情報提供ジョブにもかかわらず、frontの
+  # 変更があるPRでは毎push（synchronize）ごとにFlutter web releaseビルドをフル実行
+  # していた。バンドルサイズの継続監視が必要なPRでのみ、PRに`bundle-size:measure`
+  # ラベルを付けて明示的にオプトインする方式に変更する（ラベルはPR上で持続するため、
+  # 一度付ければ以降のpushでも計測され続ける）。
+  front-bundle-size:
+    needs: [detect-changed-packages]
+    if: |
+      needs.detect-changed-packages.outputs.run-front == 'true' &&
+      contains(github.event.pull_request.labels.*.name, 'bundle-size:measure')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    defaults:
+      run:
+        working-directory: packages/front
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+        with:
+          filter: blob:none
+
+      # CICD-85対応: test-packages-frontと重複していたFlutter SDK/pub/build_runner
+      # セットアップをcomposite actionへ集約。
+      - name: Setup Flutter workspace
+        uses: ./.github/actions/setup-flutter-workspace
+
+      - name: Build Flutter web (release)
+        # PERF-151対応: 最適化レベルを明示（deploy-front-reusable.ymlと同様）。
+        run: flutter build web --release -O4
+
+      - name: Measure bundle size
+        id: bundle-size
+        run: |
+          SIZE_BYTES=$(du -sb build/web | cut -f1)
+          SIZE_MB=$(awk "BEGIN { printf \"%.2f\", $SIZE_BYTES / 1024 / 1024 }")
+          echo "size-mb=$SIZE_MB" >> "$GITHUB_OUTPUT"
+          {
+            echo "### 📦 front バンドルサイズ（build/web, リリースビルド）"
+            echo "${SIZE_MB} MB"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment bundle size on PR
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+        with:
+          header: front-bundle-size
+          message: |
+            📦 **front バンドルサイズ**: ${{ steps.bundle-size.outputs.size-mb }} MB（`build/web`、リリースビルド）
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Widgetbook（デザインシステムのウィジェットカタログ、lib/widgetbook.dart）をPRブランチごとに
+  # Cloudflare Pagesへプレビューデプロイし、URLをPRコメントで通知する（ユーザー依頼、2026-08-07:
+  # 「PRの中でstorybookが見れたらデザイン確認が楽になる」）。
+  # test-report.ymlの race-schedule-ci-report と同じ「初回のみproject create（2回目以降は
+  # || trueで無視）→ wrangler pages deploy」パターンを踏襲する。
+  # 実行条件: デザインシステム本体（lib/design/**）・カタログのentry point（widgetbook.dart）の
+  # 変更時は自動、それ以外のfront変更でプレビューが見たい場合は`widgetbook:preview`ラベルで
+  # 手動オプトインする（front全体の変更に反応させるとCICD-97同様、無関係な変更でも毎回重い
+  # Flutter webビルドが走ってしまうため）。
+  # フォークPR除外: このジョブはCLOUDFLARE_PAGES_API_TOKEN（Cloudflare Pagesへのデプロイに
+  # 絞ったfine-grainedトークン）を使うため、head.repo.full_nameがこのリポジトリ自身と一致する
+  # 場合のみ実行する（フォークPRではsecretsが渡らずジョブが失敗するだけだが、念のため明示的にskipする）。
+  widgetbook-preview:
+    needs: [detect-changed-packages]
+    if: |
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (needs.detect-changed-packages.outputs.run-widgetbook-design == 'true' ||
+       contains(github.event.pull_request.labels.*.name, 'widgetbook:preview'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: production
+    permissions:
+      contents: read
+      pull-requests: write
+    defaults:
+      run:
+        working-directory: packages/front
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+        with:
+          filter: blob:none
+
+      - name: Setup Flutter workspace
+        uses: ./.github/actions/setup-flutter-workspace
+
+      - name: Build Widgetbook (web)
+        # PERF-151対応の最適化レベル明示をここでも踏襲する（deploy-front-reusable.yml参照）。
+        run: flutter build web --release -O4 -t lib/widgetbook.dart
+
+      # bunx wranglerはルートpackage.jsonでバージョン固定されたdevDependencyを使うため、
+      # ルートでのbun installが必要（deploy-front-reusable.ymlと同じ理由）。
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+        with:
+          bun-install-filter: ./packages/front
+
+      - name: "🔍 Validate Cloudflare Secrets"
+        uses: ./.github/actions/validate-cf-secrets
+        with:
+          cloudflare-api-token: ${{ secrets.CLOUDFLARE_PAGES_API_TOKEN }}
+          cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Ensure Cloudflare Pages project exists
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        # 初回のみプロジェクトが存在しないため作成する。2回目以降は
+        # 「already exists」エラーになるため `|| true` で無視する（race-schedule-ci-reportと同じ）。
+        run: |
+          bunx wrangler pages project create race-schedule-widgetbook \
+            --production-branch main \
+            || true
+
+      - name: Deploy Widgetbook to Cloudflare Pages
+        id: deploy
+        # SEC-041対応: ref名（PR作成者が制御できる値）を`run:`のスクリプト本文へ直接展開せず
+        # env:経由でシェル変数として渡す（deploy-front-reusable.ymlと同じ方針）。
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          BRANCH_NAME: ${{ github.head_ref }}
+        run: |
+          bunx wrangler pages deploy build/web \
+            --project-name race-schedule-widgetbook \
+            --branch "$BRANCH_NAME" | tee /tmp/wrangler-deploy-output.txt
+
+          # wranglerの出力から実際のデプロイURLを拾う（deploy-front-reusable.ymlと同じ手法）。
+          DEPLOY_URL=$(grep -oE 'https://[a-zA-Z0-9.-]+\.pages\.dev[^[:space:]]*' /tmp/wrangler-deploy-output.txt | tail -1)
+          echo "deploy-url=$DEPLOY_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Comment Widgetbook preview URL on PR
+        if: steps.deploy.outputs.deploy-url != ''
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+        with:
+          header: widgetbook-preview
+          message: |
+            🎨 Widgetbook（デザインカタログ）プレビュー: ${{ steps.deploy.outputs.deploy-url }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # コンポーネントテスト: controller → usecase → repository を InMemory で結線し、
+  # HTTPサーバーを持つパッケージは実HTTP経由で配線を検証する（packages/*/test/integration/component/）。
+  # UT とは別レイヤーの回帰を防ぐため、変更パッケージに依らず常時実行する。
+  call-component-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      checks: write
+    env:
+      NODE_ENV: ci_github_actions
+      USE_IN_MEMORY_DB: "true"
+      HTML_FETCH_DELAY_MS: "0"
+      TZ: jst
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+        with:
+          filter: blob:none
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+        with:
+          setup-node: 'false'
+      - name: Run component tests
+        run: bun test packages/*/test/integration/component --reporter=junit --reporter-outfile=component-junit-raw.xml
+      - name: Flatten JUnit XML for test-reporter
+        if: always()
+        run: bun scripts/flatten-junit-xml.ts component-junit-raw.xml component-junit.xml
+      - name: Publish Test Results
+        if: always()
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
+        with:
+          name: Test Results (component)
+          path: component-junit.xml
+          reporter: java-junit
+          fail-on-error: false
+
+  # このPR実行のジョブ別所要時間を直近の完了済み実行の平均と比較し、
+  # PRコメントに出す（CICD-55）。CICD-54（週次サマリー、ci-duration-report.yml）
+  # は「傾向を後から確認する」ためのものだが、こちらはPRのその場でCI回帰
+  # （新しいジョブが遅くなった等）に気づけるようにする。他ジョブの成否に
+  # 関わらず所要時間だけは可視化したいため、全ジョブへの `needs` + `if: always()`
+  # で実行する（このジョブ自体はブロッキングではなく情報提供のみ）。
+  call-ci-duration-comment:
+    needs:
+      - detect-changed-packages
+      - call-static-checks
+      - call-workflow-hygiene-check
+      - call-build-test
+      - call-test-packages
+      - call-component-test
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+      actions: read
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+        with:
+          filter: blob:none
+      # CICD-98対応: scripts/build-ci-duration-comment.tsはnode:child_process
+      # 経由でghコマンドを呼ぶのみでnode_modules依存が無いため、`setup-workspace`
+      # （`bun install`込み）ではなくBunランタイムのセットアップのみで足りる。
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+      - name: Build CI duration comment
+        id: build_comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        # SEC-048対応: 固定の"EOF"区切り子は出力内容に同名の行が混入すると途中で終端し
+        # GITHUB_OUTPUTへの任意キー注入を許しうるため、ランダムな区切り子を使う。
+        run: |
+          DELIMITER="$(openssl rand -hex 16)"
+          {
+            echo "comment<<$DELIMITER"
+            bun scripts/build-ci-duration-comment.ts --run-id=${{ github.run_id }}
+            echo "$DELIMITER"
+          } >> "$GITHUB_OUTPUT"
+      - name: Comment on PR
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+        with:
+          header: ci-duration-report
+          message: ${{ steps.build_comment.outputs.comment }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # PR単位のバージョン判定（auto-semver-release-requirements.md）は、外部APIキーを
+  # 使わない方針のため、CIによる自動判定ではなく、PRを作成するエージェント自身が
+  # PR作成時に semver:none/patch/minor/major ラベルと更新履歴セクションをPR本文に記載する
+  # 運用とした（`.claude/docs/task-workflow.md` 参照）。ラベル未設定のPRは
+  # deploy.ymlのauto-releaseジョブが安全側（自動リリースしない）で扱う。
+  # semver:none（ドキュメントのみ・リリース不要）はリリース対象から除外されるが、他PRの
+  # patch/minor自動リリースをブロックしない。semver:majorが含まれる場合は自動リリースせず、
+  # 人間の手動publish待ちになる。

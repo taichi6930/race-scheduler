@@ -1,0 +1,80 @@
+## wrangler.toml（テンプレート）
+## このファイルはCIで使用され、リポジトリにコミットされます。
+## - CI（deploy/test）では `envsubst` により変数が環境ごとの値に置換されます。
+## - GitHub Secrets に各シークレットが保存され、ワークフローで環境変数として設定されます。
+## - 実際のシークレットはここに保存しないでください。ローカルで必要な場合は `wrangler.effective.toml` を使用してください。
+
+name = "race-schedule-admin"
+account_id = "${CLOUDFLARE_ACCOUNT_ID}"
+workers_dev = true
+main = "src/index.ts"
+compatibility_date = "2026-01-01"
+compatibility_flags = [
+    "nodejs_compat",
+    "nodejs_compat_populate_process_env",
+    "global_fetch_strictly_public",
+]
+
+# Workers Logs / Analytics を有効化する（全環境共通、PERF-142対応）。
+[observability]
+enabled = true
+
+[dev]
+port = 8790
+local_protocol = "http"
+
+# 対象環境はproduction/testのみ（developmentは対象外）。
+# 理由: このWorkerは運用者本人1人だけが使う管理画面であり、Cloudflare Access（Zero
+# Trust、ダッシュボード側で手動設定）による保護が前提。環境を増やすとその分だけ
+# Accessアプリの手動設定が増えるため、実運用で使うproduction・確認用のtestに絞る
+# （admin-package-design.md §2.4）。
+#
+# Worker名は旧`packages/api`内蔵版（admin-flags-access-design.md）から移設した際も
+# `race-schedule-admin-prod`/`race-schedule-admin-test`のまま据え置いている。
+# 既にCloudflareダッシュボード側で設定済みのCloudflare Access保護
+# （ワーカーのホスト名に紐づく）をそのまま引き継ぎ、ユーザーによる再設定を不要にするため。
+[env.production]
+name = "race-schedule-admin-prod"
+
+[env.production.vars]
+WORKER_NAME = "admin"
+NODE_ENV = "production"
+# ADMIN_ENVIRONMENT（2026-08-08）: production/test画面の出し分け（favicon・
+# 環境バッジ・書き込み可否）専用の環境変数。NODE_ENVは`wrangler deploy`実行時に
+# test環境でも'production'として扱われることが実機で確認されており
+# （packages/admin/src/utility/isProductionAdmin.ts参照）出し分けに使えないため、
+# 予約語的な扱いを受けにくい専用の変数名を新設した。
+ADMIN_ENVIRONMENT = "production"
+
+# CFARCH-01対応（2026-08-08、CFARCH-02が検知）: [[ratelimits]]はnamed
+# environmentへ継承されないため、トップレベル定義だけでは
+# `wrangler deploy --env production`後のWorkerにバインディングが存在せず、
+# レート制限が無効化される（他4パッケージと同じ問題。当時admin作成時に
+# 見落とされていた）。環境ごとに複製して明示する。
+[[env.production.ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "1006"
+simple = { limit = 100, period = 60 }
+
+[env.test]
+name = "race-schedule-admin-test"
+
+[env.test.vars]
+WORKER_NAME = "admin"
+ADMIN_ENVIRONMENT = "test"
+
+# CFARCH-01対応: 環境ごとに複製（上記[env.production.ratelimits]のコメント参照）。
+[[env.test.ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "1006"
+simple = { limit = 100, period = 60 }
+
+# レート制限バインディング（トップレベル、`wrangler dev`専用のフォールバック。
+# Cloudflare Accessによる保護に加えた多層防御）。
+# 仕様: Wrangler 4.36.0 以上で両フィールドが必須
+# namespace_idはapi(1001/1005)/batch(1002)/scraping(1003)/calendar(1004)と
+# 衝突しないよう1006を割当。
+[[ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "1006"
+simple = { limit = 100, period = 60 }

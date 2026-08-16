@@ -1,0 +1,94 @@
+name: CodeQL
+
+# Code Scanning の Default setup（リポジトリ設定側）が packages/front（Flutter）配下の
+# ios/ macos/ android/ linux/ windows/ をそれぞれ Swift/Kotlin/C-C++/Ruby として誤検出し、
+# autobuild（pod install 等）が失敗してスキャンがエラーになっていた。実際にこのリポジトリで
+# 使っている言語（TypeScript/JavaScript, GitHub Actions workflow）のみを対象にした
+# Advanced setup へ切り替える。切り替えにあたり、リポジトリ設定側の Default setup は
+# 別途無効化が必要（PR本文参照）。
+
+# pathsフィルタ: 以前はフィルタが無く、docs/front（Dart、スキャン対象外言語）のみの
+# 変更でも毎回 javascript-typescript/actions 両matrixのCodeQLスキャンが走っていた。
+# javascript-typescript向け（packages/**、front除く）とactions向け
+# （.github/workflows/**、.github/actions/**）の対象パスを合算する
+# （matrixの各言語を個別にpaths判定する仕組みはGitHub Actionsに無いため、
+# どちらか一方に関係する変更でも両matrixとも起動する。CodeQLはブランチ保護の
+# 必須チェックには未登録のため、対象外PRが永遠にステータス待ちになる懸念は無い）。
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/**"
+      - "!packages/front/**"
+      - "!packages/*/**/*.md"
+      - "scripts/**"
+      - "tests/**"
+      - "tsconfig*.json"
+      - "biome.json"
+      - "eslint.config.mjs"
+      - "eslint-rules/**"
+      - "knip.json"
+      - "package.json"
+      - "bun.lock"
+      - ".github/workflows/**"
+      - ".github/actions/**"
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "packages/**"
+      - "!packages/front/**"
+      - "!packages/*/**/*.md"
+      - "scripts/**"
+      - "tests/**"
+      - "tsconfig*.json"
+      - "biome.json"
+      - "eslint.config.mjs"
+      - "eslint-rules/**"
+      - "knip.json"
+      - "package.json"
+      - "bun.lock"
+      - ".github/workflows/**"
+      - ".github/actions/**"
+  schedule:
+    - cron: '23 4 * * 1'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    # draft中はCIを起動せずGitHub Actionsの消費を抑える（task-workflow.md参照）。
+    # push/schedule起動時はpull_requestコンテキストが無いためdraft判定自体をスキップする。
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: javascript-typescript
+            build-mode: none
+          - language: actions
+            build-mode: none
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: '/language:${{ matrix.language }}'
