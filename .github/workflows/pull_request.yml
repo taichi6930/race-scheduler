@@ -274,6 +274,8 @@ jobs:
         run: bun run check:deploy-working-dirs
       - name: Check wrangler.toml for non-inherited binding warnings
         run: bun run check:wrangler-config
+      - name: Check Node.js major version is in sync (.nvmrc ⇔ package.json ⇔ dependabot.yml)
+        run: bun run check:node-version-sync
 
   # ワークフロー変更時のジョブ数・timeout-minutes・キャッシュ有無をレポート（CICD-56）
   # + actionlintによる設定ミス検知（CICD-57、hashFilesの存在しないファイル参照や
