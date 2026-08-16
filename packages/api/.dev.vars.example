@@ -1,0 +1,17 @@
+# Web Push (VAPID)
+VAPID_PUBLIC_KEY=your-vapid-public-key
+VAPID_PRIVATE_KEY=your-vapid-private-key
+VAPID_SUBJECT=mailto:your-contact@example.com
+PUSH_DISPATCH_TOKEN=your-push-dispatch-token
+
+# Optional: Scraping configuration
+ENV=DEVELOPMENT
+
+# バックフィル機能（POST /internal/backfill/place, POST /internal/backfill/race）が
+# scraping Workerを呼び出す先。詳細は SETUP.md「バックフィル機能」を参照。
+SCRAPING_API_URL=http://localhost:8786
+
+# Google Calendar関連の環境変数は@race-schedule/calendar Workerへ移設されました。
+# 設定が必要な場合は packages/calendar/.dev.vars を参照してください。
+
+# api は D1 のみを使い、R2 などの外部ストレージには接続しません（R2 を使うのは scraping Worker）。

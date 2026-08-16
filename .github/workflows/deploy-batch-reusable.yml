@@ -1,0 +1,86 @@
+name: Deploy Batch (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+        description: "Deployment environment (development, test, production)"
+    secrets:
+      CLOUDFLARE_WORKERS_API_TOKEN:
+        required: true
+      CLOUDFLARE_ACCOUNT_ID:
+        required: true
+      SERVICE_AUTH_TOKEN:
+        required: true
+      SERVICE_AUTH_TOKEN_PREVIOUS:
+        required: false
+      ISSUE_BOT_TOKEN:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-batch:
+    runs-on: ubuntu-24.04
+    environment: ${{ inputs.environment != 'development' && inputs.environment || '' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Deploy prelude (env + secrets check)
+        uses: ./.github/actions/deploy-prelude
+        with:
+          cloudflare-api-token: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+          cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: "🔍 Validate Batch Deployment Secrets"
+        # SEC-043対応: secrets.*をrun:のスクリプト本文へ直接展開せず、env:経由で
+        # シェル変数として渡す。
+        env:
+          SERVICE_AUTH_TOKEN: ${{ secrets.SERVICE_AUTH_TOKEN }}
+          SERVICE_AUTH_TOKEN_PREVIOUS: ${{ secrets.SERVICE_AUTH_TOKEN_PREVIOUS }}
+          ISSUE_BOT_TOKEN: ${{ secrets.ISSUE_BOT_TOKEN }}
+        run: |
+          echo "=== Cloudflare Batch Configuration ==="
+          echo "Environment: ${{ inputs.environment }}"
+
+          echo "=== Batch API Configuration ==="
+          [ -z "${{ vars.SCRAPING_API_URL }}" ] && echo "❌ SCRAPING_API_URL: NOT SET" || echo "✅ SCRAPING_API_URL: SET"
+          [ -z "${{ vars.MAIN_API_URL }}" ] && echo "❌ MAIN_API_URL: NOT SET" || echo "✅ MAIN_API_URL: SET"
+          [ -z "${{ vars.CALENDAR_API_URL }}" ] && echo "❌ CALENDAR_API_URL: NOT SET" || echo "✅ CALENDAR_API_URL: SET"
+
+          echo ""
+          echo "=== Service-to-Service Auth Configuration ==="
+          [ -z "$SERVICE_AUTH_TOKEN" ] && echo "❌ SERVICE_AUTH_TOKEN: NOT SET" || echo "✅ SERVICE_AUTH_TOKEN: SET"
+          [ -z "$SERVICE_AUTH_TOKEN_PREVIOUS" ] && echo "ℹ️  SERVICE_AUTH_TOKEN_PREVIOUS: NOT SET（ローテーション中のみ設定、通常は未設定でよい）" || echo "✅ SERVICE_AUTH_TOKEN_PREVIOUS: SET（ローテーション中）"
+
+          echo ""
+          echo "=== Workflow Failure Notification Configuration (CICD-73/OBS-014) ==="
+          [ -z "$ISSUE_BOT_TOKEN" ] && echo "⚠️  ISSUE_BOT_TOKEN: NOT SET (Workflow失敗時のIssue通知が使えない)" || echo "✅ ISSUE_BOT_TOKEN: SET"
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+        with:
+          bun-install-filter: ./packages/batch
+
+      - name: Deploy to Cloudflare Workers
+        uses: ./.github/actions/deploy-cloudflare-workers
+        with:
+          environment: ${{ inputs.environment }}
+          working-directory: packages/batch
+          cloudflare-api-token: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+          cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # 新しいシークレットが必要になったら、ここに1行足すだけでよい
+          # （登録・本番反映後の検証まで deploy-cloudflare-workers action が機械的に行う）
+          secrets-json: |
+            {
+              "SCRAPING_API_URL": "${{ vars.SCRAPING_API_URL }}",
+              "MAIN_API_URL": "${{ vars.MAIN_API_URL }}",
+              "CALENDAR_API_URL": "${{ vars.CALENDAR_API_URL }}",
+              "SERVICE_AUTH_TOKEN": "${{ secrets.SERVICE_AUTH_TOKEN }}",
+              "SERVICE_AUTH_TOKEN_PREVIOUS": "${{ secrets.SERVICE_AUTH_TOKEN_PREVIOUS }}",
+              "GITHUB_TOKEN": "${{ secrets.ISSUE_BOT_TOKEN }}"
+            }

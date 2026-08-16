@@ -1,0 +1,26 @@
+name: 'Deploy Prelude'
+description: 'Set up the deploy environment and validate Cloudflare secrets (CICD-87: 6つのdeploy-*-reusable.ymlで完全一致していた冒頭ステップの共通化)'
+
+inputs:
+  cloudflare-api-token:
+    description: 'Cloudflare API token'
+    required: true
+  cloudflare-account-id:
+    description: 'Cloudflare account ID'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    # ローカル複合actionは呼び出し元ジョブで既にcheckout済みでないと自身のaction.ymlを
+    # 解決できないため、checkoutはこのactionの中に含めず呼び出し元ジョブの最初のステップ
+    # として残す必要がある（このactionを最初のステップとして呼ぶと
+    # 「Can't find 'action.yml' ... under '.github/actions/deploy-prelude'」で失敗する）。
+    - name: Setup deployment environment
+      uses: ./.github/actions/setup-deploy-env
+
+    - name: "🔍 Validate Cloudflare Secrets"
+      uses: ./.github/actions/validate-cf-secrets
+      with:
+        cloudflare-api-token: ${{ inputs.cloudflare-api-token }}
+        cloudflare-account-id: ${{ inputs.cloudflare-account-id }}

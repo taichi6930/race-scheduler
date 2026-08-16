@@ -1,0 +1,24 @@
+# TOK-045: `bun run test:verbose`（package.json）専用の設定ファイル。
+# bun は CLI の `--coverage-reporter` で bunfig.toml の `coverageReporter` 配列指定を
+# 上書きできない（実測確認済み）ため、`--config` でこのファイルを丸ごと差し替える方式を取る。
+# [test] セクションは bunfig.toml と同一内容を維持し、`coverageReporter` のみ text を含める。
+# bunfig.toml を変更した場合は、このファイルの root/timeout/coveragePathIgnorePatterns も
+# 同じ値に更新すること（ドリフト防止）。
+
+[test]
+root = "packages"
+singleThreaded = false
+timeout = 30000
+
+coverageReporter = ["text", "lcov"]
+coverageDir = "coverage"
+
+coveragePathIgnorePatterns = [
+  "**/constants/**",
+  "**/index.ts",
+  "**/types/**",
+  "**/*.config.ts",
+  "**/*.config.js",
+  "packages/batch/src/cli.ts",
+  "packages/batch/src/workflows/batchAllWorkflow.ts"
+]

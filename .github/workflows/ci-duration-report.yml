@@ -1,0 +1,49 @@
+name: CI Duration Report
+
+# pull_request.ymlの直近実行のジョブ別所要時間（平均・最大）を集計し、週次で
+# ワークフローサマリーに出力する（CICD-54）。CICD-09〜53の「削減見込み」が
+# 実測でも維持されているか、劣化していないかを継続的に確認するための計測基盤。
+# PRごとには実行しない（scheduled-tests.ymlと同様の方針）。
+
+on:
+  schedule:
+    # 毎週月曜 16:00 JST (07:00 UTC)
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  report:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          filter: blob:none
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+
+      - name: Setup Bun cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        # TOK-057: 他ジョブ（setup-workspace）と同様に--silentで出力行数を抑える。
+        run: bun install --frozen-lockfile --silent
+
+      - name: Report CI job durations
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: bun run ci:duration-report >> "$GITHUB_STEP_SUMMARY"

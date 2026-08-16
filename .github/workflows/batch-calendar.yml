@@ -1,0 +1,88 @@
+name: Batch - Calendar Update
+
+# CICD-73/CONC-03対応（2026-08-03）: 4ワークフロー間の相互排他はapi Worker側のD1ロック
+# （batch-all.ymlのコメント参照）へ一本化したため、`concurrency:`グループは不要。
+#
+# `POST /batch/trigger`（Cloudflare Workflowインスタンスを作成、非同期実行）へ統合。
+# raceType単位のmatrix/バックグラウンド並列curlは、Workflow内部のraceTypeループに
+# 置き換わったため不要になった（1回のHTTPリクエストで完結する）。
+on:
+  # 定期実行は停止済み（batch-all.ymlに統合）。手動実行のみ。
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment"
+        required: true
+        default: "test"
+        type: choice
+        options:
+          - test
+          - production
+      start-date:
+        description: "Start date (YYYY-MM-DD format)"
+        required: false
+      finish-date:
+        description: "Finish date (YYYY-MM-DD format)"
+        required: false
+      race-type:
+        description: "Race type(s) - space-separated (e.g. \"jra nar\")"
+        required: false
+        default: "jra nar keirin autorace overseas"
+
+permissions:
+  contents: read
+
+jobs:
+  trigger-batch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: ${{ github.event.inputs.environment || 'test' }}
+    steps:
+      - name: Check out repository
+        # ./.github/actions/trigger-batch-workflow（ローカルcomposite action）を
+        # 解決するためにcheckoutが必要（旧版はcurlのみでcheckout不要だった）。
+        uses: actions/checkout@v7
+        with:
+          filter: blob:none
+
+      - name: Build request inputs
+        # SEC-042対応: workflow_dispatchの自由入力をrun:へ直接展開せずenv:経由で渡す。
+        # 従来の挙動（デフォルトrace-type・日付レンジは常にfixed/拡張なし）を維持するため、
+        # 未指定時のデフォルト値計算はここで行い、常にraceTypes/startDate/finishDateを
+        # 明示指定してトリガーする（Workflow側のbuildFixedDateRangeが使われる）。
+        id: build-inputs
+        env:
+          START_DATE_INPUT: ${{ github.event.inputs.start-date }}
+          FINISH_DATE_INPUT: ${{ github.event.inputs.finish-date }}
+          RACE_TYPE_INPUT: ${{ github.event.inputs.race-type }}
+        run: |
+          startDate="$START_DATE_INPUT"
+          finishDate="$FINISH_DATE_INPUT"
+          raceTypes="$RACE_TYPE_INPUT"
+
+          # 入力がない場合のデフォルト設定（昨日から明後日）
+          if [ -z "$startDate" ]; then
+            startDate=$(date -d "yesterday" +"%Y-%m-%d")
+          fi
+          if [ -z "$finishDate" ]; then
+            finishDate=$(date -d "+2 day" +"%Y-%m-%d")
+          fi
+          if [ -z "$raceTypes" ]; then
+            raceTypes="jra nar keirin autorace overseas"
+          fi
+
+          raceTypesJson=$(echo "$raceTypes" | tr ' ' '\n' | jq -R . | jq -sc .)
+
+          echo "start-date=$startDate" >> "$GITHUB_OUTPUT"
+          echo "finish-date=$finishDate" >> "$GITHUB_OUTPUT"
+          echo "race-types-json=$raceTypesJson" >> "$GITHUB_OUTPUT"
+
+      - name: Trigger calendar batch via packages/batch HTTP API
+        uses: ./.github/actions/trigger-batch-workflow
+        with:
+          environment: ${{ github.event.inputs.environment || 'test' }}
+          service-auth-token: ${{ secrets.SERVICE_AUTH_TOKEN }}
+          race-types-json: ${{ steps.build-inputs.outputs.race-types-json }}
+          targets-json: '["calendar"]'
+          start-date: ${{ steps.build-inputs.outputs.start-date }}
+          finish-date: ${{ steps.build-inputs.outputs.finish-date }}

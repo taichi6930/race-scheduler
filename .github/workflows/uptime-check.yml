@@ -1,0 +1,130 @@
+name: Uptime Check (/health)
+
+# OBS-018対応: batch/calendar/scraping自体の生死（Workerが応答するか）を監視する
+# 仕組みがCI/CDに存在しなかった。error-monitor.ymlはCloudflare Analyticsの
+# エラー件数を見るが、Workerがデプロイ後に応答不能（クラッシュループ等）に
+# なっているケース自体は捕捉しない。ここでは各Workerの`/health`エンドポイントへ
+# 定期的にpingし、200以外（またはタイムアウト）が続く場合にGitHub Issueを作成する。
+#
+# 外部監視サービス（UptimeRobot等）の新規導入は行わず、既存のerror-monitor.yml /
+# health-check-data-freshness.ymlと同じ「GitHub Actions cron + GitHub App token +
+# ラベルでdedupしたIssue」の作法に揃えている。
+#
+# CICD-69対応（2026-08-01）: 4サービス分をGitHub Actions matrixで並列実行すると、
+# GitHub Actionsの「ジョブ単位で最低1分に切り上げ課金」ルールにより、実処理（軽量な
+# curl）に反して15分間隔×4matrix＝1日384ジョブ実行という分数を消費していた。検知間隔
+# （15分）は変えず、1ジョブ内で4URLを順次チェックするループに統合し、ジョブ実行回数を
+# 1/4（1日96回）に削減する。1対象のチェックが失敗（gh CLIエラー等の想定外の異常）しても
+# 他対象のチェックを継続できるよう、対象ごとにサブシェルで隔離している。
+#
+# uptime監視のWorker側移行対応（2026-08-05）: 同じチェックをapi Worker自身の
+# scheduledハンドラ（`packages/api/src/utility/uptimeCheck.ts`、`packages/api/
+# wrangler.toml`の5つ目のcron）としても実装し、並行稼働を開始した。Cloudflare側が
+# 本来の検知間隔（15分おき）を担うため、このワークフローは「Cloudflare側の
+# scheduledハンドラそのものが動いていない」場合のバックストップ用途に縮小し、
+# 頻度を6時間おき（1日4回）に落とした（元は1日96回）。並行稼働の結果が一致する
+# ことを確認できたら、このワークフロー自体の`schedule`トリガー削除（cutover）を
+# 検討する（`docs/tasks/BACKLOG.md`参照）。
+
+on:
+  schedule:
+    # 全対象、6時間ごと（UTC）。Cloudflare側のネイティブcron（15分おき）に対する
+    # バックストップ用途のため、検知間隔そのものはCloudflare側に譲る。
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check-health:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      # create-github-app-token composite action はリポジトリ内のローカルファイルを
+      # 参照するため、呼び出し前に checkout が必須（CICD-89対応で発覚したリグレッション）。
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Create GitHub App Token
+        uses: ./.github/actions/create-github-app-token
+        id: app-token
+        with:
+          app-id: ${{ secrets.BOT_APP_ID }}
+          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
+
+      - name: Check /health for all targets
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -uo pipefail
+
+          # 対象1件分のチェック。サブシェル関数として定義し、内部で`set -euo pipefail`を
+          # 有効にすることで、1対象で想定外のエラー（gh CLI失敗等）が起きても呼び出し元の
+          # ループやスクリプト全体を止めず、他対象のチェックを継続できるようにしている。
+          check_target() (
+            set -euo pipefail
+            target_key="$1"
+            target_url="$2"
+
+            # CILOG-030: 正常時はステータスコード・レイテンシのみの1行に集約する
+            # （異常時のみ後続でIssue本文に詳細を出す）。
+            response=$(curl -sS -o /tmp/health-response.txt -w "%{http_code} %{time_total}" \
+              --max-time 10 "$target_url" || echo "000 0")
+            http_status="${response%% *}"
+            latency_sec="${response#* }"
+
+            label="uptime-alert:${target_key}"
+
+            gh label create "uptime-alert" --color "B60205" \
+              --description "/health 疎通失敗の自動起票" >/dev/null 2>&1 || true
+            gh label create "$label" --color "B60205" \
+              --description "/health 疎通失敗 (${target_key})" >/dev/null 2>&1 || true
+
+            existing=$(gh issue list --label "$label" --state open --json number --jq '.[0].number // empty')
+
+            if [ "$http_status" = "200" ]; then
+              echo "[$target_key] OK ${http_status} ${latency_sec}s"
+              if [ -n "$existing" ]; then
+                gh issue comment "$existing" --body "\`${target_url}\` への疎通を確認できたため、自動的にCloseします。再発した場合は新しいIssueが作成されます。"
+                gh issue close "$existing"
+                echo "[$target_key] 復旧を確認し、Issue #$existing をCloseしました"
+              fi
+              exit 0
+            fi
+
+            echo "[$target_key] NG ${http_status} ${latency_sec}s"
+
+            body="## /health 疎通失敗を検知しました
+
+          - 対象: \`${target_key}\`
+          - URL: ${target_url}
+          - HTTPステータス: ${http_status}（000はタイムアウト/接続失敗）
+
+          Workerがデプロイ後にクラッシュしている、またはCloudflare側で障害が発生している
+          可能性があります。Cloudflareダッシュボードで該当Workerの状態を確認してください。
+          復旧すれば次回チェック時に自動でCloseされます。
+
+          _このIssueは \`.github/workflows/uptime-check.yml\` により自動作成されました。_"
+
+            if [ -n "$existing" ]; then
+              gh issue comment "$existing" --body "$body"
+              echo "[$target_key] 既存Issue #$existing にコメントを追加しました"
+            else
+              gh issue create \
+                --title "[Uptime] ${target_key} の /health が失敗（HTTP ${http_status}）" \
+                --body "$body" \
+                --label "$label" --label "uptime-alert"
+              echo "[$target_key] 新規Issueを作成しました"
+            fi
+          )
+
+          overall_status=0
+          check_target "api" "https://race-schedule-prod.tn-product.workers.dev/health" || overall_status=1
+          check_target "batch" "https://race-schedule-batch-prod.tn-product.workers.dev/health" || overall_status=1
+          check_target "calendar" "https://race-schedule-calendar-prod.tn-product.workers.dev/health" || overall_status=1
+          check_target "scraping" "https://race-schedule-scraping-prod.tn-product.workers.dev/health" || overall_status=1
+
+          exit "$overall_status"

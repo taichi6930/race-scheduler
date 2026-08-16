@@ -1,0 +1,55 @@
+name: Auto-create Pull Request for Feature Branch
+
+on:
+  push:
+    branches:
+      - 'feature/**'
+      - 'claude/**'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  create_pull_request:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Get release branch name
+        id: get_branch
+        run: echo "RELEASE_BRANCH_NAME=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
+
+      # create-github-app-token composite action はリポジトリ内のローカルファイル
+      # （.github/actions/create-github-app-token/action.yml）を参照するため、
+      # 呼び出し前に checkout が必須（CICD-89対応で発覚したリグレッション）。
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Generate GitHub App token
+        id: app-token
+        uses: ./.github/actions/create-github-app-token
+        with:
+          app-id: ${{ secrets.BOT_APP_ID }}
+          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
+
+      - name: Create PR to main
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # 既存のPRがあればスキップ
+          EXISTING_PR=$(gh pr list --head "${{ steps.get_branch.outputs.RELEASE_BRANCH_NAME }}" --base main --json number --jq '.[0].number')
+          if [ -n "$EXISTING_PR" ]; then
+            echo "PR #${EXISTING_PR} already exists. Skipping."
+          else
+            # --draft: task-workflow.md の運用（最初はdraftで作成し、作業完了後に
+            # ready for reviewへ変更してから初めてCIを走らせる）に合わせるため。
+            # draft中はpull_request.yml等の各CIワークフローが起動しない
+            # （on.pull_request.typesにready_for_reviewを追加し、各ジョブに
+            # `if: github.event.pull_request.draft == false` を付けているため）。
+            gh pr create \
+              --base main \
+              --head "${{ steps.get_branch.outputs.RELEASE_BRANCH_NAME }}" \
+              --title "Merge ${{ steps.get_branch.outputs.RELEASE_BRANCH_NAME }} into main" \
+              --body "" \
+              --draft
+          fi

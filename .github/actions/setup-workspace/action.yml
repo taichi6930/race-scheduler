@@ -1,0 +1,65 @@
+name: 'Setup Workspace'
+description: 'Checkout repository, setup Bun (with cache), optionally setup Node.js, and install dependencies'
+
+inputs:
+  setup-node:
+    description: 'wranglerを使うdeploy系ワークフロー向けにNode.jsもセットアップするか'
+    required: false
+    default: 'true'
+  bun-install-filter:
+    # 注意: bunの--filterはパッケージ名（例: @race-schedule/db）か、先頭に "./" を
+    # 付けたパス（例: ./packages/db）のみを有効なパターンとして認識する。先頭"./"を
+    # 省略した "packages/db" のような値を渡すと、bunはパターン不一致として何も
+    # インストールせず（エラーにもならない）"no changes"で終了する。このため
+    # deploy-batch/calendar/scraping-reusable.ymlで実際にzod等の依存解決が
+    # サイレントに壊れ、wranglerのビルド時に初めて"Could not resolve"として
+    # 表面化する事故が起きた。値を渡す際は必ず先頭に "./" を付けること。
+    description: 'bun install実行時のフィルター（例: ./packages/db。先頭の"./"必須）。指定した場合そのパッケージのみインストール'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    # checkoutは呼び出し元が行う想定（ローカルaction参照の解決に必須なため、
+    # このactionを最初のステップとして呼ぶジョブでは呼び出し元側が必ずcheckoutを
+    # 済ませておく必要があり、ここで重ねて行っても意味が無い）。
+    - name: Setup Node.js
+      if: inputs.setup-node == 'true'
+      uses: actions/setup-node@v7
+      with:
+        node-version-file: '.nvmrc'
+
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      with:
+        bun-version-file: package.json
+
+    - name: Setup Bun cache
+      uses: actions/cache@v6
+      with:
+        path: ~/.bun/install/cache
+        key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-bun-
+
+    - name: Install dependencies
+      shell: bash
+      # CILOG-007: --silent は依存木の逐次ログ（数百行規模になりうる）のみを抑制し、
+      # エラー発生時のメッセージ・exit codeはそのまま出る（ローカル確認済み）ため、
+      # 失敗時の診断性は損なわない。
+      run: |
+        cd "$GITHUB_WORKSPACE"
+        FILTER="${{ inputs.bun-install-filter }}"
+        if [ -n "$FILTER" ]; then
+          case "$FILTER" in
+            ./*|@*) ;;
+            *)
+              echo "::error::bun-install-filter に不正な値 '$FILTER' が指定されました。パスで指定する場合は先頭に './' が必須です（例: ./packages/db）。'./'無しのパスはbunがパターン不一致として何もインストールせず、後段のビルドで依存解決エラーとしてしか気付けません。"
+              exit 1
+              ;;
+          esac
+          bun install --filter "$FILTER" --frozen-lockfile --silent
+        else
+          bun install --frozen-lockfile --silent
+        fi

@@ -1,0 +1,98 @@
+name: Deploy Calendar (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+        description: "Deployment environment (development, test, production)"
+    secrets:
+      CLOUDFLARE_WORKERS_API_TOKEN:
+        required: true
+      CLOUDFLARE_ACCOUNT_ID:
+        required: true
+      GOOGLE_PRIVATE_KEY:
+        required: false
+      SERVICE_AUTH_TOKEN:
+        required: true
+      SERVICE_AUTH_TOKEN_PREVIOUS:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-calendar:
+    runs-on: ubuntu-24.04
+    environment: ${{ inputs.environment != 'development' && inputs.environment || '' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Deploy prelude (env + secrets check)
+        uses: ./.github/actions/deploy-prelude
+        with:
+          cloudflare-api-token: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+          cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: "🔍 Validate Calendar Deployment Secrets"
+        # SEC-043対応: secrets.*（特にGOOGLE_PRIVATE_KEYの複数行PEM）をrun:の
+        # スクリプト本文へ直接展開せず、env:経由でシェル変数として渡す。
+        env:
+          GOOGLE_PRIVATE_KEY: ${{ secrets.GOOGLE_PRIVATE_KEY }}
+          SERVICE_AUTH_TOKEN: ${{ secrets.SERVICE_AUTH_TOKEN }}
+          SERVICE_AUTH_TOKEN_PREVIOUS: ${{ secrets.SERVICE_AUTH_TOKEN_PREVIOUS }}
+        run: |
+          echo "=== Cloudflare Calendar Configuration ==="
+          echo "Environment: ${{ inputs.environment }}"
+
+          [ -z "${{ vars.GOOGLE_CLIENT_EMAIL }}" ] && echo "❌ GOOGLE_CLIENT_EMAIL: NOT SET" || echo "✅ GOOGLE_CLIENT_EMAIL: SET"
+          [ -z "$GOOGLE_PRIVATE_KEY" ] && echo "❌ GOOGLE_PRIVATE_KEY: NOT SET" || echo "✅ GOOGLE_PRIVATE_KEY: SET"
+
+          echo ""
+          echo "=== Calendar IDs ==="
+          [ -z "${{ vars.JRA_CALENDAR_ID }}" ] && echo "❌ JRA_CALENDAR_ID: NOT SET" || echo "✅ JRA_CALENDAR_ID: SET"
+          [ -z "${{ vars.NAR_CALENDAR_ID }}" ] && echo "❌ NAR_CALENDAR_ID: NOT SET" || echo "✅ NAR_CALENDAR_ID: SET"
+          [ -z "${{ vars.WORLD_CALENDAR_ID }}" ] && echo "❌ WORLD_CALENDAR_ID: NOT SET" || echo "✅ WORLD_CALENDAR_ID: SET"
+          [ -z "${{ vars.KEIRIN_CALENDAR_ID }}" ] && echo "❌ KEIRIN_CALENDAR_ID: NOT SET" || echo "✅ KEIRIN_CALENDAR_ID: SET"
+          [ -z "${{ vars.AUTORACE_CALENDAR_ID }}" ] && echo "❌ AUTORACE_CALENDAR_ID: NOT SET" || echo "✅ AUTORACE_CALENDAR_ID: SET"
+          [ -z "${{ vars.BOATRACE_CALENDAR_ID }}" ] && echo "❌ BOATRACE_CALENDAR_ID: NOT SET" || echo "✅ BOATRACE_CALENDAR_ID: SET"
+
+          echo ""
+          echo "=== Main API Configuration ==="
+          [ -z "${{ vars.MAIN_API_URL }}" ] && echo "❌ MAIN_API_URL: NOT SET" || echo "✅ MAIN_API_URL: SET"
+
+          echo ""
+          echo "=== Service-to-Service Auth Configuration ==="
+          [ -z "$SERVICE_AUTH_TOKEN" ] && echo "❌ SERVICE_AUTH_TOKEN: NOT SET" || echo "✅ SERVICE_AUTH_TOKEN: SET"
+          [ -z "$SERVICE_AUTH_TOKEN_PREVIOUS" ] && echo "ℹ️  SERVICE_AUTH_TOKEN_PREVIOUS: NOT SET（ローテーション中のみ設定、通常は未設定でよい）" || echo "✅ SERVICE_AUTH_TOKEN_PREVIOUS: SET（ローテーション中）"
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+        with:
+          bun-install-filter: ./packages/calendar
+
+      - name: Deploy to Cloudflare Workers
+        uses: ./.github/actions/deploy-cloudflare-workers
+        with:
+          environment: ${{ inputs.environment }}
+          working-directory: packages/calendar
+          cloudflare-api-token: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+          cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # 新しいシークレットが必要になったら、ここに1行足すだけでよい
+          # （登録・本番反映後の検証まで deploy-cloudflare-workers action が機械的に行う）
+          secrets-json: |
+            {
+              "MAIN_API_URL": "${{ vars.MAIN_API_URL }}",
+              "GOOGLE_CLIENT_EMAIL": "${{ vars.GOOGLE_CLIENT_EMAIL }}",
+              "GOOGLE_PRIVATE_KEY": "${{ secrets.GOOGLE_PRIVATE_KEY }}",
+              "JRA_CALENDAR_ID": "${{ vars.JRA_CALENDAR_ID }}",
+              "NAR_CALENDAR_ID": "${{ vars.NAR_CALENDAR_ID }}",
+              "WORLD_CALENDAR_ID": "${{ vars.WORLD_CALENDAR_ID }}",
+              "KEIRIN_CALENDAR_ID": "${{ vars.KEIRIN_CALENDAR_ID }}",
+              "AUTORACE_CALENDAR_ID": "${{ vars.AUTORACE_CALENDAR_ID }}",
+              "BOATRACE_CALENDAR_ID": "${{ vars.BOATRACE_CALENDAR_ID }}",
+              "SERVICE_AUTH_TOKEN": "${{ secrets.SERVICE_AUTH_TOKEN }}",
+              "SERVICE_AUTH_TOKEN_PREVIOUS": "${{ secrets.SERVICE_AUTH_TOKEN_PREVIOUS }}"
+            }

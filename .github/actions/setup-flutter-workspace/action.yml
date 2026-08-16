@@ -1,0 +1,59 @@
+name: 'Setup Flutter Workspace'
+description: 'Setup Flutter SDK (with cache), install pub packages, and run build_runner code generation for packages/front'
+
+runs:
+  using: 'composite'
+  steps:
+    # checkoutは呼び出し元が行う想定（setup-workspaceと同じ方針）。
+    # QDEV-05対応: バージョン文字列はリポジトリ直下の`.flutter-version`
+    # （`.nvmrc`と同じ単一ソース・プレーンテキスト形式）に一本化した。
+    # subosito/flutter-actionの`flutter-version-file`入力はfvm設定か
+    # pubspec.yaml形式のYAML（`.environment.flutter`キー）しか読めず、
+    # プレーンテキストの1行ファイルには対応していないため、catして
+    # `flutter-version`入力へ渡す方式にしている。
+    - name: Read Flutter version
+      id: flutter-version
+      shell: bash
+      run: echo "version=$(cat "${{ github.workspace }}/.flutter-version")" >> "$GITHUB_OUTPUT"
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+      with:
+        channel: "stable"
+        # DEP-023対応: バージョンを固定しないとstable更新のたびビルド環境が
+        # 無警告で変わりうる。既知動作を確認済みのバージョンを明示固定する。
+        flutter-version: ${{ steps.flutter-version.outputs.version }}
+        cache: true
+
+    # PERF-152対応: `cache: true`はFlutter SDK本体のみが対象のため、
+    # `flutter pub get`が取得するパッケージ本体（~/.pub-cache）は別途キャッシュする。
+    - name: Cache pub packages
+      uses: actions/cache@v6
+      with:
+        path: ~/.pub-cache
+        key: ${{ runner.os }}-pub-${{ hashFiles('packages/front/pubspec.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-pub-
+
+    - name: Install Flutter dependencies
+      shell: bash
+      working-directory: packages/front
+      # TOK-057: flutter pub getに--silent相当のフラグは無いため、CILOG-002の
+      # sITログ折りたたみと同じ::group::でUI上の出力行数を抑える。
+      run: |
+        echo "::group::flutter pub get"
+        flutter pub get
+        echo "::endgroup::"
+
+    - name: Cache build_runner state
+      uses: actions/cache@v6
+      with:
+        path: packages/front/.dart_tool/build
+        key: ${{ runner.os }}-front-build-runner-${{ hashFiles('packages/front/pubspec.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-front-build-runner-
+
+    - name: Run code generation
+      shell: bash
+      working-directory: packages/front
+      run: dart run build_runner build --delete-conflicting-outputs

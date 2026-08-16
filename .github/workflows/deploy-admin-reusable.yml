@@ -1,0 +1,75 @@
+name: Deploy Admin (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+        description: "Deployment environment (test, production)"
+    secrets:
+      CLOUDFLARE_WORKERS_API_TOKEN:
+        required: true
+      CLOUDFLARE_ACCOUNT_ID:
+        required: true
+      SERVICE_AUTH_TOKEN:
+        required: true
+      SERVICE_AUTH_TOKEN_PREVIOUS:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-admin:
+    runs-on: ubuntu-24.04
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Deploy prelude (env + secrets check)
+        uses: ./.github/actions/deploy-prelude
+        with:
+          cloudflare-api-token: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+          cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: "🔍 Validate Admin Deployment Secrets"
+        # SEC-043対応: secrets.*をrun:のスクリプト本文へ直接展開せず、
+        # env:経由でシェル変数として渡す。
+        env:
+          SERVICE_AUTH_TOKEN: ${{ secrets.SERVICE_AUTH_TOKEN }}
+          SERVICE_AUTH_TOKEN_PREVIOUS: ${{ secrets.SERVICE_AUTH_TOKEN_PREVIOUS }}
+        run: |
+          echo "=== Cloudflare Admin Configuration ==="
+          echo "Environment: ${{ inputs.environment }}"
+
+          echo ""
+          echo "=== Main API Configuration ==="
+          [ -z "${{ vars.MAIN_API_URL }}" ] && echo "❌ MAIN_API_URL: NOT SET" || echo "✅ MAIN_API_URL: SET"
+
+          echo ""
+          echo "=== Service-to-Service Auth Configuration ==="
+          [ -z "$SERVICE_AUTH_TOKEN" ] && echo "❌ SERVICE_AUTH_TOKEN: NOT SET" || echo "✅ SERVICE_AUTH_TOKEN: SET"
+          [ -z "$SERVICE_AUTH_TOKEN_PREVIOUS" ] && echo "ℹ️  SERVICE_AUTH_TOKEN_PREVIOUS: NOT SET（ローテーション中のみ設定、通常は未設定でよい）" || echo "✅ SERVICE_AUTH_TOKEN_PREVIOUS: SET（ローテーション中）"
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+        with:
+          bun-install-filter: ./packages/admin
+
+      - name: Deploy to Cloudflare Workers
+        uses: ./.github/actions/deploy-cloudflare-workers
+        with:
+          environment: ${{ inputs.environment }}
+          working-directory: packages/admin
+          cloudflare-api-token: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+          cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # 新しいシークレットが必要になったら、ここに1行足すだけでよい
+          # （登録・本番反映後の検証まで deploy-cloudflare-workers action が機械的に行う）
+          secrets-json: |
+            {
+              "MAIN_API_URL": "${{ vars.MAIN_API_URL }}",
+              "SERVICE_AUTH_TOKEN": "${{ secrets.SERVICE_AUTH_TOKEN }}",
+              "SERVICE_AUTH_TOKEN_PREVIOUS": "${{ secrets.SERVICE_AUTH_TOKEN_PREVIOUS }}"
+            }

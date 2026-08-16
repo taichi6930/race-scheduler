@@ -1,0 +1,166 @@
+name: front
+description: "公営競技のレーススケジュールを管理するアプリ"
+# The following line prevents the package from being accidentally published to
+# pub.dev using `flutter pub publish`. This is preferred for private packages.
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+
+# The following defines the version and build number for your application.
+# A version number is three numbers separated by dots, like 1.2.43
+# followed by an optional build number separated by a +.
+# Both the version and the builder number may be overridden in flutter
+# build by specifying --build-name and --build-number, respectively.
+# In Android, build-name is used as versionName while build-number used as versionCode.
+# Read more about Android versioning at https://developer.android.com/studio/publish/versioning
+# In iOS, build-name is used as CFBundleShortVersionString while build-number is used as CFBundleVersion.
+# Read more about iOS versioning at
+# https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
+# In Windows, build-name is used as the major, minor, and patch parts
+# of the product and file versions while build-number is used as the build suffix.
+# 注意（QCOPY-07）: この version はCIでリリースタグに追従して自動更新されない
+# （手動更新のみ）。実際のアプリバージョン判定（更新履歴の既読管理等）は
+# この値ではなく GitHub Releases API のタグ名を参照している。詳細は
+# lib/features/whats_new/application/last_seen_release_provider.dart のコメント参照。
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.3
+
+# Dependencies specify other packages that your package needs in order to work.
+# To automatically upgrade your package dependencies to the latest versions
+# consider running `flutter pub upgrade --major-versions`. Alternatively,
+# dependencies can be manually updated by changing the version numbers below to
+# the latest version available on pub.dev. To see which dependencies have newer
+# versions available, run `flutter pub outdated`.
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # QWEB-02: flutter_localizationsを導入していないと、showDatePicker等の
+  # Flutter標準UIの文言・曜日ヘッダ・日付入力形式が既定の英語（US式）のまま
+  # になる。日本語アプリとして明確な破綻のため導入する。
+  flutter_localizations:
+    sdk: flutter
+
+  # The following adds the Cupertino Icons font to your application.
+  # Use with the CupertinoIcons class for iOS style icons.
+  cupertino_icons: ^1.0.8
+
+  # Architecture & State Management
+  get_it: ^9.2.1
+  flutter_riverpod: ^3.4.2
+
+  # Routing
+  go_router: ^17.4.0
+
+  # HTTP Communication
+  # DEP-010（2026-08-01調査）: pub.dev APIで全バージョンを確認したところ dio の
+  # 6.x系は存在しない（安定版・プレリリースとも無し、最新は5.11.0）。
+  # 「セキュリティ修正が6.x系のみで出た場合caretで取り込めない」という懸念は
+  # 現時点では該当しない。6.x系がリリースされた際は本コメントと合わせて
+  # 移行要否を再検討すること。
+  dio: ^5.11.0
+  
+  # Data serialization
+  freezed_annotation: ^3.1.0
+
+  # Date formatting
+  # QWEB-02: flutter_localizations（SDK）がintl 0.20.2に固定しているため合わせる。
+  intl: ^0.20.2
+  
+  # UI components
+  shimmer: ^3.0.0
+
+  shared_preferences: ^2.5.5
+
+  # Notifications (MVP: mobile local notifications)
+  flutter_local_notifications: ^22.3.0
+  timezone: ^0.11.1
+
+  # External links (Googleカレンダーへのレース追加)
+  url_launcher: ^6.3.2
+
+  # Web Push（Service Worker登録・購読）用のdart:js_interopサポート
+  web: ^1.1.0
+
+  # 未構築（画面外はるか先）の行にも確実にジャンプできるリスト
+  # （タイムラインの「発走が一番近いレース」自動スクロールに使用）
+  scrollable_positioned_list: ^0.3.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  # flutter_local_notifications の推移的依存だが、テストで
+  # FlutterLocalNotificationsPlatform の直接参照が必要なため明示宣言する
+  # （QNTF-11: MobileNotificationScheduler の requestPermissions テスト）。
+  flutter_local_notifications_platform_interface: ^12.1.0
+
+  # shared_preferences の推移的依存だが、テストで InMemorySharedPreferencesStore
+  # を直接継承し書き込み失敗を再現するため明示宣言する
+  # （QSTATE-02: LocalFavoritesRepository.saveFavoriteRaceIds の回帰テスト）。
+  shared_preferences_platform_interface: ^2.4.2
+
+  # Widget catalog (Storyboard的なもの)。main.dartから参照されないカタログ専用の
+  # 別entry point（lib/widgetbook.dart）でのみ使われるため dev_dependencies に配置（PERF-153）。
+  widgetbook: ^3.25.0
+
+  # The "flutter_lints" package below contains a set of recommended lints to
+  # encourage good coding practices. The lint set provided by the package is
+  # activated in the `analysis_options.yaml` file located at your
+  # package. See that file for information about deactivating specific lint
+  # rules and activating additional ones.
+  flutter_lints: ^6.0.0
+  
+  # Code generation
+  # QDEV-11: build_runner/json_serializableはコード生成時にしか使わないビルドツール
+  # のため実行時には不要。dependenciesに置くと依存解決の対象が広がりCIが重くなる。
+  build_runner: ^2.15.1
+  json_serializable: ^6.14.1
+  freezed: ^3.2.5
+
+  # url_launcher のテスト用フェイク実装に使用
+  url_launcher_platform_interface: ^2.3.2
+
+  # TTLキャッシュ失効（Timer）のテストで時間経過をシミュレートするために使用
+  fake_async: ^1.3.3
+
+# For information on the generic Dart part of this file, see the
+# following page: https://dart.dev/tools/pub/pubspec
+
+# The following section is specific to Flutter packages.
+flutter:
+
+  # The following line ensures that the Material Icons font is
+  # included with your application, so that you can use the icons in
+  # the material Icons class.
+  uses-material-design: true
+
+  # To add assets to your application, add an assets section, like this:
+  # assets:
+  #   - images/a_dot_burr.jpeg
+  #   - images/a_dot_ham.jpeg
+
+  # An image asset can refer to one or more resolution-specific "variants", see
+  # https://flutter.dev/to/resolution-aware-images
+
+  # For details regarding adding assets from package dependencies, see
+  # https://flutter.dev/to/asset-from-package
+
+  # Web（CanvasKitレンダラー）はOSインストール済みフォントを参照できないため、
+  # Hiragino/Yu Gothic等のOS依存フォント名だけでは文字が崩れる（PCのみ発生）。
+  # 全プラットフォームで同じ見た目・完全なグリフを保証するため、実フォントを同梱する。
+  fonts:
+    - family: Noto Sans JP
+      fonts:
+        - asset: assets/fonts/NotoSansJP-Regular.ttf
+        - asset: assets/fonts/NotoSansJP-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/NotoSansJP-Bold.ttf
+          weight: 700
+    - family: Noto Serif JP
+      fonts:
+        - asset: assets/fonts/NotoSerifJP-SemiBold.ttf
+          weight: 600
+  #
+  # For details regarding fonts from package dependencies,
+  # see https://flutter.dev/to/font-from-package

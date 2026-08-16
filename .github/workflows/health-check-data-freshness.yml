@@ -1,0 +1,146 @@
+name: Health Check (Data Freshness)
+
+# バッチが「success」で終わっているのに実際は何も書き込んでいない、という
+# サイレント失敗（2026-07-18〜07-22に実際に発生し、4日間検知されなかった）を
+# 検知するための仕組み。
+#
+# error-monitor.yml はWorkerの例外発生数を監視するが、今回のようにジョブが
+# 例外を投げずに「exit 0・0件処理」で終わるケースは検知できない。
+# そこで、本番APIに対して「今日のレースが実際に何件登録されているか」を
+# 直接問い合わせ、全レース種別合計で0件（＝直近のバッチが機能していない
+# 強い兆候）であればGitHub Issueを自動作成する。
+#
+# 全レース種別（JRA/NAR/KEIRIN/AUTORACE/BOATRACE/OVERSEAS）が同時に0件になる
+# ことは通常運用ではまず起こらないため、誤検知はほぼ想定していない。
+#
+# CICD-121カットオーバー（2026-08-05）: 同じチェックをapi Worker自身の
+# scheduledハンドラ（`packages/api/src/utility/dataFreshnessCheck.ts`、
+# `packages/api/wrangler.toml`の2つ目のcron`0 5 * * *`）へ移行済み
+# （2026-08-01〜、CICD-73と同様の並行稼働期間を経た）。GitHub Actions側の
+# scheduleトリガーは不要になったため削除し、`workflow_dispatch`（手動実行）
+# のみを残す。
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+# CICD-111対応: 同一ワークフローの多重実行（scheduleとworkflow_dispatchの重複起動等）を
+# 防ぐため、他ワークフロー（ci-conventions.md §1）と同じ命名規則で排他する。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check-freshness:
+    runs-on: ubuntu-24.04
+    # CICD-110対応: curlハング等でrunnerを専有し続けないよう上限を設定
+    # （ci-conventions.md §1、既定の呼び出し先はGitHub APIとMAIN_API_URLのみで
+    # 通常は数秒〜数十秒で完了する想定のため5分で十分）。
+    timeout-minutes: 5
+    steps:
+      # create-github-app-token composite action はリポジトリ内のローカルファイルを
+      # 参照するため、呼び出し前に checkout が必須（CICD-89対応で発覚したリグレッション）。
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Create GitHub App Token
+        uses: ./.github/actions/create-github-app-token
+        id: app-token
+        with:
+          app-id: ${{ secrets.BOT_APP_ID }}
+          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
+
+      - name: Query today's race count from production API
+        id: query
+        env:
+          MAIN_API_URL: ${{ vars.MAIN_API_URL }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$MAIN_API_URL" ]; then
+            echo "::warning::MAIN_API_URL not set, skipping freshness check"
+            echo "query-ok=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # JST基準の「今日」を計算（このrunnerはUTCで動くため+9時間して日付を出す）
+          TODAY_JST=$(date -u -d "+9 hours" +%Y-%m-%d)
+
+          URL="${MAIN_API_URL}/race?startDate=${TODAY_JST}&finishDate=${TODAY_JST}&raceTypeList=jra,nar,keirin,autorace,boatrace,overseas"
+          echo "Checking: $URL"
+
+          HTTP_STATUS=$(curl -sS -o /tmp/race-response.json -w "%{http_code}" "$URL")
+
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "::warning::API returned HTTP $HTTP_STATUS, skipping freshness check"
+            echo "query-ok=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          COUNT=$(jq -r '.count // 0' /tmp/race-response.json)
+          echo "Today ($TODAY_JST JST) race count across all types: $COUNT"
+
+          {
+            echo "query-ok=true"
+            echo "race-count=$COUNT"
+            echo "check-date=$TODAY_JST"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Sync GitHub Issue with freshness status
+        if: steps.query.outputs.query-ok == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          RACE_COUNT: ${{ steps.query.outputs.race-count }}
+          CHECK_DATE: ${{ steps.query.outputs.check-date }}
+        run: |
+          set -euo pipefail
+
+          LABEL="data-freshness-alert"
+
+          gh label create "$LABEL" --color "B60205" \
+            --description "本番データが更新されていない疑いの自動検知" >/dev/null 2>&1 || true
+
+          EXISTING=$(gh issue list --label "$LABEL" --state open --json number --jq '.[0].number // empty')
+
+          # 1件以上あれば正常（全レース種別が同時に0件になることは通常運用では想定しない）
+          if [ "$RACE_COUNT" -gt 0 ]; then
+            if [ -n "$EXISTING" ]; then
+              gh issue comment "$EXISTING" --body "本日（${CHECK_DATE} JST）は全レース種別合計 ${RACE_COUNT} 件のレースが確認できたため、自動的にCloseします。再発した場合は新しいIssueが作成されます。"
+              gh issue close "$EXISTING"
+              echo "データ更新を確認し、Issue #$EXISTING をCloseしました"
+            else
+              echo "正常（${RACE_COUNT}件）。対象Issueもなし（何もしません）"
+            fi
+            exit 0
+          fi
+
+          BODY="## 本番データの鮮度チェックで異常を検知しました
+
+          - 確認日: ${CHECK_DATE} (JST)
+          - 全レース種別（JRA/NAR/KEIRIN/AUTORACE/BOATRACE/OVERSEAS）合計のレース数: **0件**
+
+          全レース種別が同時に0件になることは通常運用ではまず起こらないため、
+          直近のバッチ処理（\`batch-all.yml\`）が正しく機能していない可能性が
+          あります。
+
+          過去に、CIジョブ自体は「success」で終わるのに実際は何も書き込んでいない
+          サイレント失敗が発生したことがあります（2026-07-18〜07-22）。まずは
+          \`batch-all.yml\` の直近の実行ログを確認し、実際にレースデータの
+          取得・登録処理が動いているか確認してください。
+
+          _このIssueは \`.github/workflows/health-check-data-freshness.yml\` により自動作成されました。_"
+
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "$BODY"
+            echo "既存Issue #$EXISTING にコメントを追加しました"
+          else
+            gh issue create \
+              --title "[Health Check] 本番データが更新されていない疑い（${CHECK_DATE}）" \
+              --body "$BODY" \
+              --label "$LABEL"
+            echo "新規Issueを作成しました"
+          fi

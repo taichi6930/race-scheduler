@@ -1,0 +1,105 @@
+name: Auto-merge main into claude branches
+
+on:
+  push:
+    branches: [main]
+
+## 両ジョブとも GitHub App トークン（steps.app-token.outputs.token）を明示的に使っており、
+## 既定の GITHUB_TOKEN（このpermissionsブロックが制御する対象）は checkout・git push・gh
+## いずれの操作にも使われていない。実際の権限は App のインストール権限で決まるため、
+## ここは「万一どこかで既定トークンが暗黙に使われても安全な最小値」として contents: read
+## のみに絞る（SEC-052対応）。
+permissions:
+  contents: read
+
+jobs:
+  get-branches:
+    runs-on: ubuntu-24.04
+    outputs:
+      branches: ${{ steps.branches.outputs.branches }}
+    steps:
+      # create-github-app-token composite action はリポジトリ内のローカルファイルを
+      # 参照するため、呼び出し前に checkout が必須（CICD-89対応で発覚したリグレッション）。
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Create GitHub App Token
+        uses: ./.github/actions/create-github-app-token
+        id: app-token
+        with:
+          app-id: ${{ secrets.BOT_APP_ID }}
+          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
+
+      - name: Get open claude branches
+        id: branches
+        run: |
+          # -R でリポジトリを明示し、checkout 前（.git が無い状態）でも gh を動作させる。
+          # gh が失敗して空文字列になった場合も matrix の fromJson がエラーにならないよう
+          # ${branches:-[]} で必ず有効な JSON 配列を出力する。
+          branches=$(gh pr list -R "$GITHUB_REPOSITORY" --base main --state open --json headRefName \
+            --jq '[.[] | select(.headRefName | startswith("claude/")) | .headRefName]' | jq -c .)
+          echo "branches=${branches:-[]}" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+
+  auto-merge:
+    needs: get-branches
+    if: needs.get-branches.outputs.branches != '[]'
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        branch: ${{ fromJson(needs.get-branches.outputs.branches) }}
+    steps:
+      # create-github-app-token composite action はリポジトリ内のローカルファイルを
+      # 参照するため、呼び出し前に checkout が必須（CICD-89対応で発覚したリグレッション）。
+      # このcheckoutはトークン未発行のため既定のGITHUB_TOKENを使う（読み取りのみ）。
+      # git push に必要な認証は下の「Checkout」ステップでapp-tokenを使い再取得する。
+      - name: Checkout repository (for local action)
+        uses: actions/checkout@v7
+
+      - name: Create GitHub App Token
+        uses: ./.github/actions/create-github-app-token
+        id: app-token
+        with:
+          app-id: ${{ secrets.BOT_APP_ID }}
+          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Merge main into ${{ matrix.branch }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          BRANCH: ${{ matrix.branch }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # get-branches取得時点では open だったPRが、本ジョブ実行までの間に
+          # マージ＆ブランチ自動削除される競合が起こりうる（自身をトリガーした
+          # push:main がまさにそのマージである場合等）。この場合はエラーではなく
+          # 正常スキップとして扱う。
+          if ! git ls-remote --exit-code --heads origin "$BRANCH" > /dev/null; then
+            echo "⏭️ Skipping $BRANCH: branch no longer exists (likely merged and auto-deleted)"
+            exit 0
+          fi
+
+          git fetch origin "$BRANCH" main
+          git checkout -B "$BRANCH" "origin/$BRANCH"
+
+          if git merge origin/main --no-edit; then
+            if [ -n "$(git log "origin/$BRANCH..HEAD" --oneline)" ]; then
+              git push origin "$BRANCH"
+              echo "✅ Merged main into $BRANCH"
+            else
+              echo "✅ $BRANCH is already up-to-date"
+            fi
+          else
+            git merge --abort
+            echo "⚠️ Skipping $BRANCH due to conflicts (manual resolution required)"
+          fi

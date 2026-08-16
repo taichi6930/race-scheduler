@@ -1,0 +1,147 @@
+name: 'Deploy to Cloudflare Workers'
+description: 'Deploy to Cloudflare Workers with environment configuration'
+
+inputs:
+  environment:
+    description: 'Deployment environment (development, test, production)'
+    required: true
+  working-directory:
+    description: 'Working directory (e.g., packages/api, packages/scraping)'
+    required: true
+  cloudflare-api-token:
+    description: 'Cloudflare API token'
+    required: true
+  cloudflare-account-id:
+    description: 'Cloudflare account ID'
+    required: true
+  cf-d1-db-id:
+    description: 'Cloudflare D1 database ID (optional, baked into wrangler.toml via envsubst)'
+    required: false
+    default: ''
+  secrets-json:
+    description: >
+      Worker ランタイムシークレット（wrangler secret経由で登録するもの）を
+      まとめたフラットな JSON オブジェクト（例: '{"MAIN_API_URL": "...", "GOOGLE_CLIENT_EMAIL": "..."}'）。
+      キーはそのまま Cloudflare Workers のシークレット名になる。値が空文字/nullのキーは登録をスキップする。
+      新しいシークレットを追加したい場合は、呼び出し側のワークフローでこの JSON にキーを1つ足すだけでよい
+      （このファイル自体・ループ側のコードを変更する必要はない）。
+    required: false
+    default: '{}'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Update wrangler.toml with environment variables
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account-id }}
+        DB_ID: ${{ inputs.cf-d1-db-id }}
+      run: |
+        cd "$GITHUB_WORKSPACE/${{ inputs.working-directory }}"
+        envsubst < wrangler.toml > wrangler.resolved.toml && mv wrangler.resolved.toml wrangler.toml
+        echo "Updated wrangler.toml with environment variables"
+        grep -E "account_id|database_id|r2_bucket_name" wrangler.toml || true
+
+    # `wrangler versions secret put` は新しいバージョンを作成するだけで実際にトラフィックへ
+    # 反映されない（デプロイされない）。このため、直後の「Deploy to Cloudflare Workers」で
+    # 実際にデプロイされるよう、必ず deploy より前に実行する。
+    #
+    # secrets-json は「キー: 値」のフラットな JSON を jq で機械的に走査するだけで、
+    # 個別のシークレット名をこのファイルにハードコードしない。以前は
+    # GOOGLE_CLIENT_EMAIL 等は専用ステップ、calendar-ids は grep/cut の手書きJSONパース
+    # （pretty-print のコロン後スペースに対応できず値が常に空になるバグを含んでいた）と、
+    # シークレットごとにやり方がバラバラだったため、新規追加のたびに登録漏れが起きていた。
+    #
+    # 登録は `wrangler versions secret bulk` で全キーを1回のAPI呼び出し・1バージョンに
+    # まとめて行う（PERF-150対応）。以前はキーごとに `versions secret put` を直列実行しており
+    # 12〜13件で登録だけに時間がかかっていた。単純な並列化（xargs -P 等）も検討したが、
+    # `versions secret put` は呼び出し時点の「最新バージョン」を基点に新バージョンを作るため、
+    # 並列実行すると互いの変更を取りこぼすレースコンディション（一部シークレットが最終バージョンに
+    # 反映されない）のリスクがあり不採用とした。bulk は単一操作でレースが発生し得ず、かつAPI呼び出し
+    # 回数自体が減るため安全かつ高速。
+    - name: Register worker secrets
+      if: inputs.secrets-json != '{}'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare-api-token }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account-id }}
+        SECRETS_JSON: ${{ inputs.secrets-json }}
+      run: |
+        cd "$GITHUB_WORKSPACE/${{ inputs.working-directory }}"
+
+        KEYS_FILE="$RUNNER_TEMP/deploy-cloudflare-workers-secret-keys.txt"
+        BULK_FILE="$RUNNER_TEMP/deploy-cloudflare-workers-secrets-bulk.json"
+        echo "$SECRETS_JSON" | jq 'with_entries(select(.value != null and .value != ""))' > "$BULK_FILE"
+        jq -r 'keys[]' "$BULK_FILE" > "$KEYS_FILE"
+
+        if [ ! -s "$KEYS_FILE" ]; then
+          echo "登録対象のシークレットがありません（すべて空値）"
+          rm -f "$BULK_FILE"
+          exit 0
+        fi
+
+        echo "登録対象: $(paste -sd, "$KEYS_FILE")"
+        bunx wrangler versions secret bulk "$BULK_FILE" --env ${{ inputs.environment }}
+        rm -f "$BULK_FILE"
+        echo "✅ シークレット登録ステップが完了しました"
+
+    - name: Deploy to Cloudflare Workers
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare-api-token }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account-id }}
+      # CILOG-003: wrangler deployのアップロード進捗等の詳細出力を折りたたむ。
+      # 全deploy-*-reusable.yml（api/batch/calendar/db/front/scraping、admin-api含む）
+      # がこの共通actionを経由するため、ここ1箇所の変更で全パッケージ分に波及する。
+      run: |
+        cd "$GITHUB_WORKSPACE/${{ inputs.working-directory }}"
+        echo "::group::wrangler deploy output"
+        bun run deploy:${{ inputs.environment }}
+        echo "::endgroup::"
+
+    # デプロイ直後に実際の Worker 側の状態（wrangler secret list）を確認し、
+    # 登録しようとした全キーが本当に反映されているかを機械的に検証する。
+    # これまでは「MAIN_API_URL が未設定エラーを返さないか」等、個別シークレットごとに
+    # 手書きの疎通確認をCI側に追加する運用だったため、新しいシークレットを足したときに
+    # 検証を書き忘れると気づかないまま本番で反映漏れが起き続けていた。
+    # ここでは secrets-json に列挙された「登録しようとした全キー」を対象に自動検証するため、
+    # 呼び出し側は secrets-json にキーを足すだけで検証も自動的について回る。
+    - name: Verify worker secrets are live
+      if: inputs.secrets-json != '{}'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare-api-token }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account-id }}
+      run: |
+        cd "$GITHUB_WORKSPACE/${{ inputs.working-directory }}"
+
+        KEYS_FILE="$RUNNER_TEMP/deploy-cloudflare-workers-secret-keys.txt"
+        if [ ! -s "$KEYS_FILE" ]; then
+          echo "検証対象のシークレットがありません（すべて空値）"
+          exit 0
+        fi
+
+        LIVE_SECRETS=$(bunx wrangler secret list --env ${{ inputs.environment }} 2>/dev/null | jq -r '.[].name' || true)
+        if [ -z "$LIVE_SECRETS" ]; then
+          echo "❌ wrangler secret list からシークレット一覧を取得できませんでした（権限・環境名を確認してください）"
+          exit 1
+        fi
+
+        MISSING=""
+        while IFS= read -r key; do
+          if ! echo "$LIVE_SECRETS" | grep -qx "$key"; then
+            MISSING="$MISSING $key"
+          fi
+        done < "$KEYS_FILE"
+
+        if [ -n "$MISSING" ]; then
+          echo "❌ 以下のシークレットが本番Workerに反映されていません:$MISSING"
+          echo "   （GitHub Secrets/Variables自体は設定されていても、Cloudflare Worker側への反映に失敗している可能性があります）"
+          exit 1
+        fi
+
+        echo "✅ 登録した全シークレット（$(wc -l < "$KEYS_FILE" | tr -d ' ')件）がWorkerに反映されていることを確認しました"

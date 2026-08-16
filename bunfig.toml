@@ -1,0 +1,44 @@
+# Bun Configuration
+# https://bun.sh/docs/runtime/configuration
+
+[test]
+root = "packages"
+singleThreaded = false  # CICD-41: 5回の反復実行で状態汚染が無いことを確認済み
+timeout = 30000       # テストタイムアウト：30秒（実測: 全テスト0〜7秒台のため十分な余裕）
+
+# Coverage レポーター：既定は lcov のみ（test-gap-analysis.ts解析 / ローカルHTML変換用）。
+# text（src全ファイル1行ずつのカバレッジ表）はAIが読む出力を肥大化させるため既定から外した
+# （TOK-045）。全件の詳細表示が必要な場合は `bun run test:verbose`（bunfig.verbose.toml）を使う。
+# lcov.info は各実行ディレクトリの coverage/ 配下に出力される
+coverageReporter = ["lcov"]
+coverageDir = "coverage"
+
+# Coverage設定：テスト不要なファイルを除外
+coveragePathIgnorePatterns = [
+  # 定数ファイル
+  "**/constants/**",
+  
+  # インデックスファイル（再エクスポートのみ）
+  "**/index.ts",
+  
+  # 型定義ファイル
+  "**/types/**",
+  
+  # その他の除外パターン
+  "**/*.config.ts",
+  "**/*.config.js",
+
+  # CLI エントリーポイント（`if (import.meta.main)` 分岐はサブプロセス経由でしか
+  # 実行されず親プロセスのカバレッジ計測に乗らないため、テスト可能なロジックを
+  # 別ファイル（batchCli.ts）へ分離した上で本ファイル自体を除外している）
+  "packages/batch/src/cli.ts",
+
+  # Workflows エントリーポイント（CICD-73）。`cloudflare:workers`（Workers
+  # ランタイム固有の仮想モジュール）に依存する `WorkflowEntrypoint` の継承部分は
+  # bun test 実行環境から解決できないため、テスト可能なロジックを別ファイル
+  # （batchAllWorkflowLogic.ts）へ分離した上で本ファイル自体を除外している
+  # （cli.ts と同じ設計方針）
+  "packages/batch/src/workflows/batchAllWorkflow.ts"
+]
+
+

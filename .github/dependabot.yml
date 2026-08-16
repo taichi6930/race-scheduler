@@ -1,0 +1,270 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    # packagesワークスペース配下は各パッケージのエントリで管理するため除外
+    exclude-paths:
+      - "packages/**"
+    schedule:
+      interval: "daily"
+      day: "monday"
+      time: "05:00"
+      timezone: "Asia/Tokyo"
+    ignore:
+      # TypeScript 7 は typescript-eslint と非互換（ts.ModuleKind 等のコンパイラAPIが
+      # TS7で削除されておりクラッシュする）。typescript-eslint がTS7に対応するまで無視する。
+      # typescript-eslintのpeer許容範囲は`<6.1.0`であり、TypeScriptはminorバンプでも
+      # コンパイラAPIの破壊的変更を含みうるため、majorだけでなくminorも無視対象に含める（DEP-003）。
+      # 詳細: PR #1787, #1791
+      - dependency-name: "typescript"
+        update-types:
+          ["version-update:semver-major", "version-update:semver-minor"]
+      # package.jsonのenginesでNodeランタイムを`>=24.0.0 <25.0.0`に固定しているため、
+      # `@types/node`をv25/v26系へ上げると実行環境と2メジャー乖離した型定義になってしまう
+      # （DEP-001でv26.1.1→^24.13.3へ意図的にダウングレード済み、PR #2160）。
+      # engines側をNode 25/26系へ上げるまではmajorバンプを無視する。
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+    groups:
+      dependencies-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+      dependencies-minor:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+      dependencies-major:
+        patterns:
+          - "*"
+        update-types:
+          - "major"
+    commit-message:
+      prefix: "chore(deps):"
+  # CICD-104対応（2026-08-01）: 以下6エコシステム（api/batch/calendar/db/scraping/core）は
+  # 元々全て月曜05:00-06:45の約100分に集中しており、月曜朝にdependabot PRが一気に立ち、
+  # PRごとにフルCI（pull_request.yml・dependabot-lockfile-check.yml）が走ってバーストして
+  # いた。週次の頻度は変えず、曜日をMon〜Friに分散してPRの発生タイミングを均す。
+  - package-ecosystem: "npm"
+    directory: "/packages/api"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Asia/Tokyo"
+    groups:
+      dependencies-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+      dependencies-minor:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+      dependencies-major:
+        patterns:
+          - "*"
+        update-types:
+          - "major"
+    commit-message:
+      prefix: "chore(deps-api):"
+  - package-ecosystem: "npm"
+    directory: "/packages/batch"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "06:00"
+      timezone: "Asia/Tokyo"
+    groups:
+      dependencies-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+      dependencies-minor:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+      dependencies-major:
+        patterns:
+          - "*"
+        update-types:
+          - "major"
+    commit-message:
+      prefix: "chore(deps-batch):"
+  - package-ecosystem: "npm"
+    directory: "/packages/admin"
+    schedule:
+      interval: "weekly"
+      day: "thursday"
+      time: "06:00"
+      timezone: "Asia/Tokyo"
+    groups:
+      dependencies-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+      dependencies-minor:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+      dependencies-major:
+        patterns:
+          - "*"
+        update-types:
+          - "major"
+    commit-message:
+      prefix: "chore(deps-admin):"
+  - package-ecosystem: "npm"
+    directory: "/packages/calendar"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+      time: "06:00"
+      timezone: "Asia/Tokyo"
+    groups:
+      dependencies-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+      dependencies-minor:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+      dependencies-major:
+        patterns:
+          - "*"
+        update-types:
+          - "major"
+    commit-message:
+      prefix: "chore(deps-calendar):"
+  - package-ecosystem: "npm"
+    directory: "/packages/db"
+    schedule:
+      interval: "weekly"
+      day: "thursday"
+      time: "06:00"
+      timezone: "Asia/Tokyo"
+    groups:
+      dependencies-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+      dependencies-minor:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+      dependencies-major:
+        patterns:
+          - "*"
+        update-types:
+          - "major"
+    commit-message:
+      prefix: "chore(deps-db):"
+  # packages/frontはFlutterプロジェクトでpackage.jsonが存在しないため、
+  # npmエコシステムのエントリは対象不在の空振り設定であり削除した（DEP-018）。
+  # pubエコシステムのエントリ（pubspec.yaml対象）のみを維持する。
+  - package-ecosystem: "pub"
+    directory: "/packages/front"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+      time: "05:30"
+      timezone: "Asia/Tokyo"
+    groups:
+      dependencies-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+      dependencies-minor:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+      dependencies-major:
+        patterns:
+          - "*"
+        update-types:
+          - "major"
+    commit-message:
+      prefix: "chore(deps-front-pub):"
+  - package-ecosystem: "npm"
+    directory: "/packages/scraping"
+    schedule:
+      interval: "weekly"
+      day: "friday"
+      time: "06:00"
+      timezone: "Asia/Tokyo"
+    groups:
+      dependencies-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+      dependencies-minor:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+      dependencies-major:
+        patterns:
+          - "*"
+        update-types:
+          - "major"
+    commit-message:
+      prefix: "chore(deps-scraping):"
+  - package-ecosystem: "npm"
+    directory: "/packages/core"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "07:00"
+      timezone: "Asia/Tokyo"
+    groups:
+      dependencies-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+      dependencies-minor:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+      dependencies-major:
+        patterns:
+          - "*"
+        update-types:
+          - "major"
+    commit-message:
+      prefix: "chore(deps-core):"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    # .github/workflows/*.yml と .github/actions/*/action.yml の両方が対象のはずだが、
+    # 2026-07-27/28の一括更新PR（#2153, #2166）はどちらも.github/actions/配下の
+    # composite action（setup-workspace/action.yml）を一度も更新しておらず、
+    # actions/cache@v4・actions/setup-node@v4が2026-07-29まで取り残されていた実績がある
+    # （手動修正: PR #2189）。原因はDependabot側のインデックスラグ等の可能性があり
+    # config側で確実に直せる打ち手が無いため、検知を早めるためweekly→dailyに変更した
+    schedule:
+      interval: "daily"
+      time: "07:00"
+      timezone: "Asia/Tokyo"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: "chore(deps-actions):"

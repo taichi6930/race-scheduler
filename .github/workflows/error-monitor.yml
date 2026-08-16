@@ -1,0 +1,209 @@
+name: Error Monitor (Cloudflare → GitHub Issue)
+
+# Cloudflare Workers の GraphQL Analytics API (workersInvocationsAdaptive) を
+# 1時間おきにポーリングし、直近でエラーが発生していたら GitHub Issue を自動作成する。
+# Sentry 等の外部SaaSは使わず、Account Analytics:Read権限のみのfine-grainedトークン
+# CLOUDFLARE_ANALYTICS_API_TOKEN / CLOUDFLARE_ACCOUNT_ID と
+# GitHub App (BOT_APP_ID / BOT_PRIVATE_KEY) のみで完結させる（デプロイ権限を持つ
+# CLOUDFLARE_WORKERS_API_TOKEN等は使わない。読み取り専用の監視ジョブに書き込み権限は不要）。
+#
+# 注意: workersInvocationsAdaptive はエラー"件数"のみを提供し、エラーメッセージや
+# スタックトレースまでは含まれない。詳細調査は Issue に記載する Cloudflare ダッシュ
+# ボードのリンクから人手で行う想定。
+#
+# 重複防止: Worker単位のラベル (cf-error:<key>) で open な Issue の有無を見て、
+# あればコメント追記・なければ新規作成する。エラーが検知されなかった回に、
+# 同じラベルの open な Issue があれば自動でCloseする（放置による無限増殖・
+# 恒久的なノイズ化を防ぐ）。
+#
+# ⚠️ 既知の検知ギャップ（OBS-006、2026-07-27調査で確認済み）:
+# `workersInvocationsAdaptive.sum.errors` は Worker の fetch/scheduled ハンドラが
+# **キャッチせずに** 例外を投げた（runtime outcome != "ok"）invocationのみを
+# カウントする。本リポジトリの api/batch/calendar/scraping はいずれも全HTTPルートで
+# try/catch → `handleApiError`/`logInternalError` により例外を必ず捕捉し、整形済みの
+# 500 JSONレスポンスを返す設計（`packages/api/src/router.ts`・各Workerのrouter.tsが
+# 同型）になっているため、**アプリ内で発生した例外はHTTPルート経由である限り
+# この"errors"に一切計上されない**（api の scheduled push dispatch のように
+# try/catch を持たないハンドラだけは例外）。つまり batch/calendar/scraping の
+# 実質的なアプリケーションエラーに対して、本ワークフローは恒常的にエラー0件を
+# 報告し続けている可能性が高く、Issueが作成されないこと自体を「エラーが無い」の
+# 根拠にしないこと。
+#
+# 根本修正（CF Analyticsの"errors"定義に依存しないHTTPステータス(5xx率)ベースへの
+# 切替）には、(a) 本Workerがworkers.devのみで運用されておりzone紐付けの
+# HTTPアナリティクス（edgeResponseStatus等）が使えない、(b) workersInvocationsAdaptive
+# 自体にHTTPステータス次元が無い、という制約があり、実際に直すには
+# `[observability]`（PERF-142）+ Workers Logsベースの新データセット導入が必要で
+# 動作検証もできないため、本タスクでは検知ロジックの変更は見送り、
+# このコメントで既知の限界を明示するに留める。応急的な緩和として、
+# `packages/core/src/utilities/appLogger.ts` のJSON構造化ログ（OBS-001、
+# `WORKER_NAME`設定時）を先に用意してあるため、Workers Logs導入時に
+# `level:error`でのフィルタが機械的に可能になっている。
+#
+# CICD-70対応（2026-08-01）: 4Worker分をGitHub Actions matrixで実行すると、
+# 「ジョブ単位で最低1分に切り上げ課金」ルールにより毎時+30分毎×4matrix＝1日192
+# ジョブ実行という分数を消費していた（30分毎トリガーはapiのみ実際にクエリするが、
+# 他3件も空振りジョブとしてrunnerが起動しその分課金される）。検知間隔は変えず、
+# 1ジョブ内で対象Workerを順次チェックするループに統合し、ジョブ実行回数を
+# 1/4（1日48回）に削減する。1対象のチェックが失敗しても他対象を継続できるよう
+# 対象ごとにサブシェルで隔離している（uptime-check.ymlのCICD-69対応と同じ設計）。
+#
+# CICD-122対応（2026-08-05）: 同じチェックをapi Worker自身のscheduledハンドラ
+# （`packages/api/src/utility/errorMonitorCheck.ts`、`packages/api/wrangler.toml`の
+# 3・4つ目のcron）としても実装し、並行稼働を開始した。Cloudflare側が本来の検知間隔
+# （毎時 + apiのみ毎時30分）を担うため、このワークフローは「Cloudflare側の
+# scheduledハンドラそのものが動いていない」場合のバックストップ用途に縮小し、
+# 頻度を6時間おき（1日4回）に落とした（元は1日48回）。それに伴いapi専用の
+# 30分おきチェック（OBS-012）も廃止し、単一cronで全Workerをチェックする形に
+# 統合した。並行稼働の結果が一致することを確認できたら、このワークフロー自体の
+# `schedule`トリガー削除（cutover）を検討する（`docs/tasks/BACKLOG.md` CICD-122参照）。
+
+on:
+  schedule:
+    # 全Worker、6時間ごと（UTC）。Cloudflare側のネイティブcron（毎時）に対する
+    # バックストップ用途のため、検知間隔そのものはCloudflare側に譲る。
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check-errors:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      # create-github-app-token composite action はリポジトリ内のローカルファイルを
+      # 参照するため、呼び出し前に checkout が必須（CICD-89対応で発覚したリグレッション）。
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Create GitHub App Token
+        uses: ./.github/actions/create-github-app-token
+        id: app-token
+        with:
+          app-id: ${{ secrets.BOT_APP_ID }}
+          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
+
+      - name: Query Cloudflare error count and sync GitHub Issues
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_ANALYTICS_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -uo pipefail
+
+          declare -A SCRIPT_NAMES=(
+            [api]="race-schedule-prod"
+            [batch]="race-schedule-batch-prod"
+            [calendar]="race-schedule-calendar-prod"
+            [scraping]="race-schedule-scraping-prod"
+          )
+
+          # 対象1件分のチェック。サブシェル関数として定義し、内部で`set -euo pipefail`を
+          # 有効にすることで、1対象で想定外のエラー（gh CLI失敗等）が起きても呼び出し元の
+          # ループやスクリプト全体を止めず、他対象のチェックを継続できるようにしている。
+          check_target() (
+            set -euo pipefail
+            target_key="$1"
+            script_name="$2"
+
+            end=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+            # CICD-122対応でトリガー間隔を6時間おきに縮小したため、前回実行との
+            # ギャップを取りこぼさないよう6時間分+バッファで370分さかのぼる
+            # （cronの実行遅延を考慮したバッファは元の70分と同じ10分を維持）。
+            start=$(date -u -d "370 minutes ago" +%Y-%m-%dT%H:%M:%SZ)
+
+            read -r -d '' graphql_query <<'EOF' || true
+          query ErrorCheck($accountTag: string!, $start: Time!, $end: Time!, $script: string!) {
+            viewer {
+              accounts(filter: { accountTag: $accountTag }) {
+                workersInvocationsAdaptive(
+                  filter: { datetime_gt: $start, datetime_lt: $end, scriptName: $script }
+                  limit: 1
+                ) {
+                  sum { requests errors }
+                }
+              }
+            }
+          }
+          EOF
+
+            payload=$(jq -n \
+              --arg query "$graphql_query" \
+              --arg accountTag "$CLOUDFLARE_ACCOUNT_ID" \
+              --arg start "$start" \
+              --arg end "$end" \
+              --arg script "$script_name" \
+              '{query: $query, variables: {accountTag: $accountTag, start: $start, end: $end, script: $script}}')
+
+            response=$(curl -sS -X POST "https://api.cloudflare.com/client/v4/graphql" \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "$payload")
+
+            if [ "$(echo "$response" | jq '.errors | length // 0')" != "0" ]; then
+              echo "::warning::Cloudflare GraphQL API returned an error for $script_name"
+              echo "$response" | jq '.errors'
+              exit 0
+            fi
+
+            error_count=$(echo "$response" | jq -r '.data.viewer.accounts[0].workersInvocationsAdaptive[0].sum.errors // 0')
+            request_count=$(echo "$response" | jq -r '.data.viewer.accounts[0].workersInvocationsAdaptive[0].sum.requests // 0')
+
+            echo "Script: $script_name / Errors: $error_count / Requests: $request_count"
+
+            label="cf-error:${target_key}"
+
+            gh label create "cf-error" --color "B60205" \
+              --description "Cloudflareのエラー検知による自動起票" >/dev/null 2>&1 || true
+            gh label create "$label" --color "B60205" \
+              --description "Cloudflareで検知したエラー (${script_name})" >/dev/null 2>&1 || true
+
+            existing=$(gh issue list --label "$label" --state open --json number --jq '.[0].number // empty')
+
+            # エラーなし → 既存Issueがあれば「解消」としてCloseする（放置による無限増殖を防ぐ）
+            if [ "$error_count" = "0" ]; then
+              if [ -n "$existing" ]; then
+                gh issue comment "$existing" --body "直近1時間（${start} 〜 ${end} UTC）はエラーが検知されなかったため、自動的にCloseします。再発した場合は新しいIssueが作成されます。"
+                gh issue close "$existing"
+                echo "[$target_key] エラー解消を確認し、Issue #$existing をCloseしました"
+              else
+                echo "[$target_key] エラーなし。対象Issueもなし（何もしません）"
+              fi
+              exit 0
+            fi
+
+            body="## Cloudflareでエラーを検知しました
+
+          - Worker: \`${script_name}\`
+          - 期間: ${start} 〜 ${end} (UTC)
+          - エラー数 / リクエスト数: ${error_count} / ${request_count}
+
+          エラーの詳細（メッセージ・スタックトレース）は Cloudflare ダッシュボードの Workers Logs から \`${script_name}\` を確認してください。このIssueはエラー件数の検知のみで、詳細内容は含みません。
+          エラーが止まれば次回チェック時に自動でCloseされます。
+
+          _このIssueは \`.github/workflows/error-monitor.yml\` により自動作成されました。_"
+
+            if [ -n "$existing" ]; then
+              gh issue comment "$existing" --body "$body"
+              echo "[$target_key] 既存Issue #$existing にコメントを追加しました"
+            else
+              gh issue create \
+                --title "[Cloudflare] ${script_name} でエラーを検知" \
+                --body "$body" \
+                --label "$label" --label "cf-error"
+              echo "[$target_key] 新規Issueを作成しました"
+            fi
+          )
+
+          overall_status=0
+          targets="api batch calendar scraping"
+
+          for key in $targets; do
+            check_target "$key" "${SCRIPT_NAMES[$key]}" || overall_status=1
+          done
+
+          exit "$overall_status"

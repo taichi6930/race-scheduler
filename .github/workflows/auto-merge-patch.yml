@@ -1,0 +1,113 @@
+name: Auto-merge patch PRs
+
+# semver:patchラベルが付いたPRを、必須CIチェック通過後に人手を介さず自動マージする
+# （ユーザー依頼、2026-08-09: 「パッチバージョンに関しては、もう自動でマージまでしちゃいたい、
+# 私が見なくても」）。マージ後は既存の deploy.yml の post-merge-verify → auto-release が
+# 引き続き自動でpatchの実タグ作成・productionデプロイまで進める（このワークフローが担うのは
+# 「PRをmainへ入れる」部分だけで、その先は既存の自動化（auto-semver-release-requirements.md）
+# に委ねる）。
+#
+# dependabotのpatch更新は既にdependabot-automation.ymlが別経路（semver:*ラベルを使わない）で
+# 自動マージしているため、対象が重複しないようdependabot作成PRはここでも明示的に除外する。
+#
+# CI設定・Cloudflareデプロイ設定などCODEOWNERS（.github/CODEOWNERS）でレビュー必須指定して
+# いる範囲を変更するPRは、誤ってpatchと判定されたときの影響が大きいため自動マージの対象から
+# 除外し、引き続き人間の手動レビュー・マージを必須にする（ユーザー確認済み）。CODEOWNERSと
+# 判定パターンが重複するが、目的が異なる（CODEOWNERSはGitHub標準のレビュー割当、こちらは
+# 自動マージの対象外判定）ため一方から他方を機械生成せず、変更時は両方を手動で揃える運用と
+# する（現状5パターン程度の小さい一覧のため）。
+#
+# 承認は既定の GITHUB_TOKEN（github-actions[bot]）で行う。PR自体はGitHub App
+# （race-schedule-bot[bot]、create_pull_request.yml参照）が作成するため別アクターによる承認に
+# なり、「自分のPRを自分で承認できない」というGitHubの制約に抵触しない（dependabot-automation.yml
+# の dependabot ジョブと同じ設計）。
+#
+# マージ（`gh pr merge --auto`）は既定の GITHUB_TOKEN ではなく GitHub App トークンで行う
+# （2026-08-12修正）。既定の GITHUB_TOKEN を使ったアクションが起こす push は新しい
+# ワークフロー実行をトリガーしないというGitHub Actionsの仕様（auto-releaseジョブの
+# tag push で既に対処済みの制約と同じもの）が、squash-mergeによる main への push にも
+# 適用されてしまい、mainブランチへの push で起動するはずの deploy.yml の
+# post-merge-verify → auto-release が一度も走らず、patchリリースが自動作成されない
+# 不具合が実際に発生していた（PR #2480 で発覚）。マージのみGitHub Appトークンに切り替え、
+# 承認ステップは上記の理由により GITHUB_TOKEN のまま維持する。
+#
+# Kill Switch: リポジトリ変数 AUTO_MERGE_PATCH_ENABLED を 'false' にすると
+# コード変更なしで即座に無効化できる（未設定・'false'以外は有効というfail-safeな既定。
+# deploy.yml の auto-release ジョブの Kill Switch と同じ設計）。
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+    types: [ labeled, synchronize, ready_for_review ]
+
+## トップレベルは最小権限（contents: read）に絞り、承認・マージに必要な書き込み権限は
+## ジョブ単位で明示的に取得する（SEC-052対応、他ワークフローと同じ方針）。
+permissions:
+  contents: read
+
+jobs:
+  auto-merge-patch:
+    name: "🤖 semver:patch PRを自動マージ"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    if: |
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.user.login != 'dependabot[bot]' &&
+      vars.AUTO_MERGE_PATCH_ENABLED != 'false' &&
+      contains(github.event.pull_request.labels.*.name, 'semver:patch') &&
+      !contains(github.event.pull_request.labels.*.name, 'semver:minor') &&
+      !contains(github.event.pull_request.labels.*.name, 'semver:major')
+    # `gh pr review --approve` に pull-requests: write が必要（既定の GITHUB_TOKEN で
+    # 実行するため）。マージ自体は GitHub App トークンで行うため、GITHUB_TOKEN 側の
+    # contents は checkout（read）以外に使わない。ジョブ単位で permissions を指定すると
+    # 未指定のスコープは 'none' になる（トップレベルの contents: read を引き継がない）ため、
+    # ここでも明示的に contents: read を指定する。
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Skip if PR touches CODEOWNERS-sensitive paths
+        id: sensitive
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          files=$(gh pr view "$PR_URL" --json files --jq '.files[].path')
+          if echo "$files" | grep -qE '^(\.github/workflows/|\.github/actions/|\.github/dependabot\.yml$|packages/[^/]+/wrangler\.toml$|infra/)'; then
+            echo "⏭️ CI/デプロイ設定に触れる変更のため自動マージ対象外です。手動レビュー・マージしてください。"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Approve PR
+        if: steps.sensitive.outputs.skip == 'false'
+        run: gh pr review --approve "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # create-github-app-token composite action はリポジトリ内のローカルファイルを
+      # 参照するため、呼び出し前に checkout が必須（CICD-89対応で発覚したリグレッション、
+      # auto-merge-main.yml と同じ注意点）。
+      - name: Checkout repository (for local action)
+        if: steps.sensitive.outputs.skip == 'false'
+        uses: actions/checkout@v7
+
+      - name: Create GitHub App Token
+        if: steps.sensitive.outputs.skip == 'false'
+        uses: ./.github/actions/create-github-app-token
+        id: app-token
+        with:
+          app-id: ${{ secrets.BOT_APP_ID }}
+          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
+
+      - name: Enable auto-merge
+        if: steps.sensitive.outputs.skip == 'false'
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}

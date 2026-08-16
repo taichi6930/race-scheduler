@@ -1,0 +1,43 @@
+{
+    "compilerOptions": {
+        "ignoreDeprecations": "6.0",
+        "target": "ES2022",
+        "module": "ESNext",
+        "lib": ["es2023", "esnext.iterator", "dom"],
+        "strict": true,
+        "noImplicitAny": true,
+        "strictNullChecks": true,
+        "noImplicitThis": true,
+        "alwaysStrict": true,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "noImplicitReturns": true,
+        "noFallthroughCasesInSwitch": true,
+        "inlineSourceMap": true,
+        "inlineSources": true,
+        "experimentalDecorators": true,
+        "strictPropertyInitialization": false,
+        "emitDecoratorMetadata": true,
+        "esModuleInterop": true,
+        "moduleResolution": "bundler",
+        "resolveJsonModule": true,
+        "skipLibCheck": true,
+        "noEmit": true,
+        "paths": {
+            "@race-schedule/api/src/*": ["./packages/api/src/*"],
+            "@race-schedule/api": ["./packages/api/src/index.ts"],
+            "@race-schedule/batch/src/*": ["./packages/batch/src/*"],
+            "@race-schedule/batch": ["./packages/batch/src/index.ts"],
+            "@race-schedule/core/src/*": ["./packages/core/src/*"],
+            "@race-schedule/core/test": [
+                "./packages/core/test/MockInterface.ts"
+            ],
+            "@race-schedule/core": ["./packages/core/src/index.ts"],
+            "@race-schedule/db/src/*": ["./packages/db/src/*"],
+            "@race-schedule/db": ["./packages/db/src/index.ts"],
+            "@race-schedule/scraping/src/*": ["./packages/scraping/src/*"],
+            "@race-schedule/scraping": ["./packages/scraping/src/index.ts"]
+        },
+        "types": ["bun", "@cloudflare/workers-types", "bun-types/test-globals"]
+    }
+}

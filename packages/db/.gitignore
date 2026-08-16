@@ -1,0 +1,16 @@
+# Build output
+dist/
+*.tsbuildinfo
+
+# Dependencies
+node_modules/
+
+# Local database
+*.sqlite
+*.db
+
+# wrangler --persist-to のローカルD1エミュレータ実行時データ（wal/shm含む）
+v3/
+
+# Wrangler
+.wrangler/

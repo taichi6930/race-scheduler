@@ -1,0 +1,8 @@
+# QMETA-05: SPAのためクローラーに提供できる本文はほぼ無く、`/timeline?date=...`
+# のようなクエリ違いを無限に辿られる余地があるため、クエリ付きURLのみ明示的に禁止する。
+# ponytail: test/production環境の出し分け（testは全Disallow）は、web/ディレクトリが
+# 環境間で共有される静的ファイルのため未対応（deploy-front-reusable.ymlのsed注入方式
+# を流用すれば対応可能。QNTF-04のpush-sw.js例を参照）。
+User-agent: *
+Disallow: /*?
+Allow: /

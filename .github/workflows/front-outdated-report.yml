@@ -1,0 +1,39 @@
+name: Front Outdated Dependencies Report
+
+# DEP-029/DEP-014対応: packages/front（Flutter/pub.dev）の依存更新状況は
+# `pubspec.yaml`冒頭コメントに記載の手動実行に依存しており、自動レポートが
+# 無かった。`flutter pub outdated`を週次実行し$GITHUB_STEP_SUMMARYへ出力することで、
+# 定期的な更新状況の可視化（DEP-029）と定期実行運用の整備（DEP-014）を両立する。
+# ブロッキングではない（情報提供のみ、他のscheduled-tests.yml各ジョブと同じ思想）。
+
+on:
+  schedule:
+    # 毎週月曜 16:00 JST (07:00 UTC)。ci-duration-report.ymlと同じ曜日・時刻。
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  front-outdated-report:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          filter: blob:none
+
+      - name: Setup Flutter workspace
+        uses: ./.github/actions/setup-flutter-workspace
+
+      - name: Report outdated pub packages
+        working-directory: packages/front
+        run: |
+          {
+            echo "## 📦 front (pub.dev) 依存の更新状況"
+            echo '```'
+            flutter pub outdated || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

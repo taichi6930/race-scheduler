@@ -1,0 +1,92 @@
+name: Lint Auto Fix
+
+on:
+  pull_request:
+    types: [labeled]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  lint-fix:
+    # lint:fix ラベルが明示的に付与された場合のみ実行する（CICD-10）。
+    # 以前は opened/synchronize（＝実質すべてのpush）でも自動発火しており、
+    # call-eslint-check / call-biome-check と同じ解析を毎回もう1本の
+    # runnerで重複実行していた（lint違反の検出自体はそちらが既に担っている）。
+    #
+    # SEC-047対応: このジョブはPRブランチ（fork含む）をcheckoutし、そこに含まれる
+    # package.json/eslint.config.mjs等のスクリプトをそのまま実行する（＝PRブランチの
+    # 制御下にあるコードのCI上での実行）。`pull_request`トリガーでは fork PR に対して
+    # 既定のGITHUB_TOKENが自動的にread-only化されるため現状の実害は限定的だが、
+    # 将来このワークフローに実シークレット（GITHUB_TOKEN以外）を1つ追加した瞬間、
+    # forkが完全に制御するコードにそのシークレットが渡ってしまう。
+    # **このワークフローに新しいシークレットを追加しないこと。** 追加が必要な場合は
+    # `pull_request_target`への変更や設計の見直しを検討すること。
+    # 併せて、fork PRではそもそも実行しないようガードする（多層防御）。
+    if: |
+      github.event.label.name == 'lint:fix' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+        with:
+          setup-node: 'false'
+
+      - name: Run lint fix (Biome --write + ESLint --fix)
+        run: bun run lint:fix
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and push fixes
+        if: steps.changes.outputs.has_changes == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "style: auto-fix linter issues"
+          git push
+
+      - name: Remove lint:fix label
+        if: always()
+        uses: actions/github-script@v9
+        with:
+          script: |
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                name: 'lint:fix'
+              });
+            } catch (e) {
+              console.log('Label already removed or not found');
+            }
+
+      - name: Comment on PR (fixes applied)
+        if: steps.changes.outputs.has_changes == 'true'
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+        with:
+          header: lint-fix-report
+          message: "Linter auto-fix has been applied and pushed to this branch."
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

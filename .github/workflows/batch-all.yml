@@ -1,0 +1,134 @@
+name: Batch - All Updates (Calendar, Place, Race)
+
+# CICD-73/CONC-03対応（2026-08-03）: batch-all/batch-race/batch-place/batch-calendar
+# 4ワークフローの相互排他は、GitHub Actionsの`concurrency:`グループから
+# api Worker側のD1ロック（batch_run_lock、`POST /batch/trigger`が取得・
+# packages/batch WorkerのWorkflowが完了時に解放）へ一本化した。
+# 4経路すべてが同じ`/batch/trigger`エンドポイントを通るため、
+# `concurrency:`グループは不要（重複した排他機構を持たない）。
+
+# CICD-73カットオーバー（2026-08-05）: production・test両環境とも定期実行は
+# packages/batchのCloudflareネイティブ`schedules`（wrangler.toml）へ一本化した
+# （§14）。本ワークフローの`schedule`トリガー（production向け6時間ごと・test向け
+# 1日1回の両方）は削除し、`workflow_dispatch`（手動実行）のみを残す。
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment"
+        required: true
+        default: "test"
+        type: choice
+        options:
+          - test
+          - production
+      start-date:
+        description: "Start date (YYYY-MM-DD format)"
+        required: false
+      finish-date:
+        description: "Finish date (YYYY-MM-DD format)"
+        required: false
+      race-type:
+        description: 'Race type(s) - space-separated (e.g. "nar keirin autorace
+          overseas"). All: jra nar keirin autorace boatrace overseas'
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  trigger-batch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # CICD-73カットオーバー（2026-08-05）: schedule実行は無くなり、常に
+    # workflow_dispatchの入力値（デフォルトtest）を使う。
+    environment: ${{ github.event.inputs.environment || 'test' }}
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          filter: blob:none
+
+      - name: Build request inputs
+        # SEC-042対応: workflow_dispatchの自由入力（race-type/start-date/finish-date）は
+        # type指定の無いstring入力のため、run:へ直接展開せずenv:経由でシェル変数として渡す。
+        # スケジュール実行時・workflow_dispatchでrace-type省略時はraceTypesを省略し、
+        # batch Worker側（Workflow内部）の既定値（全raceType）にフォールバックさせる
+        # （日付レンジも同様。省略時はWorkflow内部でcomputeScheduledDateRangeが
+        # 基準日から動的に計算するため、GitHub Actions側での日付計算は不要になった）。
+        id: build-inputs
+        env:
+          RACE_TYPE_INPUT: ${{ github.event.inputs.race-type }}
+        run: |
+          if [ -n "$RACE_TYPE_INPUT" ]; then
+            raceTypesJson=$(echo "$RACE_TYPE_INPUT" | tr ' ' '\n' | jq -R . | jq -sc .)
+            echo "race-types-json=$raceTypesJson" >> "$GITHUB_OUTPUT"
+          else
+            echo "race-types-json=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Trigger batch-all workflow via packages/batch HTTP API
+        uses: ./.github/actions/trigger-batch-workflow
+        with:
+          environment: ${{ github.event.inputs.environment || 'test' }}
+          service-auth-token: ${{ secrets.SERVICE_AUTH_TOKEN }}
+          race-types-json: ${{ steps.build-inputs.outputs.race-types-json }}
+          start-date: ${{ github.event.inputs.start-date }}
+          finish-date: ${{ github.event.inputs.finish-date }}
+
+      # OBS-014: workflow_dispatchでの手動実行失敗はPRと異なり誰かがすぐ気づくとは
+      # 限らないため、GitHub標準の失敗通知に加えて、error-monitor.ymlと同じ
+      # GitHub AppトークンでIssueへ能動的に通知する。CICD-73カットオーバー
+      # （§14）後は本ジョブが検知できるのは「トリガー自体の失敗」（ロック競合の
+      # 再試行失敗・HTTPエラー等）のみであり、Workflow内部での実際のplace/race/
+      # calendar処理の成功/失敗はこのジョブからは分からない（非同期実行のため。
+      # Workflow失敗時のGitHub Issue通知はCICD-73/OBS-014、PR #2312で別途対応済み）。
+      - name: Create GitHub App Token
+        if: failure()
+        uses: ./.github/actions/create-github-app-token
+        id: app-token
+        with:
+          app-id: ${{ secrets.BOT_APP_ID }}
+          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
+
+      - name: Notify trigger failure via GitHub Issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          LABEL="batch-failure:trigger"
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+          gh label create "batch-failure" --color "B60205" \
+            --description "batch-all.yml の失敗による自動起票" >/dev/null 2>&1 || true
+          gh label create "$LABEL" --color "B60205" \
+            --description "batch-all.yml のWorkflowトリガー失敗" >/dev/null 2>&1 || true
+
+          EXISTING=$(gh issue list --label "$LABEL" --state open --json number --jq '.[0].number // empty')
+
+          BODY="## batch-all.yml でbatch Workflowのトリガーに失敗しました
+
+          - 実行ログ: ${RUN_URL}
+
+          ロック競合（HTTP 409）の再試行後もトリガーできなかったか、HTTPエラーが
+          発生しました。実行ログを確認してください。
+
+          _このIssueは \`.github/workflows/batch-all.yml\` により自動作成されました。次回の成功実行時は自動でCloseされません
+          （手動で解消を確認しCloseしてください）。_"
+
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "$BODY"
+            echo "既存Issue #$EXISTING にコメントを追加しました"
+          else
+            gh issue create \
+              --title "[Batch] Workflowトリガーに失敗" \
+              --body "$BODY" \
+              --label "$LABEL" --label "batch-failure"
+            echo "新規Issueを作成しました"
+          fi
