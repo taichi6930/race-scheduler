@@ -2,13 +2,19 @@
 /**
  * check-wrangler-config.ts (CFARCH-02)
  *
- * `wrangler.toml` の設定警告をCIで検知し、非継承キーの再発を防ぐ。
+ * `wrangler.toml` の設定警告と、git追跡漏れをCIで検知する。
  *
- * 背景: `[[ratelimits]]` 等のバインディング系キーは `wrangler` の仕様上
+ * 背景1: `[[ratelimits]]` 等のバインディング系キーは `wrangler` の仕様上
  * named environment（`[env.production]` 等）へ継承されない。`wrangler deploy
  * --dry-run` はこの不整合を警告として標準エラー出力に出すが、**警告のみで
  * 終了コードは0のまま**のため、CI・手動デプロイのどちらでも誰にも気づかれず、
  * 本番を含む全環境でレート制限が無効化される事故（CFARCH-01）が実際に発生した。
+ *
+ * 背景2: `.gitignore` の `wrangler.toml` 除外ルールにより、`git add -f` を
+ * 忘れるとディスク上には存在するのにgitには一度も含まれない、という
+ * 気づきにくい欠落が発生する。リポジトリ丸ごとの移行作業で実際に発生した
+ * （race-scheduler移行時、admin/api/batch/dbの全wrangler.tomlが未追跡のまま
+ * pushされ、実デプロイ実行で初めて発覚した）。
  *
  * db パッケージは `main`（デプロイされるWorkerスクリプト）を持たない
  * マイグレーション専用パッケージのため対象外（CFARCH-01と同じ判定基準）。
@@ -20,7 +26,13 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import {
+    existsSync,
+    readdirSync,
+    readFileSync,
+    unlinkSync,
+    writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -97,6 +109,46 @@ export function findCompatibilityDateMismatches(
     );
 }
 
+/**
+ * `packages/*&#47;wrangler.toml` のうち、ディスク上に存在するファイルの一覧を返す。
+ * @param repoRoot - リポジトリルートの絶対パス
+ * @returns `packages/<pkg>/wrangler.toml` 形式の相対パス一覧
+ */
+export function findWranglerTomlPaths(repoRoot: string): string[] {
+    const packagesDir = join(repoRoot, 'packages');
+    return readdirSync(packagesDir, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => `packages/${entry.name}/wrangler.toml`)
+        .filter((relativePath) => existsSync(join(repoRoot, relativePath)));
+}
+
+/**
+ * 指定した相対パスのファイルがgitに追跡されているかを判定する。
+ *
+ * `.gitignore` の `wrangler.toml`（拡張子・ファイル名のみの除外パターン）は
+ * リポジトリ全体でこの名前のファイルを一律に無視するため、`git add -f` で
+ * 個別に追跡させる運用になっている（本ファイル自身のコメント参照）。
+ * リポジトリを丸ごとコピーして別リポジトリへ移行するような操作で
+ * `git add -A`（force無し）だけを行うと、ディスク上には存在するのに
+ * gitには一度も含まれない、という気づきにくい欠落が発生する
+ * （実際に発生した事故: race-schedulerへの移行時、admin/api/batch/dbの
+ * wrangler.tomlが全て未追跡のままpushされ、実デプロイ実行で初めて発覚した）。
+ * @param repoRoot - リポジトリルートの絶対パス
+ * @param relativePath - リポジトリルートからの相対パス
+ * @returns gitに追跡されていれば true
+ */
+export function isTrackedByGit(
+    repoRoot: string,
+    relativePath: string,
+): boolean {
+    const result = spawnSync(
+        'git',
+        ['ls-files', '--error-unmatch', relativePath],
+        { cwd: repoRoot, encoding: 'utf8' },
+    );
+    return result.status === 0;
+}
+
 interface DryRunTarget {
     pkg: (typeof PACKAGES)[number];
     env: (typeof ENVIRONMENTS)[number];
@@ -151,6 +203,10 @@ function checkOne(repoRoot: string, target: DryRunTarget): DryRunResult {
 
 if (import.meta.main) {
     const repoRoot = join(import.meta.dir, '..');
+    const untrackedWranglerTomls = findWranglerTomlPaths(repoRoot).filter(
+        (relativePath) => !isTrackedByGit(repoRoot, relativePath),
+    );
+
     const targets: DryRunTarget[] = PACKAGES.flatMap((pkg) =>
         ENVIRONMENTS.map((env) => ({ pkg, env })),
     );
@@ -172,7 +228,24 @@ if (import.meta.main) {
     );
     const dateMismatches = findCompatibilityDateMismatches(compatibilityDates);
 
-    if (withWarnings.length > 0 || dateMismatches.length > 0) {
+    if (
+        untrackedWranglerTomls.length > 0 ||
+        withWarnings.length > 0 ||
+        dateMismatches.length > 0
+    ) {
+        if (untrackedWranglerTomls.length > 0) {
+            console.log(
+                '❌ ディスク上には存在するのにgitに追跡されていないwrangler.tomlがあります:',
+            );
+            for (const relativePath of untrackedWranglerTomls) {
+                console.log(`   - ${relativePath}`);
+            }
+            console.log(
+                '\n.gitignoreの`wrangler.toml`除外ルールに引っかかっています。' +
+                    '`git add -f <path>` で個別に追跡してください。',
+            );
+        }
+
         if (withWarnings.length > 0) {
             console.log(
                 '❌ wrangler.toml に設定警告があります（named environment への非継承キー）:',
@@ -205,6 +278,7 @@ if (import.meta.main) {
     }
 
     console.log(
-        `✅ ${PACKAGES.length}パッケージ × ${ENVIRONMENTS.length}環境、wrangler設定警告なし・compatibility_date一致`,
+        `✅ ${PACKAGES.length}パッケージ × ${ENVIRONMENTS.length}環境、wrangler設定警告なし・compatibility_date一致・` +
+            'git追跡漏れなし',
     );
 }

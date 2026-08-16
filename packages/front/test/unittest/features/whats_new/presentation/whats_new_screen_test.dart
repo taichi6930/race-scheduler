@@ -203,7 +203,7 @@ void main() {
 
     expect(
       fake.lastLaunchedUrl,
-      'https://github.com/taichi6930/race-schedule/releases',
+      'https://github.com/taichi6930/race-scheduler/releases',
     );
   });
 }

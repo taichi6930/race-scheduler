@@ -93,7 +93,7 @@ class _WhatsNewBody extends StatelessWidget {
           // （API取得が復旧するまで自己解決できるようにする）。
           action: TextButton(
             onPressed: () => launchUrl(
-              Uri.parse('https://github.com/taichi6930/race-schedule/releases'),
+              Uri.parse('https://github.com/taichi6930/race-scheduler/releases'),
               mode: LaunchMode.externalApplication,
             ),
             child: const Text('GitHubのリリースページを開く'),

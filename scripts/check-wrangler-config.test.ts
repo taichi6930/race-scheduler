@@ -29,13 +29,32 @@
  * | T-09 | 全パッケージ同じ日付 | 空配列（不一致なし） |
  * | T-10 | 1パッケージだけ異なる日付 | 全パッケージ分のメッセージを返す |
  * | T-11 | 抽出できなかった（null）パッケージを含む | nullも不一致として扱いメッセージに含める |
+ *
+ * ### findWranglerTomlPaths
+ * | # | 条件 | 期待 |
+ * |---|------|------|
+ * | T-12 | packages配下の一部にwrangler.tomlが存在する | 存在するファイルのみ相対パスで返す |
+ * | T-13 | どのpackagesにもwrangler.tomlが無い | 空配列を返す |
+ *
+ * ### isTrackedByGit
+ * | # | 条件 | 期待 |
+ * |---|------|------|
+ * | T-14 | gitに追跡されているファイル | true を返す |
+ * | T-15 | ディスクに存在するがgitには未追跡（.gitignore等） | false を返す |
  */
-import { describe, expect, it } from 'bun:test';
+
+import { afterEach, describe, expect, it } from 'bun:test';
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import {
     extractCompatibilityDate,
     findCompatibilityDateMismatches,
     findInheritanceWarnings,
+    findWranglerTomlPaths,
+    isTrackedByGit,
     resolvePlaceholders,
 } from './check-wrangler-config';
 
@@ -155,5 +174,65 @@ describe('findCompatibilityDateMismatches', () => {
 
         expect(result).toHaveLength(2);
         expect(result[1]).toContain('見つかりません');
+    });
+});
+
+describe('findWranglerTomlPaths', () => {
+    let repoRoot: string;
+
+    afterEach(() => {
+        rmSync(repoRoot, { recursive: true, force: true });
+    });
+
+    it('T-12_packages配下の一部にwrangler.tomlが存在する_存在するファイルのみ相対パスで返す', () => {
+        repoRoot = mkdtempSync(join(tmpdir(), 'check-wrangler-config-'));
+        mkdirSync(join(repoRoot, 'packages', 'api'), { recursive: true });
+        mkdirSync(join(repoRoot, 'packages', 'front'), { recursive: true });
+        writeFileSync(
+            join(repoRoot, 'packages', 'api', 'wrangler.toml'),
+            'name = "api"',
+        );
+
+        const result = findWranglerTomlPaths(repoRoot);
+
+        expect(result).toEqual(['packages/api/wrangler.toml']);
+    });
+
+    it('T-13_どのpackagesにもwrangler.tomlが無い_空配列を返す', () => {
+        repoRoot = mkdtempSync(join(tmpdir(), 'check-wrangler-config-'));
+        mkdirSync(join(repoRoot, 'packages', 'front'), { recursive: true });
+
+        const result = findWranglerTomlPaths(repoRoot);
+
+        expect(result).toEqual([]);
+    });
+});
+
+describe('isTrackedByGit', () => {
+    let repoRoot: string;
+
+    afterEach(() => {
+        rmSync(repoRoot, { recursive: true, force: true });
+    });
+
+    it('T-14_gitに追跡されているファイル_trueを返す', () => {
+        repoRoot = mkdtempSync(join(tmpdir(), 'check-wrangler-config-git-'));
+        spawnSync('git', ['init', '-q'], { cwd: repoRoot });
+        spawnSync('git', ['config', 'user.email', 'test@example.com'], {
+            cwd: repoRoot,
+        });
+        spawnSync('git', ['config', 'user.name', 'test'], { cwd: repoRoot });
+        writeFileSync(join(repoRoot, 'tracked.txt'), 'content');
+        spawnSync('git', ['add', 'tracked.txt'], { cwd: repoRoot });
+
+        expect(isTrackedByGit(repoRoot, 'tracked.txt')).toBe(true);
+    });
+
+    it('T-15_ディスクに存在するがgit未追跡_falseを返す', () => {
+        repoRoot = mkdtempSync(join(tmpdir(), 'check-wrangler-config-git-'));
+        spawnSync('git', ['init', '-q'], { cwd: repoRoot });
+        writeFileSync(join(repoRoot, 'untracked.txt'), 'content');
+
+        expect(isTrackedByGit(repoRoot, 'untracked.txt')).toBe(false);
     });
 });

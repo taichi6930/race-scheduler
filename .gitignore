@@ -37,7 +37,7 @@ test-run-results.txt
 test-debug.ts
 
 # Coverage reports (Bun/nyc)
-coverage-*
+/coverage-*
 .c8.output/
 
 # Test report（scripts/generate-test-report.ts の生成物）
