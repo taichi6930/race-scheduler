@@ -166,6 +166,16 @@ erDiagram
         string layout_key PK
         string config
     }
+    release_note {
+        int id PK
+        string tag_name
+        string name
+        string body
+        string published_at
+        int draft
+        int prerelease
+        string source_repo
+    }
 ```
 
 `race_player` はレースの出走表スナップショットです（`race_player_id` は `race_id` + 車番の合成ID。枠番は複数車で共有され一意にならないため車番で合成する。`race`/`race_stage`/`race_condition` と同様スクレイピングが所有し、再取得のたびに上書き・削除される。`0021_race_player.sqlite.sql`）。
@@ -179,6 +189,8 @@ erDiagram
 `data_quality_warning_log` はデータ品質警告の蓄積ログです（追記専用）。`PlaceRepository.fetch` 等がマッピング失敗行をスキップする際にベストエフォートで記録し、api Worker の scheduled ハンドラ（既存のCloudflareエラー監視と同じ1時間おきcron）が `source` ごとに直近ウィンドウでCOUNTしてGitHub Issueの作成/追記/Closeに使います（`0032_data_quality_warning_log.sqlite.sql`）。
 
 `ui_layout` はServer-Driven UI（`GET /ui/race-detail` 等）のレイアウト構成（フィールド参照JSON）を保存するテーブルです。`feature_flag` と同じ「行があれば最優先、無ければコード内既定値にフォールバック」という考え方をJSON構成全体に拡張したもので、`config` 列には値そのものではなくフィールド参照のみが入ります（`aidlc-docs/inception/application-design/race-detail-sdui-design.md` 参照、`0033_ui_layout.sqlite.sql`）。
+
+`release_note` は更新履歴（front の What's New 画面）テーブルです。race-schedule（旧統合リポジトリ）のprivate化に伴い、GitHub Releases APIを匿名で直接fetchする既存方式では過去リリース（v1.x）が参照できなくなるため、frontが読む先をこのテーブル（DB経由のAPI）へ切り替えました。`body` にはGitHub Releaseと同じMarkdown本文をそのまま保存します。`tag_name` はrace-schedule/race-scheduler双方で独立採番されており重複しうる（実例: 両方とも分割区切りとして`v2.0.0`を採番）ため、一意性は`(tag_name, source_repo)`の複合indexで担保します（`0038_release_note.sqlite.sql`）。
 
 `calendar_flag` は `race` から独立したテーブルです（スクレイピングによる `race` の再作成が起きても、ユーザーが設定したカレンダー掲載意思を保持するための設計。`0015_calendar_flag.sqlite.sql`）。
 
