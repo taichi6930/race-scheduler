@@ -31,16 +31,35 @@ jobs:
           cloudflare-api-token: ${{ secrets.CLOUDFLARE_PAGES_API_TOKEN }}
           cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
+      # 2026-08-16の実障害: production/test環境ともEnvironment変数MAIN_API_URLが
+      # 未設定のまま、このステップが警告ログのみで後続をブロックしていなかったため、
+      # front（Cloudflare Pages）が空文字のAPI_BASE_URLでビルド・デプロイされ続けていた。
+      # 結果、front内の全API呼び出しがfront自身のオリジンへ送信され（相対パスの解決先が
+      # baseUrl不在でwindow.location.originにフォールバックするため）、
+      # POST /push/subscription は405（静的ホスティングはPOST非対応）、
+      # GET /race はSPAフォールバックのindex.htmlが返るためJSON解析に失敗し
+      # 「レースの取得に失敗しました」という表示になっていた。
+      # PAGES_PROJECT_NAME・MAIN_API_URLはどちらも「未設定でも動くように見えて実は
+      # 壊れる」値（VAPID_PUBLIC_KEYと異なり、意図的な機能無効化のフォールバックが無い）
+      # のため、警告ログに留めず、ここで確実にジョブを失敗させる。
       - name: "🔍 Validate Frontend Deployment Configuration"
         run: |
           echo "=== Cloudflare Pages Configuration ==="
           echo "Environment: ${{ inputs.environment }}"
 
-          [ -z "${{ vars.PAGES_PROJECT_NAME }}" ] && echo "❌ PAGES_PROJECT_NAME: NOT SET" || echo "✅ PAGES_PROJECT_NAME: SET (${{ vars.PAGES_PROJECT_NAME }})"
+          if [ -z "${{ vars.PAGES_PROJECT_NAME }}" ]; then
+            echo "::error::PAGES_PROJECT_NAME が未設定です。Settings → Environments → ${{ inputs.environment }} → Environment variables に設定してください。"
+            exit 1
+          fi
+          echo "✅ PAGES_PROJECT_NAME: SET (${{ vars.PAGES_PROJECT_NAME }})"
 
           echo ""
           echo "=== API Configuration ==="
-          [ -z "${{ vars.MAIN_API_URL }}" ] && echo "⚠️  MAIN_API_URL: NOT SET (will use empty string)" || echo "✅ MAIN_API_URL: SET"
+          if [ -z "${{ vars.MAIN_API_URL }}" ]; then
+            echo "::error::MAIN_API_URL が未設定です。空のままビルドすると、front内の全API呼び出しがfront自身のオリジンへ送信される致命的な不具合になります（2026-08-16の実障害）。Settings → Environments → ${{ inputs.environment }} → Environment variables に MAIN_API_URL を設定してください。"
+            exit 1
+          fi
+          echo "✅ MAIN_API_URL: SET"
 
           echo ""
           echo "=== Web Push Configuration ==="

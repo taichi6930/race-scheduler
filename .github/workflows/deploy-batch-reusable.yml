@@ -49,7 +49,15 @@ jobs:
 
           echo "=== Batch API Configuration ==="
           [ -z "${{ vars.SCRAPING_API_URL }}" ] && echo "❌ SCRAPING_API_URL: NOT SET" || echo "✅ SCRAPING_API_URL: SET"
-          [ -z "${{ vars.MAIN_API_URL }}" ] && echo "❌ MAIN_API_URL: NOT SET" || echo "✅ MAIN_API_URL: SET"
+          # 2026-08-16の実障害（front側で発覚、deploy-front-reusable.ymlのコメント参照）:
+          # MAIN_API_URLが未設定のまま「❌」ログのみで後続をブロックしていなかったため、
+          # 気づかれずに空文字でデプロイされ続けるリスクがあった。batchも同じ変数へ
+          # 依存するため、同様に確実に失敗させる。
+          if [ -z "${{ vars.MAIN_API_URL }}" ]; then
+            echo "::error::MAIN_API_URL が未設定です。Settings → Environments → ${{ inputs.environment }} → Environment variables に設定してください。"
+            exit 1
+          fi
+          echo "✅ MAIN_API_URL: SET"
           [ -z "${{ vars.CALENDAR_API_URL }}" ] && echo "❌ CALENDAR_API_URL: NOT SET" || echo "✅ CALENDAR_API_URL: SET"
 
           echo ""
