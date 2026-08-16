@@ -129,6 +129,10 @@ jobs:
               if: github.event.pull_request.head.repo.full_name == github.repository
               # SEC-041対応: ref名（PR作成者が制御できる値）を`run:`のスクリプト本文へ
               # 直接展開せずenv:経由でシェル変数として渡す（widgetbook-previewと同じ方針）。
+              # `shell: bash`明示によりpipefailを有効化する（下記`| tee`のexit codeが
+              # wranglerの失敗ではなくteeの成功を反映してしまい、実際にはCloudflare Pagesへの
+              # デプロイが失敗していても`success`として報告されるのを防ぐ）。
+              shell: bash
               env:
                   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_API_TOKEN }}
                   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
