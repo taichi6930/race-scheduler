@@ -65,7 +65,7 @@ ${renderAdminHeader('レース詳細レイアウト編集キット（競輪）',
   <li>「プレビュー用レース」で確認したいレースを選び、「プレビュー」ボタンを押すと実際の値で解決した結果を下に表示します。</li>
   <li>内容に問題が無ければ「適用」ボタンで保存します。保存すると<strong>テスト環境・本番環境ともにレース詳細画面へすぐに反映されます</strong>。</li>
 </ol>
-<p id="error" class="error" hidden></p>
+<p id="error" class="error" role="alert" hidden></p>
 <table id="fields" hidden>
   <caption>「フィールド」列のカッコ内は内部キーです。「表示ラベル」を入力すると既定のラベルの代わりに使われます。</caption>
   <thead>
@@ -80,9 +80,12 @@ ${renderAdminHeader('レース詳細レイアウト編集キット（競輪）',
   <button id="apply-button" type="button">適用</button>
 </div>
 <p class="apply-warning">「適用」は保存操作です。テスト環境・本番環境ともに即座にレース詳細画面へ反映されます。</p>
-<p id="preview-error" class="error" hidden></p>
+<p id="preview-error" class="error" role="alert" hidden></p>
 <div id="preview-output" class="preview-output"></div>
 `;
+
+/** API呼び出しのタイムアウト（ミリ秒）。QADM-03: 応答が返らないままボタンが固まるのを防ぐ。 */
+const FETCH_TIMEOUT_MS = 30_000;
 
 /**
  * ページ埋め込みスクリプトを組み立てる。
@@ -90,6 +93,7 @@ ${renderAdminHeader('レース詳細レイアウト編集キット（競輪）',
  */
 const buildPageScript = (): string => `
 (function () {
+  var FETCH_TIMEOUT_MS = ${FETCH_TIMEOUT_MS};
   var FIELD_CATALOG = ${JSON.stringify(FIELD_CATALOG)};
   var errorEl = document.getElementById('error');
   var tableEl = document.getElementById('fields');
@@ -121,6 +125,22 @@ const buildPageScript = (): string => `
   }
   function clearError(el) {
     el.hidden = true;
+  }
+  // QADM-03: タイムアウトを設定し、応答が返らないままボタンが固まるのを防ぐ。
+  function fetchWithTimeout(path, options) {
+    var controller = new AbortController();
+    var timer = setTimeout(function () {
+      controller.abort();
+    }, FETCH_TIMEOUT_MS);
+    var opts = Object.assign({}, options, { signal: controller.signal });
+    return fetch(path, opts).catch(function (err) {
+      if (err && err.name === 'AbortError') {
+        throw new Error('タイムアウトしました（' + (FETCH_TIMEOUT_MS / 1000) + '秒）。再度お試しください');
+      }
+      throw err;
+    }).finally(function () {
+      clearTimeout(timer);
+    });
   }
   function labelForKey(key) {
     var found = FIELD_CATALOG.filter(function (f) { return f.key === key; })[0];
@@ -203,7 +223,7 @@ const buildPageScript = (): string => `
     raceSelectEl.innerHTML = '';
     raceSelectEl.disabled = true;
     previewButton.disabled = true;
-    fetch('/race-detail-layout/api/races')
+    fetchWithTimeout('/race-detail-layout/api/races')
       .then(function (res) {
         if (!res.ok) {
           showError(previewErrorEl, 'プレビュー候補レースの読み込みに失敗しました（' + res.status + '）');
@@ -235,7 +255,7 @@ const buildPageScript = (): string => `
 
   function loadConfig() {
     clearError(errorEl);
-    fetch('/race-detail-layout/api')
+    fetchWithTimeout('/race-detail-layout/api')
       .then(function (res) {
         if (!res.ok) {
           showError(errorEl, '読み込みに失敗しました（' + res.status + '）');
@@ -319,7 +339,7 @@ const buildPageScript = (): string => `
       showError(previewErrorEl, 'プレビュー用レースを選択してください');
       return;
     }
-    fetch('/race-detail-layout/api/preview', {
+    fetchWithTimeout('/race-detail-layout/api/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ config: buildConfig(), raceId: raceId }),
@@ -342,7 +362,7 @@ const buildPageScript = (): string => `
   applyButton.addEventListener('click', function () {
     clearError(errorEl);
     applyButton.disabled = true;
-    fetch('/race-detail-layout/api', {
+    fetchWithTimeout('/race-detail-layout/api', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ config: buildConfig() }),

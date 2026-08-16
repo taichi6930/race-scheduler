@@ -50,7 +50,7 @@ const buildPageBody = (isProduction: boolean): string => {
     return `
 ${renderAdminHeader('バックフィル実行', isProduction, '/backfill')}
 <p class="hint">R2に既にキャッシュされたHTMLだけを使って再パース・再Upsertします。生スクレイピング（対象サイトへの新規アクセス）は行いません。</p>
-<p id="error" class="error" hidden></p>
+<p id="error" class="error" role="alert" hidden></p>
 <div class="group">
   <h2>レース種別</h2>
   ${raceTypeRows}
@@ -71,21 +71,27 @@ ${renderAdminHeader('バックフィル実行', isProduction, '/backfill')}
 <div class="group">
   <h2>操作</h2>
   <button id="run">実行</button>
-  <span id="running" class="hint" hidden>実行中…</span>
+  <span id="running" class="hint" role="status" hidden>実行中…</span>
 </div>
-<div id="result" class="group" hidden>
+<div id="result" class="group" role="status" hidden>
   <h2>結果</h2>
   <div id="result-body"></div>
 </div>
 `;
 };
 
+/** バックフィルAPI呼び出しのタイムアウト（ミリ秒）。QADM-03: 応答が返らないままボタンが固まるのを防ぐ。 */
+const FETCH_TIMEOUT_MS = 60_000;
+
 /**
  * ページ埋め込みスクリプトを組み立てる。
+ * @param isProduction - production環境なら true。実行前の確認ダイアログの出し分けに使う。
  * @returns `<script>`要素の中身
  */
-const buildPageScript = (): string => `
+const buildPageScript = (isProduction: boolean): string => `
 (function () {
+  var IS_PRODUCTION = ${isProduction ? 'true' : 'false'};
+  var FETCH_TIMEOUT_MS = ${FETCH_TIMEOUT_MS};
   var errorEl = document.getElementById('error');
   var runButton = document.getElementById('run');
   var runningEl = document.getElementById('running');
@@ -119,13 +125,43 @@ const buildPageScript = (): string => `
       return el.value;
     });
   }
-  function formatResult(label, result, notCachedKey) {
+  // QADM-03: タイムアウトを設定し、応答が返らないまま「実行中…」に固まるのを防ぐ。
+  function fetchWithTimeout(path, options) {
+    var controller = new AbortController();
+    var timer = setTimeout(function () {
+      controller.abort();
+    }, FETCH_TIMEOUT_MS);
+    var opts = Object.assign({}, options, { signal: controller.signal });
+    return fetch(path, opts).finally(function () {
+      clearTimeout(timer);
+    });
+  }
+  function buildResultSummary(label, result, notCachedKey) {
     var notCached = result[notCachedKey] || [];
-    return label + ': 成功' + result.successCount + '件 / 失敗' +
+    var summary = document.createElement('p');
+    summary.textContent = label + ': 成功' + result.successCount + '件 / 失敗' +
       result.failureCount + '件 / キャッシュ無し' + notCached.length + '件';
+    var fragment = document.createDocumentFragment();
+    fragment.appendChild(summary);
+    // QADM-11: キャッシュ無しで捨てられていたキー一覧を折りたたみ表示する。
+    if (notCached.length > 0) {
+      var details = document.createElement('details');
+      var caption = document.createElement('summary');
+      caption.textContent = 'キャッシュ無しでスキップしたキーを表示（' + notCached.length + '件）';
+      details.appendChild(caption);
+      var list = document.createElement('ul');
+      notCached.forEach(function (key) {
+        var item = document.createElement('li');
+        item.textContent = String(key);
+        list.appendChild(item);
+      });
+      details.appendChild(list);
+      fragment.appendChild(details);
+    }
+    return fragment;
   }
   function runBackfill(path, body) {
-    return fetch(path, {
+    return fetchWithTimeout(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -138,6 +174,11 @@ const buildPageScript = (): string => `
         });
       }
       return res.json();
+    }, function (err) {
+      if (err && err.name === 'AbortError') {
+        throw new Error('タイムアウトしました（' + (FETCH_TIMEOUT_MS / 1000) + '秒）。再度お試しください');
+      }
+      throw err;
     });
   }
 
@@ -154,6 +195,10 @@ const buildPageScript = (): string => `
       showError('開始日は終了日より前にしてください');
       return;
     }
+    // QADM-02: 本番環境への書き込みは確認ステップを挟む（テスト環境は即実行）。
+    if (IS_PRODUCTION && !window.confirm('本番環境のデータを書き換えます。実行しますか？')) {
+      return;
+    }
     var target = document.getElementById('target').value;
     var body = { startDate: startDate, finishDate: finishDate, raceTypeList: raceTypeList };
 
@@ -165,14 +210,14 @@ const buildPageScript = (): string => `
     if (target === 'place' || target === 'both') {
       tasks.push(
         runBackfill('/backfill/api/place', body).then(function (result) {
-          return formatResult('開催情報', result, 'notCachedKeys');
+          return buildResultSummary('開催情報', result, 'notCachedKeys');
         }),
       );
     }
     if (target === 'race' || target === 'both') {
       tasks.push(
         runBackfill('/backfill/api/race', body).then(function (result) {
-          return formatResult('レース情報', result, 'notCachedPlaceIds');
+          return buildResultSummary('レース情報', result, 'notCachedPlaceIds');
         }),
       );
     }
@@ -183,9 +228,7 @@ const buildPageScript = (): string => `
         var errors = [];
         settled.forEach(function (result) {
           if (result.status === 'fulfilled') {
-            var p = document.createElement('p');
-            p.textContent = result.value;
-            resultBodyEl.appendChild(p);
+            resultBodyEl.appendChild(result.value);
           } else {
             errors.push(result.reason && result.reason.message || '実行に失敗しました');
           }
@@ -224,7 +267,7 @@ export const renderBackfillPage = (isProduction: boolean): string => {
 </head>
 <body>
 ${buildPageBody(isProduction)}
-<script>${buildPageScript()}</script>
+<script>${buildPageScript(isProduction)}</script>
 </body>
 </html>
 `;

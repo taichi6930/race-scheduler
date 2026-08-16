@@ -7,6 +7,7 @@
  * |---|--------------|----------------------------------------------------------|
  * | 1 | false        | testのfavicon・「テスト環境」バッジ・READ_ONLY=false      |
  * | 2 | true         | productionのfavicon・「本番環境」バッジ・READ_ONLY=true   |
+ * | 3 | いずれも     | 読み込み中表示（QADM-12）・エラー領域のrole="alert"（QADM-08）が含まれる |
  *
  * ## カバレッジ目標: 行・分岐カバレッジ 100%
  */
@@ -40,5 +41,17 @@ describe('admin/controller/renderFeatureFlagsPage', () => {
         expect(html).toContain('var READ_ONLY = true;');
         expect(html).toContain('本番環境ではフラグの切り替えはできません');
         expect(html).not.toContain(TEST_FAVICON_DATA_URI);
+    });
+
+    it('3: 読み込み中表示・エラー領域のrole="alert"が含まれること', () => {
+        const html = renderFeatureFlagsPage(false);
+
+        expect(html).toContain(
+            '<p id="loading" class="hint" role="status">読み込み中…</p>',
+        );
+        expect(html).toContain(
+            '<p id="error" class="error" role="alert" hidden></p>',
+        );
+        expect(html).toContain('loadingEl.hidden = true;');
     });
 });

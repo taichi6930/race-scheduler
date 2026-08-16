@@ -43,7 +43,8 @@ const buildPageBody = (isProduction: boolean): string => {
     return `
 ${renderAdminHeader('機能フラグ管理', isProduction, '/flags')}
 <p class="hint">${hint}</p>
-<p id="error" class="error" hidden></p>
+<p id="loading" class="hint" role="status">読み込み中…</p>
+<p id="error" class="error" role="alert" hidden></p>
 <p id="empty" class="hint" hidden>登録済みの機能フラグがありません。</p>
 <table id="flags" hidden>
   <thead>
@@ -62,6 +63,7 @@ ${renderAdminHeader('機能フラグ管理', isProduction, '/flags')}
 const buildPageScript = (isProduction: boolean): string => `
 (function () {
   var READ_ONLY = ${isProduction ? 'true' : 'false'};
+  var loadingEl = document.getElementById('loading');
   var errorEl = document.getElementById('error');
   var emptyEl = document.getElementById('empty');
   var tableEl = document.getElementById('flags');
@@ -167,6 +169,10 @@ const buildPageScript = (isProduction: boolean): string => `
       })
       .catch(function () {
         showError('読み込みに失敗しました');
+      })
+      .finally(function () {
+        // QADM-12: 初回読み込みが終わるまで一覧が空白のままだったのを解消する。
+        loadingEl.hidden = true;
       });
   }
   function revertSwitch(checkboxEl, stateTextEl, previousEnabled) {
