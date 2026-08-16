@@ -292,3 +292,35 @@ export const uiLayout = sqliteTable('ui_layout', {
     createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
 });
+
+/**
+ * 更新履歴（What's New画面）用のリリースノート（0038_release_note.sqlite.sql参照）。
+ * body には GitHub Release と同じMarkdown本文をそのまま保存し、front側の
+ * 既存Markdownパースロジックをそのまま使えるようにする。
+ */
+/**
+ * tag_name は race-schedule / race-scheduler で独立採番されており重複しうる
+ * （実例: 両リポジトリとも分割区切りとして v2.0.0 を採番している）ため、
+ * 一意性は (tag_name, source_repo) の組で担保する
+ * （0038_release_note.sqlite.sql の idx_release_note_tag_source に対応）。
+ */
+export const releaseNote = sqliteTable(
+    'release_note',
+    {
+        id: integer('id').primaryKey({ autoIncrement: true }),
+        tagName: text('tag_name').notNull(),
+        name: text('name'),
+        body: text('body'),
+        publishedAt: text('published_at'),
+        draft: integer('draft').notNull().default(0),
+        prerelease: integer('prerelease').notNull().default(0),
+        sourceRepo: text('source_repo').notNull(),
+        createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+    },
+    (table) => [
+        uniqueIndex('idx_release_note_tag_source').on(
+            table.tagName,
+            table.sourceRepo,
+        ),
+    ],
+);

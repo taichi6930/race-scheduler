@@ -63,6 +63,7 @@ import { PlaceController } from './controller/placeController';
 import { PlayerController } from './controller/playerController';
 import { PushController } from './controller/pushController';
 import { RaceController } from './controller/raceController';
+import { ReleaseNoteController } from './controller/releaseNoteController';
 import { initializeDIForInMemory } from './di';
 import { openApiSpec } from './openapi/openApiSpec';
 import { createCacheControlMiddleware } from './utility/cacheControl';
@@ -491,6 +492,7 @@ export const SERVICE_AUTH_EXEMPT_ROUTES: readonly ServiceAuthExemptRoute[] = [
     { method: 'GET', path: '/health', reason: 'monitoring' },
     { method: 'GET', path: '/ui/announcement', reason: 'front-public' },
     { method: 'GET', path: '/ui/race-detail', reason: 'front-public' },
+    { method: 'GET', path: '/release-notes', reason: 'front-public' },
     { method: 'GET', path: '/openapi.json', reason: 'static-docs' },
     { method: 'GET', path: '/docs', reason: 'static-docs' },
     { method: 'GET', path: '/calendar', reason: 'front-public' },
@@ -877,6 +879,26 @@ const registerServerDrivenUiRoutes = (router: Hono): void => {
 };
 
 /**
+ * 更新履歴（What's New画面）エンドポイントを登録する。
+ * GET はfrontから直接呼ばれる公開エンドポイント（`SERVICE_AUTH_EXEMPT_ROUTES`で免除）。
+ * POST は `scripts/release/autoRelease.ts` からの `X-Service-Auth-Token` 経由の
+ * サービス間書き込み専用のため免除しない（`requireServiceAuth` で保護される）。
+ * @param router - 登録対象の Hono アプリケーション
+ */
+const registerReleaseNoteRoutes = (router: Hono): void => {
+    registerMethodDispatch(router, '/release-notes', ReleaseNoteController, [
+        {
+            httpMethod: 'get',
+            invoke: (controller) => controller.get(),
+        },
+        {
+            httpMethod: 'post',
+            invoke: (controller, c) => controller.create(c.req.raw),
+        },
+    ]);
+};
+
+/**
  * APIドキュメント（OpenAPI仕様 + Scalarによるインタラクティブなビューア）を登録する。
  * front-publicなエンドポイント（`SERVICE_AUTH_EXEMPT_ROUTES`で免除）と同じ範囲を
  * `openApiSpec` にまとめており、front以外の開発者・利用者もブラウザで一覧できる。
@@ -1052,6 +1074,7 @@ const buildRouter = (): Hono => {
     });
 
     registerServerDrivenUiRoutes(router);
+    registerReleaseNoteRoutes(router);
     registerDocsRoutes(router);
     registerCalendarRoutes(router);
     registerPlaceRoutes(router);

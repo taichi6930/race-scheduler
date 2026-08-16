@@ -67,6 +67,29 @@ const announcementSchemaDoc = {
     required: ['schemaVersion', 'enabled', 'message'],
 };
 
+const releaseNoteSchemaDoc = {
+    type: 'object',
+    description:
+        "更新履歴（What's New画面）1件分。GitHub Releases APIと同じフィールド名（snake_case）。" +
+        '`body` はMarkdown本文で、front側がカテゴリ見出しをパースして表示する。',
+    properties: {
+        tag_name: { type: 'string', example: 'v2.0.0' },
+        name: { type: 'string', nullable: true },
+        body: { type: 'string', nullable: true },
+        published_at: { type: 'string', format: 'date-time', nullable: true },
+        draft: { type: 'boolean' },
+        prerelease: { type: 'boolean' },
+    },
+    required: [
+        'tag_name',
+        'name',
+        'body',
+        'published_at',
+        'draft',
+        'prerelease',
+    ],
+};
+
 const raceEntitySchema = {
     type: 'object',
     description:
@@ -403,6 +426,7 @@ export const openApiSpec = {
         { name: 'race', description: 'レース情報' },
         { name: 'player', description: '選手/騎手情報' },
         { name: 'push', description: 'Web Push 購読・発火予約' },
+        { name: 'release-notes', description: "更新履歴（What's New画面）" },
         {
             name: 'ui',
             description:
@@ -530,6 +554,32 @@ export const openApiSpec = {
                             'application/json': {
                                 schema: {
                                     $ref: '#/components/schemas/ErrorResponse',
+                                },
+                            },
+                        },
+                    },
+                    '429': tooManyRequestsResponse,
+                    '500': internalErrorResponse,
+                },
+            },
+        },
+        '/release-notes': {
+            get: {
+                tags: ['release-notes'],
+                summary: '更新履歴一覧取得',
+                description:
+                    "front の更新履歴（What's New）画面が表示するリリースノート一覧を、" +
+                    '公開日時の新しい順で返す。GitHub Releases APIと同じフィールド名（snake_case）。',
+                responses: {
+                    '200': {
+                        description: '正常',
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'array',
+                                    items: {
+                                        $ref: '#/components/schemas/ReleaseNote',
+                                    },
                                 },
                             },
                         },
@@ -1158,6 +1208,7 @@ export const openApiSpec = {
         schemas: {
             ErrorResponse: errorResponseSchema,
             Announcement: announcementSchemaDoc,
+            ReleaseNote: releaseNoteSchemaDoc,
             RaceDetailUi: raceDetailUiSchemaDoc,
             UpsertFailure: upsertFailureSchema,
             UpsertResult: upsertResultSchema,

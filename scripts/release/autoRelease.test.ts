@@ -23,10 +23,17 @@
  * | T-10 | ['none','none'] / 0 | eligible=false（noneを除外すると対象PRが無い） |
  * | T-12 | ['patch','minor'] / 0 | eligible=true, bumpLevel='minor'（minorも自動リリース対象） |
  * | T-13 | ['minor','minor'] / 0 | eligible=true, bumpLevel='minor' |
+ *
+ * ### buildReleaseNoteWritePayload
+ * | # | 入力 | 期待 |
+ * |---|------|------|
+ * | T-14 | GitHub Releaseレスポンス（name/bodyあり）+ sourceRepo | releaseの全フィールド + source_repo を含むオブジェクト |
+ * | T-15 | name/bodyがnull | nullがそのまま維持される |
  */
 import { describe, expect, it } from 'bun:test';
 
 import {
+    buildReleaseNoteWritePayload,
     computeNextVersion,
     determineAutoReleaseEligibility,
 } from './autoRelease';
@@ -140,5 +147,48 @@ describe('determineAutoReleaseEligibility', () => {
 
         expect(result.eligible).toBe(true);
         expect(result.bumpLevel).toBe('minor');
+    });
+});
+
+describe('buildReleaseNoteWritePayload', () => {
+    it('T-14_GitHub Releaseレスポンスの場合_source_repoを付与したオブジェクトを返す', () => {
+        const result = buildReleaseNoteWritePayload({
+            release: {
+                tag_name: 'v2.0.0',
+                name: 'v2.0.0',
+                body: '本文',
+                published_at: '2026-08-16T00:00:00Z',
+                draft: false,
+                prerelease: false,
+            },
+            sourceRepo: 'race-scheduler',
+        });
+
+        expect(result).toEqual({
+            tag_name: 'v2.0.0',
+            name: 'v2.0.0',
+            body: '本文',
+            published_at: '2026-08-16T00:00:00Z',
+            draft: false,
+            prerelease: false,
+            source_repo: 'race-scheduler',
+        });
+    });
+
+    it('T-15_name-bodyがnullの場合_nullのまま維持される', () => {
+        const result = buildReleaseNoteWritePayload({
+            release: {
+                tag_name: 'v2.0.0',
+                name: null,
+                body: null,
+                published_at: null,
+                draft: false,
+                prerelease: false,
+            },
+            sourceRepo: 'race-schedule',
+        });
+
+        expect(result.name).toBeNull();
+        expect(result.body).toBeNull();
     });
 });

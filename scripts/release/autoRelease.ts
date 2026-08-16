@@ -125,7 +125,33 @@ interface RunAutoReleaseParams {
     githubToken: string;
     owner: string;
     repo: string;
+    /**
+     * release_note テーブルへのdual-write先。省略時（ローカル実行等）はdual-writeをスキップする。
+     * `mainApiUrl`は本番API（`vars.MAIN_API_URL`）を指す。
+     */
+    mainApiUrl?: string;
+    serviceAuthToken?: string;
 }
+
+/**
+ * 作成直後のGitHub Releaseレスポンスから release_note テーブルへの書き込みペイロードを
+ * 組み立てる。GitHubのレスポンス形状をそのまま使うことで、front互換の形（ReleaseNote）と
+ * 一致させる。
+ */
+export const buildReleaseNoteWritePayload = (params: {
+    release: {
+        tag_name: string;
+        name: string | null;
+        body: string | null;
+        published_at: string | null;
+        draft: boolean;
+        prerelease: boolean;
+    };
+    sourceRepo: string;
+}) => ({
+    ...params.release,
+    source_repo: params.sourceRepo,
+});
 
 /** 自動リリースの判定・実行を行う。実行結果の説明文字列を返す。 */
 export const runAutoRelease = async (
@@ -186,7 +212,73 @@ export const runAutoRelease = async (
             `自動リリースの作成に失敗しました (HTTP ${response.status}): ${errorBody}`,
         );
     }
+    const createdRelease: unknown = await response.json();
+
+    // release_note テーブルへのdual-writeはあくまで補助的な複製（正の情報源はGitHub
+    // Release自体）のため、失敗してもリリース作成自体は成功として扱う（ベストエフォート）。
+    // 取りこぼした行は scripts/release/backfillReleaseNotes.ts の再実行で回収できる
+    // （(tag_name, source_repo) が一致する行は上書きされる冪等な設計）。
+    if (params.mainApiUrl && params.serviceAuthToken) {
+        try {
+            await writeReleaseNoteBestEffort({
+                mainApiUrl: params.mainApiUrl,
+                serviceAuthToken: params.serviceAuthToken,
+                release: createdRelease,
+                sourceRepo: params.repo,
+            });
+        } catch (error) {
+            console.warn(
+                `release_noteテーブルへのdual-writeに失敗しましたが、リリース作成自体は続行します: ${error}`,
+            );
+        }
+    }
+
     return `自動リリースを作成しました: ${nextVersion}（${eligibility.reason}）`;
+};
+
+interface CreatedReleaseResponse {
+    tag_name: string;
+    name: string | null;
+    body: string | null;
+    published_at: string | null;
+    draft: boolean;
+    prerelease: boolean;
+}
+
+const isCreatedReleaseResponse = (
+    value: unknown,
+): value is CreatedReleaseResponse =>
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { tag_name?: unknown }).tag_name === 'string';
+
+/** 作成直後のGitHub Releaseレスポンスを release_note テーブルへ書き込む（POST /release-notes）。 */
+const writeReleaseNoteBestEffort = async (params: {
+    mainApiUrl: string;
+    serviceAuthToken: string;
+    release: unknown;
+    sourceRepo: string;
+}): Promise<void> => {
+    if (!isCreatedReleaseResponse(params.release)) {
+        throw new Error('GitHub Releaseレスポンスの形式が想定と異なります');
+    }
+    const payload = buildReleaseNoteWritePayload({
+        release: params.release,
+        sourceRepo: params.sourceRepo,
+    });
+    const response = await fetch(`${params.mainApiUrl}/release-notes`, {
+        method: 'POST',
+        headers: {
+            'content-type': 'application/json',
+            'x-service-auth-token': params.serviceAuthToken,
+        },
+        body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+        throw new Error(
+            `release_notesへの書き込みに失敗しました (HTTP ${response.status})`,
+        );
+    }
 };
 
 if (import.meta.main) {
@@ -203,7 +295,13 @@ if (import.meta.main) {
     }
 
     try {
-        const result = await runAutoRelease({ githubToken, owner, repo });
+        const result = await runAutoRelease({
+            githubToken,
+            owner,
+            repo,
+            mainApiUrl: process.env.MAIN_API_URL,
+            serviceAuthToken: process.env.SERVICE_AUTH_TOKEN,
+        });
         console.log(result);
     } catch (error) {
         console.error(`自動リリース処理でエラーが発生しました: ${error}`);
