@@ -27,12 +27,20 @@
  * | # | 条件 | 期待 |
  * |---|------|------|
  * | T-13 | 入れ子の括弧 | 最外の対応する `)` の位置を返す |
+ *
+ * ### findPublicClassNames（QWB-07: widgetbook登録チェック対象クラスの抽出）
+ * | # | source | 期待 |
+ * |---|--------|------|
+ * | T-14 | 公開クラス1件 | クラス名を1件返す |
+ * | T-15 | 非公開クラス（`_`始まり）を含む | 非公開クラスは除外する |
+ * | T-16 | 同一ファイルに複数の公開クラス | 定義順に全件返す |
  */
 import { describe, expect, it } from 'bun:test';
 
 import {
     findDisallowedImports,
     findMatchingParen,
+    findPublicClassNames,
     findRoundedDecorations,
 } from './check-design-layers';
 
@@ -170,5 +178,34 @@ describe('findMatchingParen', () => {
         const source = 'f(g(1), 2)x';
 
         expect(findMatchingParen(source, 1)).toBe(source.indexOf(')x'));
+    });
+});
+
+describe('findPublicClassNames', () => {
+    it('T-14_公開クラス1件_クラス名を返す', () => {
+        const source = 'class Pill extends StatelessWidget {}';
+
+        expect(findPublicClassNames(source)).toEqual(['Pill']);
+    });
+
+    it('T-15_非公開クラスを含む_非公開クラスは除外する', () => {
+        const source = [
+            'class Pill extends StatelessWidget {}',
+            'class _IconBadge extends StatelessWidget {}',
+        ].join('\n');
+
+        expect(findPublicClassNames(source)).toEqual(['Pill']);
+    });
+
+    it('T-16_複数の公開クラス_定義順に全件返す', () => {
+        const source = [
+            'class SettingsGroup extends StatelessWidget {}',
+            'class SettingsToggleRow extends StatelessWidget {}',
+        ].join('\n');
+
+        expect(findPublicClassNames(source)).toEqual([
+            'SettingsGroup',
+            'SettingsToggleRow',
+        ]);
     });
 });

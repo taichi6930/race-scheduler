@@ -9,7 +9,7 @@
  * 三重目のコピーだった。「下の階層に有る部品を、上の階層で勝手に作り直す」ことを
  * レビューの目視だけで防ぐのは現実的でないため、CIでブロックする。
  *
- * ## 検証する2つのルール
+ * ## 検証する3つのルール
  *
  * **A. import方向**: 上位層は下位層のみを参照してよい。
  *   atoms → (design配下では何も参照しない) / molecules → atoms /
@@ -26,6 +26,14 @@
  *   "部品"ではなくレイアウトの一部なので意図的に対象外にしている。この線引きにより
  *   誤検知なしに「再実装されたチップ/ピル/カード」だけを検出できる。
  *
+ * **C. Widgetbookへの登録（QWB-07）**: `design/{atoms,molecules,organisms}/`
+ *   直下で定義した公開クラス（`_`始まりの非公開クラスは対象外）は、
+ *   `widgetbook.dart` のどこかにクラス名（識別子）が現れる＝カタログに
+ *   登録されている必要がある。判定は文字列一致（クラス名が単語境界で
+ *   1回でも出現するか）で十分とし、A/Bルールと同じ「文字列一致ベース」の
+ *   割り切りに揃える（`name: 'X'`ラベルでの登録・実際のコンストラクタ呼び出し
+ *   のどちらでも検出できる）。登録を忘れたまま埋もれる（QWB-01〜06の再発）のを防ぐ。
+ *
  * ## 使い方
  *
  *   bun run check:design-layers
@@ -40,6 +48,9 @@ import { join, relative } from 'node:path';
 
 const FRONT_LIB = 'packages/front/lib';
 const DESIGN_DIR = join(FRONT_LIB, 'design');
+const WIDGETBOOK_PATH = join(FRONT_LIB, 'widgetbook.dart');
+/** ルールCの検査対象レイヤー（widgetbookに登録が必要な層）。 */
+const WIDGETBOOK_CHECKED_LAYERS = ['atoms', 'molecules', 'organisms'];
 
 /** レイヤー名 → そのレイヤーが design 配下で import してよいレイヤー。 */
 const ALLOWED_IMPORTS: Record<string, readonly string[]> = {
@@ -68,7 +79,10 @@ const DECORATION_CONSTRUCTORS = [
 export interface Violation {
     readonly file: string;
     readonly line: number;
-    readonly rule: 'import-direction' | 'rounded-decoration';
+    readonly rule:
+        | 'import-direction'
+        | 'rounded-decoration'
+        | 'widgetbook-registration';
     readonly message: string;
 }
 
@@ -150,6 +164,15 @@ export const findDisallowedImports = (
 };
 
 /**
+ * ルールC: [source]（design/{atoms,molecules,organisms}配下のファイル）が
+ * トップレベルで定義する公開クラス名（`_`始まりの非公開クラスは除く）を返す。
+ */
+export const findPublicClassNames = (source: string): string[] =>
+    [...source.matchAll(/^class ([A-Za-z][A-Za-z0-9_]*)/gm)]
+        .map((m) => m[1])
+        .filter((name) => !name.startsWith('_'));
+
+/**
  * ルールB: [source] 内の「角丸を持つ装飾」（＝再実装されたピル/チップ/カード）
  * を検出する。角丸を持たない装飾（区切り線の `Border(bottom:)` や背景色だけの
  * `Material(color:)`）はレイアウトの一部なので検出しない。
@@ -212,6 +235,31 @@ export const collectViolations = (): Violation[] => {
                 rule: 'rounded-decoration',
                 message: `${constructor} に borderRadius を直接指定しています（角丸+塗りの"部品"は design/atoms/ のウィジェットとして定義し、ここではそれを組み合わせること）`,
             });
+        }
+    }
+
+    let widgetbookSource: string | undefined;
+    try {
+        widgetbookSource = readFileSync(WIDGETBOOK_PATH, 'utf8');
+    } catch {
+        widgetbookSource = undefined;
+    }
+    if (widgetbookSource !== undefined) {
+        for (const layer of WIDGETBOOK_CHECKED_LAYERS) {
+            for (const file of collectDartFiles(join(DESIGN_DIR, layer))) {
+                for (const className of findPublicClassNames(
+                    readFileSync(file, 'utf8'),
+                )) {
+                    if (new RegExp(`\\b${className}\\b`).test(widgetbookSource))
+                        continue;
+                    violations.push({
+                        file,
+                        line: 1,
+                        rule: 'widgetbook-registration',
+                        message: `クラス ${className} が widgetbook.dart に登録されていません（新しい部品は widgetbook.dart の該当カテゴリへ登録すること）`,
+                    });
+                }
+            }
         }
     }
 
