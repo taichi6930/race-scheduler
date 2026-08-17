@@ -93,6 +93,17 @@ export default defineConfig([
                     message:
                         'z.any() は禁止です。z.unknown() や具体的なスキーマを使用してください。',
                 },
+                {
+                    // QJST-04: `new Date('YYYY-MM-DD').toISOString().slice(0, 10)` は
+                    // UTC基準の日付になり、JSTの00:00〜09:00の間は前日の日付になる
+                    // （QJST-01/02で実際に admin ですり抜けていた不具合と同種）。
+                    // JST日付が必要な箇所は core の dateJst.ts（`getJstPart`等）や
+                    // `+09:00`オフセット付きのDateパースを使うこと。
+                    selector:
+                        "CallExpression[callee.property.name='slice'][arguments.0.value=0][arguments.1.value=10][callee.object.callee.property.name='toISOString']",
+                    message:
+                        'toISOString().slice(0, 10) はUTC基準の日付になりJSTとずれます。JST日付が必要な場合は core の dateJst.ts 等を使ってください。',
+                },
             ],
             // 別ワークスペースパッケージの内部 src へ相対パスで侵入することを禁止し、
             // 公開エントリ（@race-schedule/xxx）経由の import を強制する。

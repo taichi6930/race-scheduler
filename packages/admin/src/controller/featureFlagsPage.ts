@@ -44,7 +44,7 @@ const buildPageBody = (isProduction: boolean): string => {
 ${renderAdminHeader('機能フラグ管理', isProduction, '/flags')}
 <p class="hint">${hint}</p>
 <p id="loading" class="hint" role="status">読み込み中…</p>
-<p id="error" class="error" role="alert" hidden></p>
+<p id="error" class="error" role="alert" tabindex="-1" hidden></p>
 <p id="empty" class="hint" hidden>登録済みの機能フラグがありません。</p>
 <table id="flags" hidden>
   <thead>
@@ -69,9 +69,12 @@ const buildPageScript = (isProduction: boolean): string => `
   var tableEl = document.getElementById('flags');
   var tbodyEl = document.getElementById('flags-body');
 
+  // QADM-08: エラーはページ上部と離れた位置に出るため、スクリーンリーダー
+  // 利用者・目視の双方が見落とさないようエラー要素へフォーカスを移す。
   function showError(message) {
     errorEl.textContent = message;
     errorEl.hidden = false;
+    errorEl.focus();
   }
   function clearError() {
     errorEl.hidden = true;

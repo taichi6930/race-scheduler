@@ -18,6 +18,13 @@
  * | T-04 | 設定         | 0件                | GitHub Issue作成APIが呼ばれる（fetchがPOST /issuesを1回叩く） |
  * | T-05 | 設定         | 1件以上            | GitHub APIは呼ばれない（正常）                          |
  * | T-06 | 設定         | 例外を投げる        | catchされ警告ログ、GitHub APIは呼ばれない               |
+ *
+ * ## デシジョンテーブル（toQueryDate、QJST-07回帰）
+ *
+ * | #    | dateJst      | 期待挙動                                                    |
+ * |------|--------------|---------------------------------------------------------------|
+ * | T-07 | '2026-08-01' | JST深夜0時（=UTC前日15時）を表すDateになる（UTC深夜0時ではない） |
+ * | T-08 | '2026-08-01' | runDataFreshnessCheckがfetchへ渡すstartDateがJST深夜0時になる |
  */
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
@@ -28,6 +35,7 @@ import { container } from 'tsyringe';
 import {
     resolveTodayJst,
     runDataFreshnessCheck,
+    toQueryDate,
 } from '../../../src/utility/dataFreshnessCheck';
 
 interface FakeResponse {
@@ -82,6 +90,14 @@ describe('resolveTodayJst', () => {
     it('T-02: UTC 00:00はJSTで同日9時のため日付は変わらない', () => {
         expect(resolveTodayJst(new Date('2026-08-01T00:00:00Z'))).toBe(
             '2026-08-01',
+        );
+    });
+});
+
+describe('toQueryDate', () => {
+    it('T-07: JST深夜0時（UTC前日15時）を表すDateを返すこと', () => {
+        expect(toQueryDate('2026-08-01').toISOString()).toBe(
+            '2026-07-31T15:00:00.000Z',
         );
     });
 });
@@ -143,6 +159,24 @@ describe('runDataFreshnessCheck', () => {
 
         const writeCalls = calls.filter((c) => c.init?.method !== undefined);
         expect(writeCalls).toHaveLength(0);
+    });
+
+    it('T-08: fetchへ渡すstartDateがJST深夜0時になること', async () => {
+        EnvStore.setEnv({ ...MINIMAL_ENV, GITHUB_TOKEN: 'token' } as never, []);
+        const fetchSpy = mock((_params: unknown) => Promise.resolve([]));
+        container.register<MockRaceUsecase>(DI_TOKENS.RaceUsecase, {
+            useValue: { fetch: fetchSpy },
+        });
+        setFetch(() => Promise.resolve(okJson([])));
+
+        // UTC 05:00 = JST 14:00（当日）
+        await runDataFreshnessCheck(new Date('2026-08-01T05:00:00Z'));
+
+        const params = fetchSpy.mock.calls[0][0] as {
+            startDate: Date;
+            finishDate: Date;
+        };
+        expect(params.startDate.toISOString()).toBe('2026-07-31T15:00:00.000Z');
     });
 
     it('T-06: RaceUsecase.fetchが例外を投げてもスローせずGitHub APIは呼ばれない', async () => {

@@ -50,8 +50,9 @@ describe('admin/controller/renderFeatureFlagsPage', () => {
             '<p id="loading" class="hint" role="status">読み込み中…</p>',
         );
         expect(html).toContain(
-            '<p id="error" class="error" role="alert" hidden></p>',
+            '<p id="error" class="error" role="alert" tabindex="-1" hidden></p>',
         );
+        expect(html).toContain('errorEl.focus();');
         expect(html).toContain('loadingEl.hidden = true;');
     });
 });

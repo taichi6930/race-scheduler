@@ -32,18 +32,26 @@ const ALL_RACE_TYPES: RaceType[] = [
  */
 export function resolveTodayJst(now: Date): string {
     const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+    // QJST-04: ここは `now` へ既に+9時間を加算済み（=JST時刻をUTC値として
+    // 保持している）ため、toISOString().slice(0,10)はJST日付を正しく返す
+    // （lintルールが警告する「未加算のDateにそのまま呼ぶ」パターンとは異なる）。
+    // eslint-disable-next-line no-restricted-syntax
     return jst.toISOString().slice(0, 10);
 }
 
 /**
- * `resolveTodayJst`が返すYYYY-MM-DD文字列から、そのJST日付をUTC 0時として
+ * `resolveTodayJst`が返すYYYY-MM-DD文字列から、そのJST日付のJST深夜0時を
  * 表すDateを組み立てる（`searchRaceFilterParamsSchema`のstartDate/finishDateに
  * そのまま渡せる形。元のGitHub Actions版がHTTPクエリ文字列として渡していた
  * `startDate=finishDate=YYYY-MM-DD`と同じ範囲指定になる）。
+ * @remarks QJST-07: 以前は `T00:00:00.000Z`（UTC深夜0時）としてパースしていたが、
+ * `queryParamParser.ts`の`normalizeValue`と同じくJST深夜0時（`+09:00`）として
+ * 解釈しないと、DB検索の`startDate`（JST日付の最後へ調整されない側）がJST 9時
+ * 相当になり、当日0〜9時台のレースが集計から漏れる。
  * @param dateJst - YYYY-MM-DD形式の日付文字列
  */
-function toQueryDate(dateJst: string): Date {
-    return new Date(`${dateJst}T00:00:00.000Z`);
+export function toQueryDate(dateJst: string): Date {
+    return new Date(`${dateJst}T00:00:00+09:00`);
 }
 
 /**

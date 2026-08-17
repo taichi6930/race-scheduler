@@ -65,7 +65,7 @@ ${renderAdminHeader('レース詳細レイアウト編集キット（競輪）',
   <li>「プレビュー用レース」で確認したいレースを選び、「プレビュー」ボタンを押すと実際の値で解決した結果を下に表示します。</li>
   <li>内容に問題が無ければ「適用」ボタンで保存します。保存すると<strong>テスト環境・本番環境ともにレース詳細画面へすぐに反映されます</strong>。</li>
 </ol>
-<p id="error" class="error" role="alert" hidden></p>
+<p id="error" class="error" role="alert" tabindex="-1" hidden></p>
 <table id="fields" hidden>
   <caption>「フィールド」列のカッコ内は内部キーです。「表示ラベル」を入力すると既定のラベルの代わりに使われます。</caption>
   <thead>
@@ -80,7 +80,7 @@ ${renderAdminHeader('レース詳細レイアウト編集キット（競輪）',
   <button id="apply-button" type="button">適用</button>
 </div>
 <p class="apply-warning">「適用」は保存操作です。テスト環境・本番環境ともに即座にレース詳細画面へ反映されます。</p>
-<p id="preview-error" class="error" role="alert" hidden></p>
+<p id="preview-error" class="error" role="alert" tabindex="-1" hidden></p>
 <div id="preview-output" class="preview-output"></div>
 `;
 
@@ -119,9 +119,12 @@ const buildPageScript = (): string => `
   tbodyEl.addEventListener('change', markDirty);
   tbodyEl.addEventListener('input', markDirty);
 
+  // QADM-08: エラー要素は操作対象から離れた位置に出るため、スクリーンリーダー
+  // 利用者・目視の双方が見落とさないようエラー要素へフォーカスを移す。
   function showError(el, message) {
     el.textContent = message;
     el.hidden = false;
+    el.focus();
   }
   function clearError(el) {
     el.hidden = true;

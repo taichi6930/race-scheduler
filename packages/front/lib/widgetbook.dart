@@ -731,6 +731,12 @@ class WidgetbookApp extends StatelessWidget {
                         title: '既定フィルタ',
                         value: '重賞のみ',
                       ),
+                      SettingsActionRow(
+                        icon: '🔗',
+                        title: 'アカウント連携',
+                        actionLabel: '設定',
+                        onTap: () {},
+                      ),
                     ],
                   ),
                 ),
