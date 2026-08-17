@@ -32,6 +32,10 @@ const ALL_RACE_TYPES: RaceType[] = [
  */
 export function resolveTodayJst(now: Date): string {
     const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+    // QJST-04: ここは `now` へ既に+9時間を加算済み（=JST時刻をUTC値として
+    // 保持している）ため、toISOString().slice(0,10)はJST日付を正しく返す
+    // （lintルールが警告する「未加算のDateにそのまま呼ぶ」パターンとは異なる）。
+    // eslint-disable-next-line no-restricted-syntax
     return jst.toISOString().slice(0, 10);
 }
 
