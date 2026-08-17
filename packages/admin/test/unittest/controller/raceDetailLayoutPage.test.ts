@@ -75,11 +75,12 @@ describe('admin/controller/renderRaceDetailLayoutPage', () => {
         const html = renderRaceDetailLayoutPage(false);
 
         expect(html).toContain(
-            '<p id="error" class="error" role="alert" hidden></p>',
+            '<p id="error" class="error" role="alert" tabindex="-1" hidden></p>',
         );
         expect(html).toContain(
-            '<p id="preview-error" class="error" role="alert" hidden></p>',
+            '<p id="preview-error" class="error" role="alert" tabindex="-1" hidden></p>',
         );
+        expect(html).toContain('el.focus();');
         expect(html).toContain('function fetchWithTimeout(path, options)');
         expect(html).toContain(
             "fetchWithTimeout('/race-detail-layout/api/races')",

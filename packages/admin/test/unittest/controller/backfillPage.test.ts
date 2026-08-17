@@ -52,7 +52,7 @@ describe('admin/controller/renderBackfillPage', () => {
         const html = renderBackfillPage(false);
 
         expect(html).toContain(
-            '<p id="error" class="error" role="alert" hidden></p>',
+            '<p id="error" class="error" role="alert" tabindex="-1" hidden></p>',
         );
         expect(html).toContain(
             '<span id="running" class="hint" role="status" hidden>',
@@ -60,6 +60,7 @@ describe('admin/controller/renderBackfillPage', () => {
         expect(html).toContain(
             '<div id="result" class="group" role="status" hidden>',
         );
+        expect(html).toContain('errorEl.focus();');
         expect(html).toContain('function fetchWithTimeout(path, options)');
         expect(html).toContain('controller.abort();');
         expect(html).toContain(

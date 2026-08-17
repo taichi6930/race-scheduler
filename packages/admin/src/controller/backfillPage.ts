@@ -50,7 +50,7 @@ const buildPageBody = (isProduction: boolean): string => {
     return `
 ${renderAdminHeader('バックフィル実行', isProduction, '/backfill')}
 <p class="hint">R2に既にキャッシュされたHTMLだけを使って再パース・再Upsertします。生スクレイピング（対象サイトへの新規アクセス）は行いません。</p>
-<p id="error" class="error" role="alert" hidden></p>
+<p id="error" class="error" role="alert" tabindex="-1" hidden></p>
 <div class="group">
   <h2>レース種別</h2>
   ${raceTypeRows}
@@ -112,9 +112,12 @@ const buildPageScript = (isProduction: boolean): string => `
   document.getElementById('startDate').value = daysAgo(30);
   document.getElementById('finishDate').value = today();
 
+  // QADM-08: エラーはページ上部・結果はボタン下と離れた位置に出るため、
+  // スクリーンリーダー利用者・目視の双方が見落とさないようエラー要素へフォーカスを移す。
   function showError(message) {
     errorEl.textContent = message;
     errorEl.hidden = false;
+    errorEl.focus();
   }
   function clearError() {
     errorEl.hidden = true;
