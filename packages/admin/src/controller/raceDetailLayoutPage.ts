@@ -3,12 +3,7 @@ import {
     RACE_DETAIL_FIELDS,
 } from '@race-schedule/core';
 
-import {
-    CHROME_STYLE,
-    FRONT_COLORS,
-    faviconFor,
-    renderAdminHeader,
-} from './adminPageChrome';
+import { CHROME_STYLE, faviconFor, renderAdminHeader } from './adminPageChrome';
 
 /**
  * `GET /race-detail-layout` が返すレース詳細レイアウト編集キット画面のHTML
@@ -30,22 +25,22 @@ const FIELD_CATALOG = RACE_DETAIL_FIELD_KEYS.map((key) => ({
 
 const PAGE_STYLE = `
 ${CHROME_STYLE}
-.usage-steps { background: ${FRONT_COLORS.surface}; border: 1px solid ${FRONT_COLORS.line}; border-radius: 0.5rem; padding: 1rem 1rem 1rem 2rem; margin: 0.75rem 0; font-size: 0.875rem; line-height: 1.6; }
+.usage-steps { background: var(--surface); border: 1px solid var(--line); border-radius: 0.5rem; padding: 1rem 1rem 1rem 2rem; margin: 0.75rem 0; font-size: 0.875rem; line-height: 1.6; }
 .usage-steps li { margin-bottom: 0.25rem; }
 .usage-steps li:last-child { margin-bottom: 0; }
-table { border-collapse: collapse; width: 100%; margin-top: 1rem; background: ${FRONT_COLORS.surface}; }
-th, td { border: 1px solid ${FRONT_COLORS.line}; padding: 0.5rem; text-align: left; font-size: 0.875rem; }
-th { background: ${FRONT_COLORS.surface2}; }
-caption { caption-side: bottom; text-align: left; font-size: 0.8125rem; color: ${FRONT_COLORS.ink2}; padding-top: 0.5rem; }
+table { border-collapse: collapse; width: 100%; margin-top: 1rem; background: var(--surface); }
+th, td { border: 1px solid var(--line); padding: 0.5rem; text-align: left; font-size: 0.875rem; }
+th { background: var(--surface2); }
+caption { caption-side: bottom; text-align: left; font-size: 0.8125rem; color: var(--ink2); padding-top: 0.5rem; }
 td input[type="text"] { font-size: 0.875rem; padding: 0.25rem; width: 100%; box-sizing: border-box; }
 select { font-size: 0.875rem; padding: 0.35rem; }
-button { font-size: 0.875rem; padding: 0.35rem 0.9rem; border-radius: 0.375rem; border: none; background: ${FRONT_COLORS.brand}; color: #fff; cursor: pointer; }
-button.secondary { background: ${FRONT_COLORS.surface2}; color: ${FRONT_COLORS.ink}; border: 1px solid ${FRONT_COLORS.line}; }
+button { font-size: 0.875rem; padding: 0.35rem 0.9rem; border-radius: 0.375rem; border: none; background: var(--brand); color: #fff; cursor: pointer; }
+button.secondary { background: var(--surface2); color: var(--ink); border: 1px solid var(--line); }
 button:disabled { opacity: 0.5; cursor: default; }
 .move-buttons button { padding: 0.15rem 0.5rem; margin-right: 0.25rem; }
 .preview-controls { margin-top: 1.5rem; display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
 .preview-controls select#preview-race-select { min-width: 22rem; }
-.apply-warning { color: ${FRONT_COLORS.danger}; font-size: 0.8125rem; margin: 0.35rem 0 0; }
+.apply-warning { color: var(--danger); font-size: 0.8125rem; margin: 0.35rem 0 0; }
 .preview-output { margin-top: 1rem; }
 .preview-output table { margin-top: 0.5rem; }
 .preview-output h3 { font-size: 0.875rem; margin: 1rem 0 0.25rem; }
