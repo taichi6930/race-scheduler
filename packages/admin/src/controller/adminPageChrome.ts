@@ -25,6 +25,34 @@ export const FRONT_COLORS = {
 };
 
 /**
+ * front `AppColors.dark`（`packages/front/lib/design/tokens.dart`）由来の配色。
+ * ダークモード対応（QADM-09）で追加。front本体はOSのテーマに追従するため、
+ * 同じ運用者がfrontとadminを行き来したときの見た目の一貫性を保つ。
+ */
+export const FRONT_COLORS_DARK = {
+    bg: '#0C100D',
+    surface: '#161C18',
+    surface2: '#1D2420',
+    ink: '#E9EFE9',
+    ink2: '#A6AFA8',
+    line: '#28312B',
+    brand: '#52B487',
+    danger: '#FF5A5A',
+};
+
+/**
+ * 配色オブジェクトをCSSカスタムプロパティの宣言列に変換する。
+ * `:root` ブロックおよび `@media (prefers-color-scheme: dark)` 内の
+ * `:root` 上書きブロックの両方で使う（QADM-09）。
+ * @param colors - {@link FRONT_COLORS} または {@link FRONT_COLORS_DARK}
+ * @returns `--bg: #xxx; --surface: #xxx; ...` の形式の宣言列
+ */
+const cssColorVariables = (colors: typeof FRONT_COLORS): string =>
+    Object.entries(colors)
+        .map(([key, value]) => `--${key}: ${value};`)
+        .join(' ');
+
+/**
  * 環境に応じたfaviconのdata URIを選ぶ。
  * @param isProduction - production環境なら true
  * @returns favicon用data URI
@@ -85,19 +113,32 @@ export const renderAdminHeader = (
 `;
 };
 
-/** 全admin画面共通のCSS（ナビゲーション・見出し・環境バッジ・エラー表示）。 */
+/**
+ * 全admin画面共通のCSS（ナビゲーション・見出し・環境バッジ・エラー表示）。
+ *
+ * 配色はCSSカスタムプロパティ（`--bg`等）経由で参照する（QADM-09）。`:root` で
+ * {@link FRONT_COLORS}（ライトテーマ）を既定値として宣言し、
+ * `@media (prefers-color-scheme: dark)` で {@link FRONT_COLORS_DARK} に
+ * 差し替えることで、OSのダークモード設定に自動追従する。他ページ
+ * （`featureFlagsPage.ts`・`raceDetailLayoutPage.ts`・`backfillPage.ts`）の
+ * ページ固有スタイルも、このCSSが宣言する同じカスタムプロパティを参照する。
+ */
 export const CHROME_STYLE = `
-body { font-family: system-ui, -apple-system, sans-serif; margin: 2rem; color: ${FRONT_COLORS.ink}; background: ${FRONT_COLORS.bg}; }
+:root { ${cssColorVariables(FRONT_COLORS)} }
+@media (prefers-color-scheme: dark) {
+  :root { ${cssColorVariables(FRONT_COLORS_DARK)} }
+}
+body { font-family: system-ui, -apple-system, sans-serif; margin: 2rem; color: var(--ink); background: var(--bg); }
 .admin-nav { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1rem; }
 .nav-item { display: inline-block; padding: 0.35rem 0.8rem; border-radius: 0.5rem; font-size: 0.8125rem; text-decoration: none; }
-a.nav-item { color: ${FRONT_COLORS.ink2}; background: ${FRONT_COLORS.surface}; border: 1px solid ${FRONT_COLORS.line}; }
-a.nav-item:hover { border-color: ${FRONT_COLORS.brand}; color: ${FRONT_COLORS.brand}; }
-.nav-item.nav-current { color: #fff; background: ${FRONT_COLORS.brand}; font-weight: bold; }
-a.nav-item.nav-external { color: ${FRONT_COLORS.brand}; background: transparent; border: 1px dashed ${FRONT_COLORS.brand}; }
+a.nav-item { color: var(--ink2); background: var(--surface); border: 1px solid var(--line); }
+a.nav-item:hover { border-color: var(--brand); color: var(--brand); }
+.nav-item.nav-current { color: #fff; background: var(--brand); font-weight: bold; }
+a.nav-item.nav-external { color: var(--brand); background: transparent; border: 1px dashed var(--brand); }
 h1 { font-size: 1.25rem; margin-bottom: 0.25rem; display: inline-block; }
 .env-badge { display: inline-block; margin-left: 0.5rem; padding: 0.15rem 0.6rem; border-radius: 1rem; font-size: 0.75rem; font-weight: bold; color: #fff; vertical-align: middle; }
-.env-badge.test { background: ${FRONT_COLORS.brand}; }
-.env-badge.production { background: ${FRONT_COLORS.danger}; }
-.hint { color: ${FRONT_COLORS.ink2}; font-size: 0.875rem; margin-top: 0; }
-.error { color: ${FRONT_COLORS.danger}; }
+.env-badge.test { background: var(--brand); }
+.env-badge.production { background: var(--danger); }
+.hint { color: var(--ink2); font-size: 0.875rem; margin-top: 0; }
+.error { color: var(--danger); }
 `;
