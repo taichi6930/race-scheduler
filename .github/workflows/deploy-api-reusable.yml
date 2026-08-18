@@ -79,7 +79,15 @@ jobs:
 
           echo ""
           echo "=== Service-to-Service Auth Configuration ==="
-          [ -z "$SERVICE_AUTH_TOKEN" ] && echo "❌ SERVICE_AUTH_TOKEN: NOT SET" || echo "✅ SERVICE_AUTH_TOKEN: SET"
+          # Issue #2505（race-schedule）: batchパッケージのrace-scheduler移行時に
+          # SERVICE_AUTH_TOKENが未設定のままデプロイが成功し、他Worker側との認証が
+          # フェイルクローズ設計（SECURITY-15）により401で失敗し続けた。MAIN_API_URLと
+          # 同様、未設定を検知したら確実にデプロイを失敗させる。
+          if [ -z "$SERVICE_AUTH_TOKEN" ]; then
+            echo "::error::SERVICE_AUTH_TOKEN が未設定です。連携先Worker側に設定されている値と完全一致する値を、Settings → Environments → ${{ inputs.environment }} → Secrets に設定してください。"
+            exit 1
+          fi
+          echo "✅ SERVICE_AUTH_TOKEN: SET"
           [ -z "$SERVICE_AUTH_TOKEN_PREVIOUS" ] && echo "ℹ️  SERVICE_AUTH_TOKEN_PREVIOUS: NOT SET（ローテーション中のみ設定、通常は未設定でよい）" || echo "✅ SERVICE_AUTH_TOKEN_PREVIOUS: SET（ローテーション中）"
 
           echo ""
