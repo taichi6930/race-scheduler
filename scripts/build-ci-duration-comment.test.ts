@@ -36,10 +36,9 @@ import {
     buildComment,
     buildComparisonRows,
     buildDegradedComment,
-    onlyCompleted,
     parseArgs,
 } from './build-ci-duration-comment';
-import type { JobTiming } from './lib/ciDuration';
+import { type JobTiming, onlyCompleted } from './lib/ciDuration';
 
 const job = (
     name: string,
@@ -48,7 +47,7 @@ const job = (
 ): JobTiming => ({
     name,
     started_at: startedAt,
-    completed_at: completedAt as unknown as string,
+    completed_at: completedAt,
     conclusion: 'success',
 });
 
@@ -63,7 +62,7 @@ describe('buildComparisonRows', () => {
         ];
         const baseline = new Map<string, number>();
 
-        const rows = buildComparisonRows(timings, baseline);
+        const rows = buildComparisonRows(onlyCompleted(timings), baseline);
 
         expect(rows[0]?.isRegression).toBe(false);
         expect(rows[0]?.baseline).toBeUndefined();
@@ -80,7 +79,7 @@ describe('buildComparisonRows', () => {
         ];
         const baseline = new Map([['call-type-check', 25]]);
 
-        const rows = buildComparisonRows(timings, baseline);
+        const rows = buildComparisonRows(onlyCompleted(timings), baseline);
 
         expect(rows[0]?.isRegression).toBe(false);
     });
@@ -96,7 +95,7 @@ describe('buildComparisonRows', () => {
         ];
         const baseline = new Map([['test-packages-core', 100]]);
 
-        const rows = buildComparisonRows(timings, baseline);
+        const rows = buildComparisonRows(onlyCompleted(timings), baseline);
 
         expect(rows[0]?.isRegression).toBe(false);
         expect(rows[0]?.delta).toBe(20);
@@ -112,7 +111,7 @@ describe('buildComparisonRows', () => {
         ];
         const baseline = new Map([['call-build-test', 10]]);
 
-        const rows = buildComparisonRows(timings, baseline);
+        const rows = buildComparisonRows(onlyCompleted(timings), baseline);
 
         expect(rows[0]?.isRegression).toBe(true);
         expect(rows[0]?.delta).toBe(20);
@@ -125,7 +124,7 @@ describe('buildComparisonRows', () => {
         ];
         const baseline = new Map<string, number>();
 
-        const rows = buildComparisonRows(timings, baseline);
+        const rows = buildComparisonRows(onlyCompleted(timings), baseline);
 
         expect(rows.map((r) => r.name)).toEqual(['long-job', 'short-job']);
     });

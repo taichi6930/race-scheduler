@@ -17,7 +17,7 @@ export default defineConfig({
         { name: 'anti-slop', specifier: './tools/oxlint/anti-slop/index.ts' },
     ],
     rules: {
-        'anti-slop/no-chained-type-assertions': 'warn',
+        'anti-slop/no-chained-type-assertions': 'error',
         'anti-slop/no-conditional-empty-object-spread': 'error',
         'anti-slop/no-known-value-widening': 'warn',
         'anti-slop/no-module-mocking': 'warn',

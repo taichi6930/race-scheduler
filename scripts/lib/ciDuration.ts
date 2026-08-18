@@ -8,13 +8,34 @@
 
 import { execFileSync } from 'node:child_process';
 
-/** 1ジョブ分の開始・終了時刻 */
+/**
+ * 1ジョブ分の開始・終了時刻。
+ * `completed_at` はジョブが未完了（実行中）の間は GitHub API 上 null になりうる
+ * （{@link onlyCompleted} で除外してから {@link durationSeconds} 等に渡すこと）。
+ */
 export interface JobTiming {
     name: string;
     started_at: string;
-    completed_at: string;
+    completed_at: string | null;
     conclusion: string | null;
 }
+
+/** {@link onlyCompleted} で絞り込み済みの、必ず完了しているジョブ。 */
+export interface CompletedJobTiming extends JobTiming {
+    completed_at: string;
+}
+
+/**
+ * まだ完了していないジョブ（`completed_at` が null、例えば実行中のジョブ自身）を除外する。
+ * `new Date(null)` は 1970-01-01 に解決されてしまい、所要時間計算が破綻するため、
+ * {@link durationSeconds} を呼ぶ前に必ずこのフィルタを通す。
+ * @param timings - フィルタ対象のジョブ一覧
+ * @returns 完了済みジョブのみの一覧
+ */
+export const onlyCompleted = (timings: JobTiming[]): CompletedJobTiming[] =>
+    timings.filter(
+        (job): job is CompletedJobTiming => job.completed_at !== null,
+    );
 
 /**
  * `gh api` を実行し、標準出力を文字列で返す。
@@ -90,7 +111,7 @@ export const fetchJobTimings = (repo: string, runId: number): JobTiming[] => {
  * @param job - 対象ジョブの開始・終了時刻
  * @returns 実行時間（秒）
  */
-export const durationSeconds = (job: JobTiming): number =>
+export const durationSeconds = (job: CompletedJobTiming): number =>
     (new Date(job.completed_at).getTime() -
         new Date(job.started_at).getTime()) /
     1000;
@@ -114,7 +135,7 @@ export const totalBillableMinutes = (allTimings: JobTiming[][]): number =>
     allTimings.reduce(
         (sum, timings) =>
             sum +
-            timings.reduce(
+            onlyCompleted(timings).reduce(
                 (jobSum, job) => jobSum + billableMinutes(durationSeconds(job)),
                 0,
             ),
@@ -130,12 +151,13 @@ export const totalBillableMinutes = (allTimings: JobTiming[][]): number =>
  * @param timings - フィルタ対象のジョブ一覧
  * @returns skippedを除いたジョブ一覧
  */
-export const excludeSkipped = (timings: JobTiming[]): JobTiming[] =>
+export const excludeSkipped = <T extends JobTiming>(timings: T[]): T[] =>
     timings.filter((job) => job.conclusion !== 'skipped');
 
 /**
  * 複数run分のジョブ一覧を、ジョブ名ごとに実行時間（秒）のリストへグルーピングする。
- * skippedジョブは平均を歪めるため集計対象から除く（{@link excludeSkipped}）。
+ * 未完了ジョブは除外し（{@link onlyCompleted}）、skippedジョブは平均を歪めるため
+ * 集計対象から除く（{@link excludeSkipped}）。
  * @param allTimings - run単位のジョブ一覧（外側の配列が各run）
  * @returns ジョブ名 → 実行時間（秒）配列 のマップ
  */
@@ -144,7 +166,7 @@ export const groupByJobName = (
 ): Map<string, number[]> => {
     const byJob = new Map<string, number[]>();
     for (const timings of allTimings) {
-        for (const job of excludeSkipped(timings)) {
+        for (const job of excludeSkipped(onlyCompleted(timings))) {
             const list = byJob.get(job.name) ?? [];
             list.push(durationSeconds(job));
             byJob.set(job.name, list);

@@ -28,6 +28,11 @@
  * |---|---------|------|
  * | T-07 | conclusion='skipped'を含む一覧 | skippedのジョブが除外される |
  * | T-08 | groupByJobNameの集計 | skippedジョブが平均対象から除かれる |
+ *
+ * ### 未完了ジョブ（completed_at=null）の除外
+ * | # | 検証観点 | 期待 |
+ * |---|---------|------|
+ * | T-09 | totalBillableMinutes/groupByJobNameへ未完了ジョブが混在 | new Date(null)による1970年計算に汚染されず、完了済みジョブのみで集計される |
  */
 import { describe, expect, it } from 'bun:test';
 
@@ -63,7 +68,7 @@ describe('buildRecentRunsArgs', () => {
 const makeJob = (
     name: string,
     startedAt: string,
-    completedAt: string,
+    completedAt: string | null,
     conclusion: string | null = 'success',
 ): JobTiming => ({
     name,
@@ -155,5 +160,19 @@ describe('groupByJobName', () => {
         const byJob = groupByJobName([run1, run2, run3]);
 
         expect(byJob.get('call-workflow-hygiene-check')).toEqual([25]);
+    });
+});
+
+describe('未完了ジョブ（completed_at=null）の除外', () => {
+    it('[T-09] totalBillableMinutes/groupByJobNameが未完了ジョブをnew Date(null)で汚染せず除外すること', () => {
+        // 完了済み1件（45秒→1分）+ 未完了1件（completed_at=null、
+        // フィルタが無いと1970-01-01との差分でduration計算が破綻する）。
+        const run: JobTiming[] = [
+            makeJob('job-a', '2026-01-01T00:00:00Z', '2026-01-01T00:00:45Z'),
+            makeJob('job-a', '2026-01-01T00:01:00Z', null),
+        ];
+
+        expect(totalBillableMinutes([run])).toBe(1);
+        expect(groupByJobName([run]).get('job-a')).toEqual([45]);
     });
 });

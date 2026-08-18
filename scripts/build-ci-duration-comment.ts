@@ -18,12 +18,13 @@
 
 /* eslint-disable no-console */
 import {
+    type CompletedJobTiming,
     durationSeconds,
     excludeSkipped,
     fetchJobTimings,
     fetchRecentRunIds,
     groupByJobName,
-    type JobTiming,
+    onlyCompleted,
 } from './lib/ciDuration';
 
 const WORKFLOW_FILE = 'pull_request.yml';
@@ -110,7 +111,7 @@ const isRegression = (current: number, baseline: number): boolean =>
  * @returns 所要時間降順の比較行一覧
  */
 export const buildComparisonRows = (
-    currentTimings: JobTiming[],
+    currentTimings: CompletedJobTiming[],
     baseline: Map<string, number>,
 ): ComparisonRow[] =>
     currentTimings
@@ -172,16 +173,6 @@ export const buildComment = (
         '_このコメントは `.github/workflows/pull_request.yml` の `call-ci-duration-comment` ジョブにより自動更新されます（CICD-55）。_',
     ].join('\n');
 };
-
-/**
- * まだ完了していないジョブ（`completed_at` が null、例えばこのコメント投稿
- * ジョブ自身）を除外する。`new Date(null)` は 1970-01-01 に解決されてしまい、
- * 所要時間計算が破綻するため、完了済みジョブのみを対象にする。
- * @param timings - フィルタ対象のジョブ一覧
- * @returns 完了済みジョブのみの一覧
- */
-export const onlyCompleted = (timings: JobTiming[]): JobTiming[] =>
-    timings.filter((job) => Boolean(job.completed_at));
 
 /**
  * GitHub API呼び出し失敗時の代替コメント本文を組み立てる。
