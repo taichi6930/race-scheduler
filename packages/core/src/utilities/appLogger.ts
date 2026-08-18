@@ -86,6 +86,7 @@ const isStructuredLoggingEnabled = (): boolean =>
  * @param args - `appLogger.*` に渡された可変長引数
  * @returns `meta` フィールドの値（引数が無ければ `undefined`）
  */
+// oxlint-disable-next-line anti-slop/no-unknown-returns -- ログの補足情報は形状不定で、そのまま構造化ログのmetaへ渡すだけのためunknownが唯一正直な型
 const buildMeta = (args: unknown[]): unknown => {
     if (args.length === 0) {
         return;

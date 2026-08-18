@@ -69,6 +69,7 @@ type RaceRow = z.infer<typeof raceRowSchema>;
  * 生 DB 行を検証する（PlayerRepository の様式に準拠）。
  * @param row - Drizzle から返された生の race 行
  */
+// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Drizzleから返る生DB行をZodで検証する前の中間表現のため、Record<string, unknown>が正しい
 const validateRaceRow = (row: Record<string, unknown>): RaceRow => {
     const rowValidationResult = raceRowSchema.safeParse(row);
     if (!rowValidationResult.success) {
@@ -188,6 +189,7 @@ const buildValidatedRaceEntity = (rawEntity: unknown): RaceEntity => {
  * DBから返されるRaceのRawデータをEntityに変換し、同時にスキーマで検証
  */
 export const RaceMapper = {
+    // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- validateRaceRowと同じ、検証前の生DB行
     toEntity(row: Record<string, unknown>): RaceEntity {
         const validatedRow = validateRaceRow(row);
 

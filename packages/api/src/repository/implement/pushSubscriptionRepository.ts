@@ -1,5 +1,5 @@
 import { DI_TOKENS, LogAllMethods } from '@race-schedule/core';
-import { eq, inArray, lt, sql } from 'drizzle-orm';
+import { eq, inArray, lt, type SQL, sql } from 'drizzle-orm';
 import { inject, injectable } from 'tsyringe';
 
 import { pushNotificationRequest, pushSubscription } from '../../db/schema';
@@ -28,22 +28,30 @@ export class PushSubscriptionRepository implements IPushSubscriptionRepository {
         // SEC-053: PUSH_AUTH_ENCRYPTION_KEY設定時はauthを暗号化して保存する
         // （未設定時はencryptPushAuthが平文をそのまま返す）。
         const encryptedAuth = await encryptPushAuth(record.auth);
+        const updateValues: {
+            endpoint: string;
+            p256dh: string;
+            auth: string;
+            updatedAt: SQL;
+            secretHash?: string;
+        } = {
+            endpoint: record.endpoint,
+            p256dh: record.p256dh,
+            auth: encryptedAuth,
+            updatedAt: sql`CURRENT_TIMESTAMP`,
+        };
+        // secretHash未指定（既存行の検証済みupsert）の場合は
+        // 既存の secret_hash を上書きしない（push-ownership-design.md §2.4）。
+        if (record.secretHash !== undefined) {
+            updateValues.secretHash = record.secretHash;
+        }
+
         await this.drizzleGateway.db
             .insert(pushSubscription)
             .values({ ...record, auth: encryptedAuth })
             .onConflictDoUpdate({
                 target: pushSubscription.id,
-                set: {
-                    endpoint: record.endpoint,
-                    p256dh: record.p256dh,
-                    auth: encryptedAuth,
-                    updatedAt: sql`CURRENT_TIMESTAMP`,
-                    // secretHash未指定（既存行の検証済みupsert）の場合は
-                    // 既存の secret_hash を上書きしない（push-ownership-design.md §2.4）。
-                    ...(record.secretHash === undefined
-                        ? {}
-                        : { secretHash: record.secretHash }),
-                },
+                set: updateValues,
             });
     }
 

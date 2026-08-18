@@ -16,7 +16,7 @@ import {
 } from '../domain/rule/raceInvariants';
 import { findPlaceNameByCode } from '../domain/service/courseCode/officialCourseCode';
 import { composePlaceId } from '../domain/service/identifier/composePlaceId';
-import { createPlaceEntityBaseShape } from '../schemas/placeEntityShape';
+import { createPlaceEntityBaseFields } from '../schemas/placeEntityShape';
 
 /**
  * 開催場情報を表すエンティティのzod型定義
@@ -26,7 +26,7 @@ import { createPlaceEntityBaseShape } from '../schemas/placeEntityShape';
  */
 export const PlaceEntitySchema = z
     .object({
-        ...createPlaceEntityBaseShape(),
+        ...createPlaceEntityBaseFields(),
         /** 開催日付 */
         datetime: RaceDateTimeSchema,
     })

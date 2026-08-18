@@ -21,6 +21,7 @@ const placeListResponseSchema = z.record(z.string(), z.unknown());
 /** JSON 応答内の1件分の生レコード（`datetime` が文字列で届く想定） */
 interface RawPlaceRecord {
     datetime?: unknown;
+    // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- HTTPレスポンスをvalidatePlaceEntity（Zod）で検証する前の生JSON中間表現のため、unknownが正直な型
     [key: string]: unknown;
 }
 

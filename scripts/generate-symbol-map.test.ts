@@ -103,6 +103,7 @@ type BuildSymbolMapFsDeps = Parameters<typeof buildSymbolMap>[1];
 
 describe('resolveModuleFile', () => {
     it('[T-09] <dir>/x.ts が存在する場合はそのパスを返すこと', () => {
+        // oxlint-disable-next-line anti-slop/no-chained-type-assertions
         const fsDeps = {
             existsSync: (p: string) => p.endsWith('x.ts'),
             statSync: () => ({}),
@@ -113,6 +114,7 @@ describe('resolveModuleFile', () => {
     });
 
     it('[T-10] x.ts が無く x/index.ts が存在する場合はディレクトリindexを返すこと', () => {
+        // oxlint-disable-next-line anti-slop/no-chained-type-assertions
         const fsDeps = {
             existsSync: (p: string) => p.endsWith('index.ts'),
             statSync: () => ({}),
@@ -123,6 +125,7 @@ describe('resolveModuleFile', () => {
     });
 
     it('[T-11] どちらも存在しない場合はnullを返すこと', () => {
+        // oxlint-disable-next-line anti-slop/no-chained-type-assertions
         const fsDeps = {
             existsSync: () => false,
             statSync: () => ({}),
@@ -138,6 +141,7 @@ describe('buildSymbolMap', () => {
         const files = new Map<string, string>([
             ['/core/src/withBarrel/index.ts', "export * from './a';"],
         ]);
+        // oxlint-disable-next-line anti-slop/no-chained-type-assertions
         const fsDeps = {
             readdirSync: () => [
                 { name: 'withBarrel', isDirectory: () => true },
@@ -162,6 +166,7 @@ describe('buildSymbolMap', () => {
             ],
             ['/core/src/mixed/a.ts', 'export const A = 1;'],
         ]);
+        // oxlint-disable-next-line anti-slop/no-chained-type-assertions
         const fsDeps = {
             readdirSync: () => [{ name: 'mixed', isDirectory: () => true }],
             readFileSync: (p: string) => files.get(p) ?? '',

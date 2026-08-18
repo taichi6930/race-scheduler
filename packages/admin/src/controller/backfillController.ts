@@ -8,6 +8,10 @@ import {
 import { inject, injectable } from 'tsyringe';
 import { z } from 'zod';
 
+import type {
+    BackfillPlaceResult,
+    BackfillRaceResult,
+} from '../dto/backfillResult';
 import type { IBackfillUsecase } from '../usecase/interface/IBackfillUsecase';
 import { isProductionAdmin } from '../utility/isProductionAdmin';
 import { renderBackfillPage } from './backfillPage';
@@ -77,7 +81,7 @@ export class BackfillController {
         invoke: (
             usecase: IBackfillUsecase,
             filter: z.infer<typeof BackfillRequestSchema>,
-        ) => Promise<unknown>,
+        ) => Promise<BackfillPlaceResult | BackfillRaceResult>,
     ): Promise<Response> {
         try {
             const body: unknown = await request.json();

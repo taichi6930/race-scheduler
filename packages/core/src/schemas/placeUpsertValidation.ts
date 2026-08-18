@@ -14,11 +14,11 @@ import {
     extractIndexedIssue,
     formatZodIssues,
 } from './common';
-import { createPlaceEntityBaseShape } from './placeEntityShape';
+import { createPlaceEntityBaseFields } from './placeEntityShape';
 
 const PlaceEntityUpsertItemSchema = z
     .object({
-        ...createPlaceEntityBaseShape(),
+        ...createPlaceEntityBaseFields(),
         /**
          * Upsert用のdatetime定義（Entityと異なりJSON入力からの文字列を
          * Date型へ自動変換するpreprocessを持つ）

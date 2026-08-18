@@ -59,6 +59,7 @@ describe('checkSync', () => {
         expect(issues).toEqual([
             {
                 kind: 'broken-link',
+                // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- expect.stringContaining()の非対称マッチャー型をdetail:stringへ橋渡しするテスト定型句
                 detail: expect.stringContaining(
                     'api/README.md',
                 ) as unknown as string,
@@ -71,6 +72,7 @@ describe('checkSync', () => {
         expect(issues).toEqual([
             {
                 kind: 'undocumented-package',
+                // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- expect.stringContaining()の非対称マッチャー型をdetail:stringへ橋渡しするテスト定型句
                 detail: expect.stringContaining('newpkg') as unknown as string,
             },
         ]);

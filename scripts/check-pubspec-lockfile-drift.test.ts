@@ -121,6 +121,7 @@ describe('checkDrift', () => {
             {
                 name: 'foo',
                 kind: 'missing-in-lock',
+                // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- expect.stringContaining()の非対称マッチャー型をdetail:stringへ橋渡しするテスト定型句
                 detail: expect.stringContaining('^1.0.0') as unknown as string,
             },
         ]);

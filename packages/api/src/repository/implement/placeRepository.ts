@@ -113,6 +113,7 @@ interface MapPlaceRowResult {
  * @param isGradeTarget - placeGrade を Entity に含めるか
  */
 const mapPlaceRowToEntity = (
+    // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Drizzleから返る生DB行を検証しながら変換する境界の中間表現のため、Record<string, unknown>が正しい
     row: Record<string, unknown>,
     isGradeTarget: boolean,
 ): MapPlaceRowResult => {
@@ -320,6 +321,7 @@ export class PlaceRepository implements IPlaceRepository {
      * @param isGradeTarget - placeGrade を Entity に含めるか
      */
     private async mapRowsAndRecordWarnings(
+        // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- mapPlaceRowToEntityと同じ、検証前の生DB行一覧
         rows: Record<string, unknown>[],
         isGradeTarget: boolean,
     ): Promise<PlaceEntity[]> {

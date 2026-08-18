@@ -144,6 +144,8 @@ export const setupMiniflareEnv = async (): Promise<MiniflareTestEnv> => {
     const db = await mf.getD1Database('DB');
     const r2 = await mf.getR2Bucket('R2_BUCKET');
 
+    // SAFETY: 下記コメントの通りworkerd実装とアンビエント型の非互換は既知かつ無害。
+    // oxlint-disable-next-line anti-slop/no-chained-type-assertions
     await applyMigrations(db as unknown as D1Database);
 
     return {
@@ -153,7 +155,10 @@ export const setupMiniflareEnv = async (): Promise<MiniflareTestEnv> => {
         // @cloudflare/workers-types 版で異なる）。実行時の挙動は本物の D1/R2 であり、
         // 呼び出し側が使うメソッド（prepare/exec/put/get 等）の実体は満たしているため、
         // unknown 経由でのキャストにとどめる（as any は使わない）。
+        // SAFETY: 上記の通りworkerd実装とアンビエント型の非互換は既知かつ無害。
+        // oxlint-disable-next-line anti-slop/no-chained-type-assertions
         db: db as unknown as D1Database,
+        // oxlint-disable-next-line anti-slop/no-chained-type-assertions
         r2: r2 as unknown as R2Bucket,
         dispose: () => mf.dispose(),
     };
