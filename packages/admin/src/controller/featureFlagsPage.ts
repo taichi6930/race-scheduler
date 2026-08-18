@@ -1,9 +1,4 @@
-import {
-    CHROME_STYLE,
-    FRONT_COLORS,
-    faviconFor,
-    renderAdminHeader,
-} from './adminPageChrome';
+import { CHROME_STYLE, faviconFor, renderAdminHeader } from './adminPageChrome';
 
 /**
  * `GET /flags` が返す機能フラグ管理画面のHTML（admin-package-design.md 参照）。
@@ -17,15 +12,15 @@ import {
 
 const PAGE_STYLE = `
 ${CHROME_STYLE}
-table { border-collapse: collapse; width: 100%; margin-top: 1rem; background: ${FRONT_COLORS.surface}; }
-th, td { border: 1px solid ${FRONT_COLORS.line}; padding: 0.5rem; text-align: left; font-size: 0.875rem; }
-th { background: ${FRONT_COLORS.surface2}; }
+table { border-collapse: collapse; width: 100%; margin-top: 1rem; background: var(--surface); }
+th, td { border: 1px solid var(--line); padding: 0.5rem; text-align: left; font-size: 0.875rem; }
+th { background: var(--surface2); }
 .switch-cell { display: flex; align-items: center; gap: 0.5rem; }
 .switch { position: relative; display: inline-block; width: 2.75rem; height: 1.5rem; flex-shrink: 0; }
 .switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
 .switch .slider { position: absolute; inset: 0; background: #ccc; border-radius: 1.5rem; transition: background-color 0.15s; pointer-events: none; }
 .switch .slider::before { content: ""; position: absolute; left: 0.15rem; top: 0.15rem; width: 1.2rem; height: 1.2rem; background: #fff; border-radius: 50%; transition: transform 0.15s; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); }
-.switch input:checked + .slider { background: ${FRONT_COLORS.brand}; }
+.switch input:checked + .slider { background: var(--brand); }
 .switch input:checked + .slider::before { transform: translateX(1.25rem); }
 .switch input:disabled + .slider { opacity: 0.5; }
 .switch-state { font-size: 0.875rem; }

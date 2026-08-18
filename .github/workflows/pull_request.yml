@@ -278,6 +278,16 @@ jobs:
         run: bun run check:cron-sync
       - name: Check Node.js major version is in sync (.nvmrc ⇔ package.json ⇔ dependabot.yml)
         run: bun run check:node-version-sync
+      - name: Check grade master is in sync (core gradeMaster.ts ⇔ front grade_tier.dart)
+        run: bun run check:grade-master-sync
+      - name: Check RaceType values are in sync (core raceType.ts ⇔ front race_type.dart)
+        run: bun run check:race-type-sync
+      - name: Check push Service Worker script/scope are in sync (app-bootstrap.js ⇔ web_push_client_web.dart)
+        run: bun run check:push-sw-scope-sync
+      - name: Check app name/description are in sync across manifest/index.html/app.dart
+        run: bun run check:app-name-sync
+      - name: Check admin colors are in sync with front tokens.dart
+        run: bun run check:admin-color-drift
 
   # ワークフロー変更時のジョブ数・timeout-minutes・キャッシュ有無をレポート（CICD-56）
   # + actionlintによる設定ミス検知（CICD-57、hashFilesの存在しないファイル参照や

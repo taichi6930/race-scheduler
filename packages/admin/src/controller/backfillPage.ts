@@ -1,11 +1,6 @@
 import { RaceType } from '@race-schedule/core';
 
-import {
-    CHROME_STYLE,
-    FRONT_COLORS,
-    faviconFor,
-    renderAdminHeader,
-} from './adminPageChrome';
+import { CHROME_STYLE, faviconFor, renderAdminHeader } from './adminPageChrome';
 
 /**
  * `GET /backfill` が返すバックフィル（R2キャッシュのみでの再同期）実行画面の
@@ -22,13 +17,13 @@ const RACE_TYPE_VALUES: readonly string[] = Object.values(RaceType);
 
 const PAGE_STYLE = `
 ${CHROME_STYLE}
-.group { background: ${FRONT_COLORS.surface}; border: 1px solid ${FRONT_COLORS.line}; border-radius: 0.5rem; padding: 1rem; margin-top: 1rem; }
+.group { background: var(--surface); border: 1px solid var(--line); border-radius: 0.5rem; padding: 1rem; margin-top: 1rem; }
 .group h2 { font-size: 0.9375rem; margin: 0 0 0.75rem; }
 .checkbox-row { display: flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0; font-size: 0.875rem; }
 .field-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0; font-size: 0.875rem; }
 .field-row label { width: 6rem; flex-shrink: 0; }
 input[type="date"], select { font-size: 0.875rem; padding: 0.25rem; }
-button { font-size: 0.875rem; padding: 0.4rem 1rem; border-radius: 0.375rem; border: none; background: ${FRONT_COLORS.brand}; color: #fff; cursor: pointer; }
+button { font-size: 0.875rem; padding: 0.4rem 1rem; border-radius: 0.375rem; border: none; background: var(--brand); color: #fff; cursor: pointer; }
 button:disabled { opacity: 0.5; cursor: default; }
 .result { font-size: 0.875rem; margin-top: 0.5rem; }
 `;

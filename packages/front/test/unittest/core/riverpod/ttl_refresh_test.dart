@@ -1,4 +1,4 @@
-// scheduleTtlInvalidate のデシジョンテーブル
+// scheduleTtlInvalidate / shouldInvalidateOnResume のデシジョンテーブル
 //
 // | ID   | 条件                                  | 期待                                    |
 // | ---- | ------------------------------------- | ------------------------------------------ |
@@ -6,6 +6,8 @@
 // | T-02 | TTL経過後に参照                       | 自動的に再取得され値が更新される          |
 // | T-03 | TTL経過を1サイクル超えて繰り返す      | build のたびにタイマーが張り直され続ける  |
 // | T-04 | providerが破棄された後にTTLが経過     | タイマーが解放されエラーにならない        |
+// | T-05 | 非表示時間がTTL未満（QLIFE-01）       | shouldInvalidateOnResume は false         |
+// | T-06 | 非表示時間がTTLちょうど・超過（QLIFE-01） | shouldInvalidateOnResume は true      |
 
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -92,6 +94,35 @@ void main() {
           returnsNormally,
         );
       });
+    });
+  });
+
+  group('shouldInvalidateOnResume', () {
+    test('[T-05] 非表示時間がTTL未満_falseを返すこと', () {
+      expect(
+        shouldInvalidateOnResume(
+          const Duration(minutes: 14),
+          const Duration(minutes: 15),
+        ),
+        isFalse,
+      );
+    });
+
+    test('[T-06] 非表示時間がTTLちょうど・超過_trueを返すこと', () {
+      expect(
+        shouldInvalidateOnResume(
+          const Duration(minutes: 15),
+          const Duration(minutes: 15),
+        ),
+        isTrue,
+      );
+      expect(
+        shouldInvalidateOnResume(
+          const Duration(minutes: 20),
+          const Duration(minutes: 15),
+        ),
+        isTrue,
+      );
     });
   });
 }

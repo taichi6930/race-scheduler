@@ -15,12 +15,21 @@
  * | 3 | '/flags'     | '/flags'は現在地表示、'/backfill'はリンクとして出る    |
  * | 4 | '/backfill'  | '/backfill'は現在地表示、'/flags'はリンクとして出る、Widgetbookへの外部リンクが出る |
  *
+ * ### CHROME_STYLE（QADM-09: ダークモード対応）
+ * | # | 期待値 |
+ * |---|--------|
+ * | 5 | `:root` にライトテーマのCSSカスタムプロパティを宣言している |
+ * | 6 | `@media (prefers-color-scheme: dark)` でダークテーマの値に上書きしている |
+ *
  * ## カバレッジ目標: 行・分岐カバレッジ 100%
  */
 
 import { describe, expect, it } from 'bun:test';
 
 import {
+    CHROME_STYLE,
+    FRONT_COLORS,
+    FRONT_COLORS_DARK,
     faviconFor,
     renderAdminHeader,
 } from '../../../src/controller/adminPageChrome';
@@ -63,6 +72,24 @@ describe('admin/controller/renderAdminHeader', () => {
         expect(html).toContain('env-badge production">本番環境');
         expect(html).toContain(
             '<a class="nav-item nav-external" href="https://race-schedule-widgetbook.pages.dev" target="_blank" rel="noopener noreferrer">Widgetbook（デザインカタログ） ↗</a>',
+        );
+    });
+});
+
+describe('admin/controller/CHROME_STYLE', () => {
+    it('5: :rootにライトテーマ（FRONT_COLORS）のCSSカスタムプロパティを宣言していること', () => {
+        expect(CHROME_STYLE).toContain(`--bg: ${FRONT_COLORS.bg};`);
+        expect(CHROME_STYLE).toContain(`--brand: ${FRONT_COLORS.brand};`);
+    });
+
+    it('6: prefers-color-scheme: darkでダークテーマ（FRONT_COLORS_DARK）の値に上書きしていること', () => {
+        const darkBlockMatch = CHROME_STYLE.match(
+            /@media \(prefers-color-scheme: dark\) \{([\s\S]*?)\}\n\}/,
+        );
+        expect(darkBlockMatch).not.toBeNull();
+        expect(darkBlockMatch?.[1]).toContain(`--bg: ${FRONT_COLORS_DARK.bg};`);
+        expect(darkBlockMatch?.[1]).toContain(
+            `--brand: ${FRONT_COLORS_DARK.brand};`,
         );
     });
 });
