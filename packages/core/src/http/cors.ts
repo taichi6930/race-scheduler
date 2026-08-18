@@ -42,7 +42,7 @@ const ALLOWED_HEADERS = 'Content-Type';
  * @returns production 環境であれば true
  */
 const isProductionEnv = (): boolean =>
-    typeof process !== 'undefined' && process.env.NODE_ENV === 'production';
+    globalThis.process?.env.NODE_ENV === 'production';
 
 /**
  * production 環境で `CORS_ALLOWED_ORIGINS` にワイルドカード（`*`）が
@@ -129,10 +129,7 @@ const isAllowedOriginsCacheStale = (
 export const getAllowedOrigins = (overrideRaw?: string): string[] => {
     // 複合条件（&&）をガード節に分解し、C2組み合わせテストを回避する。
     // process が存在しない環境（Workers等）では undefined を使う。
-    const processOriginsRaw =
-        typeof process === 'undefined'
-            ? undefined
-            : process.env.CORS_ALLOWED_ORIGINS;
+    const processOriginsRaw = globalThis.process?.env.CORS_ALLOWED_ORIGINS;
     const envOriginsRaw = overrideRaw ?? processOriginsRaw;
 
     const isProduction = isProductionEnv();

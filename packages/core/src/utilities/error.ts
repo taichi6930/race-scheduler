@@ -2,6 +2,7 @@ import { json } from '../http/response';
 import { appLogger } from './appLogger';
 import { isInternalServiceCall } from './requestContext';
 import { sanitizeError } from './sanitizeLog';
+import { isStringValue } from './validation';
 import { ValidationError } from './validationError';
 
 /**
@@ -34,8 +35,8 @@ export const resolveInternalErrorMessage = (error: unknown): string => {
         return GENERIC_INTERNAL_ERROR_MESSAGE;
     }
     const { name, message } = sanitizeError(error);
-    return typeof message === 'string'
-        ? `${typeof name === 'string' ? name : 'Error'}: ${message}`
+    return isStringValue(message)
+        ? `${isStringValue(name) ? name : 'Error'}: ${message}`
         : GENERIC_INTERNAL_ERROR_MESSAGE;
 };
 

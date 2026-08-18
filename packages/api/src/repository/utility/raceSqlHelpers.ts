@@ -85,9 +85,9 @@ export const toRaceInsertRow = (entity: RaceEntity) => ({
     raceType: entity.raceType,
     raceName: entity.raceName,
     dateTime:
-        typeof entity.datetime === 'string'
-            ? entity.datetime
-            : toJstISOString(entity.datetime),
+        entity.datetime instanceof Date
+            ? toJstISOString(entity.datetime)
+            : entity.datetime,
     locationCode: entity.locationCode,
     grade: entity.raceGrade,
     raceNumber: entity.raceNumber,

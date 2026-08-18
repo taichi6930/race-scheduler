@@ -33,8 +33,8 @@ export const formatEntities = <
         ...entity,
         ...(augment?.(entity) ?? ({} as A)),
         datetime:
-            typeof entity.datetime === 'string'
-                ? entity.datetime
-                : toJstISOString(entity.datetime),
+            entity.datetime instanceof Date
+                ? toJstISOString(entity.datetime)
+                : entity.datetime,
     }));
 };

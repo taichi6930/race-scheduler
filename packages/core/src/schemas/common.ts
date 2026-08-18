@@ -2,11 +2,15 @@ import type { ZodType } from 'zod';
 import { z } from 'zod';
 
 import { appLogger } from '../utilities/appLogger';
+import { isStringValue } from '../utilities/validation';
 import { ValidationError } from '../utilities/validationError';
 import { raceTypeArraySchema } from './raceValidation';
 
 /**
  * RaceTypeList を正規化する（文字列またはカンマ区切り文字列を配列に変換）
+ * `value` の型は `string | string[]` だが、Zodの`.transform()`は実行時に型定義を
+ * 超えた値（例: 数値）を渡し得るため、防御的に isStringValue で確認する
+ * （T-05: 非文字列・非配列の入力は空配列を返す）。
  * @param value
  */
 export const normalizeRaceTypeList = (value: string | string[]): string[] => {
@@ -14,7 +18,7 @@ export const normalizeRaceTypeList = (value: string | string[]): string[] => {
         return value;
     }
     // カンマ区切りの文字列を分割、または単一の値を配列にラップ
-    if (typeof value === 'string') {
+    if (isStringValue(value)) {
         if (value.includes(',')) {
             return value.split(',').map((v) => v.trim());
         }
@@ -98,6 +102,16 @@ export interface IndexedIssue {
 }
 
 /**
+ * 値が配列インデックス（number）かどうかを判定する型ガード。
+ * Zod issue の path 要素は `PropertyKey`（string | number | symbol）のため、
+ * typeof を呼び出し側へ直接書かせず名前付き述語関数として切り出す。
+ * @param value - 判定対象の値（Zod issue の path 要素）
+ * @returns number であれば true
+ */
+const isNumericIndex = (value: PropertyKey): value is number =>
+    typeof value === 'number';
+
+/**
  * Zod issue の先頭要素が「配列インデックスに紐づく検証エラー」であれば、
  * そのインデックスとメッセージを取り出す。
  * `issue && typeof issue.path[0] === 'number'` という複合条件を独立関数へ切り出し、
@@ -112,7 +126,7 @@ export const extractIndexedIssue = (
         return;
     }
     const index = issue.path[0];
-    return typeof index === 'number'
+    return isNumericIndex(index)
         ? { index, message: issue.message }
         : undefined;
 };

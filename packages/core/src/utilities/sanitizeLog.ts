@@ -19,6 +19,8 @@
  *   独自の長期保管は行わない。
  */
 
+import { isNonNullObject, isStringValue } from './validation';
+
 /** マスク対象のキー名パターン（大文字小文字を無視して一致したキー値をマスク） */
 const SENSITIVE_KEY_PATTERNS = [
     /private.?key/i,
@@ -134,16 +136,6 @@ const truncateStackForProduction = (
 const isNullish = (value: unknown): value is null | undefined =>
     value === null || value === undefined;
 
-/**
- * 値が null ではないオブジェクトかどうかを判定する。
- * 呼び出し側にインライン展開すると複合条件（&&）になるため、
- * 単独でテストできる名前付き関数として切り出す。
- * @param value - 判定対象の値
- * @returns null ではないオブジェクトであれば true
- */
-const isNonNullObject = (value: unknown): value is object =>
-    typeof value === 'object' && value !== null;
-
 /* oxlint-disable anti-slop/no-unknown-returns, anti-slop/no-unsafe-dictionary-type --
    ログ・エラーに渡される値は形状不定（任意のオブジェクト・配列・プリミティブ）で、
    このマスク処理はキー名だけを見て再帰的にそのまま返す。マスク後も元の値の形状を
@@ -157,13 +149,13 @@ const isNonNullObject = (value: unknown): value is object =>
 const maskSensitiveFields = (value: unknown, depth = 0): unknown => {
     if (depth > 5) return value; // 再帰深さ制限
     if (isNullish(value)) return value;
-    if (typeof value === 'string') {
+    if (isStringValue(value)) {
         // 文字列値そのものに `token=xxx` のようなキー・値が連結・埋め込まれている
         // ケースを検出してマスクする（SEC-020）。オブジェクトのキー名だけで判定する
         // 上のロジックでは、メッセージ文字列へ直接埋め込まれたトークン等はすり抜ける。
         return maskSensitiveValuesInString(value);
     }
-    if (typeof value !== 'object') return value;
+    if (!isNonNullObject(value)) return value;
     if (Array.isArray(value)) {
         return value.map((item) => maskSensitiveFields(item, depth + 1));
     }

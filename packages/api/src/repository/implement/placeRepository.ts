@@ -86,9 +86,9 @@ const toPlaceInsertRow = (entity: PlaceEntity) => ({
     placeId: entity.placeId,
     raceType: entity.raceType,
     dateTime:
-        typeof entity.datetime === 'string'
-            ? entity.datetime
-            : toJstISOString(entity.datetime),
+        entity.datetime instanceof Date
+            ? toJstISOString(entity.datetime)
+            : entity.datetime,
     locationCode: entity.locationCode,
     isRaceListAvailable:
         entity.isRaceListAvailable === undefined

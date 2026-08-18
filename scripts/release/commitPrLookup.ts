@@ -9,6 +9,8 @@
  * 先頭行末尾に `(#NNNN)` を自動付与する（`git log --oneline` で確認済み）。
  */
 
+import { isNonNullObject, isStringValue } from '../lib/typeGuards';
+
 const GITHUB_API_URL = 'https://api.github.com';
 
 export const githubHeaders = (githubToken: string) => ({
@@ -40,11 +42,11 @@ export const fetchPrSemverLevel = async (params: {
     }
     const names = json
         .map((entry) =>
-            typeof entry === 'object' && entry !== null
+            isNonNullObject(entry)
                 ? (entry as { name?: unknown }).name
                 : undefined,
         )
-        .filter((name): name is string => typeof name === 'string');
+        .filter(isStringValue);
     const semverLabel = names.find((name) => name.startsWith('semver:'));
     if (semverLabel) {
         return semverLabel.replace('semver:', '');

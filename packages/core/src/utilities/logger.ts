@@ -184,6 +184,15 @@ const wrapMethodByKind = (
     method.constructor.name === 'AsyncFunction'
         ? wrapAsyncMethod(method, context)
         : wrapSyncMethod(method, context);
+
+/**
+ * 値が呼び出し可能（関数）かどうかを判定する型ガード。
+ * @param value - 判定対象の値（PropertyDescriptor.value）
+ * @returns 関数であれば true
+ */
+const isCallableMethod = (
+    value: unknown,
+): value is (...args: unknown[]) => unknown => typeof value === 'function';
 /* oxlint-enable anti-slop/no-unknown-returns */
 
 /**
@@ -213,7 +222,7 @@ const wrapPropertyIfMethod = (
     const method = descriptor.value;
 
     // メソッドか、そして関数であることを確認
-    if (typeof method !== 'function') {
+    if (!isCallableMethod(method)) {
         return;
     }
 
