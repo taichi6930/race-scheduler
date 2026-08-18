@@ -63,16 +63,19 @@
  *
  * ### Function: getPriority(raceEntity)
  *
- * mechanicalGradeRule の `getSpecifiedGrades(...).has(raceEntity.raceGrade)`
- * ガードにより、raceGrade が非 string の呼び出しは shouldIncludeInCalendar
- * 経由では実質到達しない（Set<string> は文字列以外を含まないため）。
- * 防御的な型ガードの分岐を直接検証するため getPriority を直接呼び出す。
+ * raceGrade は RaceEntity 上 常に string（`z.string()`）のため、非string値を
+ * 渡す P1/P2 は型定義違反の実行時入力（`as unknown as RaceEntity`）に対する
+ * フォールバック確認であり、getStagePriorityInfo が該当エントリ無しとして
+ * priority=0 を返す一般経路を通る（raceGrade 専用の早期リターン分岐は無い）。
+ * raceStage は省略可能（`string | undefined`）なため、P5 は実際に起こりうる
+ * 入力として早期リターン分岐を直接検証する。
  *
  * | Case | raceGrade（非string） | raceStage | 期待結果 |
  * |------|------------------------|-----------|----------|
  * | P1   | undefined              | 'A'       | 0        |
  * | P2   | number(123)            | 'A'       | 0        |
  * | P3   | 'GⅠ'（string）        | null      | 0        |
+ * | P5   | 'GⅠ'（string）        | undefined（省略）| 0  |
  *
  * ### getPriority のメモ化 (PERF-094)
  * | Case | 呼び出し                              | 期待                          |
@@ -858,6 +861,17 @@ describe('calendarInclusion', () => {
                 raceType: RaceType.KEIRIN,
                 raceGrade: 'GⅠ',
                 raceStage: null,
+            } as unknown as RaceEntity;
+
+            const result = getPriority(race);
+            expect(result).toBe(0);
+        });
+
+        it('P5: raceStage が undefined（省略）の場合は 0 を返すこと', () => {
+            const race = {
+                raceType: RaceType.KEIRIN,
+                raceGrade: 'GⅠ',
+                raceStage: undefined,
             } as unknown as RaceEntity;
 
             const result = getPriority(race);
