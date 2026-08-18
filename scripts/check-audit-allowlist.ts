@@ -22,6 +22,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { isNonNullObject, isStringValue } from './lib/typeGuards';
+
 interface AllowlistEntry {
     id: string;
     package: string;
@@ -54,7 +56,7 @@ function validateEntry(entry: unknown, index: number): string[] {
     const errors: string[] = [];
     const prefix = `allowlist[${index}]`;
 
-    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+    if (!isNonNullObject(entry) || Array.isArray(entry)) {
         return [`${prefix}: オブジェクトである必要があります`];
     }
 
@@ -62,12 +64,12 @@ function validateEntry(entry: unknown, index: number): string[] {
     const record = entry as Record<string, unknown>;
 
     for (const field of REQUIRED_STRING_FIELDS) {
-        if (typeof record[field] !== 'string' || record[field] === '') {
+        if (!isStringValue(record[field]) || record[field] === '') {
             errors.push(`${prefix}.${field}: 必須の文字列フィールドです`);
         }
     }
 
-    if (typeof record.id === 'string' && !GHSA_ID_PATTERN.test(record.id)) {
+    if (isStringValue(record.id) && !GHSA_ID_PATTERN.test(record.id)) {
         errors.push(
             `${prefix}.id: "${record.id}" はGHSA形式（GHSA-xxxx-xxxx-xxxx）ではありません`,
         );
@@ -75,7 +77,7 @@ function validateEntry(entry: unknown, index: number): string[] {
 
     for (const field of ['addedAt', 'reviewBy'] as const) {
         const value = record[field];
-        if (typeof value === 'string' && !DATE_PATTERN.test(value)) {
+        if (isStringValue(value) && !DATE_PATTERN.test(value)) {
             errors.push(
                 `${prefix}.${field}: "${value}" はYYYY-MM-DD形式ではありません`,
             );

@@ -34,7 +34,7 @@ export const MS_PER_DAY = 24 * 60 * 60 * 1000;
  * @returns Date オブジェクト
  */
 const toDate = (datetime: Date | string): Date =>
-    typeof datetime === 'string' ? new Date(datetime) : datetime;
+    datetime instanceof Date ? datetime : new Date(datetime);
 
 /**
  * JST 基準で `Date` オブジェクトを返す（内部処理用）

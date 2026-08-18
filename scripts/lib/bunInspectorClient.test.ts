@@ -123,7 +123,7 @@ describe('runInspectorSession', () => {
         expect(received).toHaveLength(2);
         expect((received[0] as { m: string }).m).toBe('TestReporter.found');
         expect((received[1] as { m: string }).m).toBe('TestReporter.end');
-        expect(typeof (received[0] as { t: number }).t).toBe('number');
+        expect((received[0] as { t: number }).t).toEqual(expect.any(Number));
     });
 
     it('[T-05] 接続できない場合はタイムアウト予算内でconnected=falseを返す', async () => {

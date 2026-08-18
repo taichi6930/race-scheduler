@@ -8,6 +8,7 @@ import {
     raceStageRequiredSuperRefine,
     shouldHavePlaceHeldDaysForJra,
 } from '../domain/rule/raceInvariants';
+import { isStringValue } from '../utilities/validation';
 import { ValidationError } from '../utilities/validationError';
 import {
     dedupeByLastOccurrence,
@@ -25,7 +26,7 @@ const RaceEntityUpsertItemSchema = z
     .object({
         ...createRaceEntityBaseFields(),
         datetime: z.preprocess((value) => {
-            if (typeof value === 'string') return new Date(value);
+            if (isStringValue(value)) return new Date(value);
             return value;
         }, z.date()),
         raceGrade: RaceGradeField,

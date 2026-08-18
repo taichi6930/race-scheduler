@@ -22,9 +22,11 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 
+import { isStringValue } from './lib/typeGuards';
+
 interface WorkflowStep {
     uses?: string;
-    // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- with:はuses先のActionごとに入力キーが異なるYAML設定で、実際に読む値は使用箇所でtypeof文字列ガード済み
+    // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- with:はuses先のActionごとに入力キーが異なるYAML設定で、実際に読む値は使用箇所で文字列型ガード済み
     with?: Record<string, unknown>;
 }
 
@@ -52,7 +54,7 @@ export function extractWorkingDirectories(workflowContent: string): string[] {
         for (const step of job.steps ?? []) {
             if (!step.uses?.includes('deploy-cloudflare-workers')) continue;
             const dir = step.with?.['working-directory'];
-            if (typeof dir === 'string') dirs.add(dir);
+            if (isStringValue(dir)) dirs.add(dir);
         }
     }
     return [...dirs];

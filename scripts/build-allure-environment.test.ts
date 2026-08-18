@@ -31,7 +31,7 @@ describe('buildProperties', () => {
 
         expect(result.Branch).toBe('(local)');
         expect(result.Commit).toBe('(local)');
-        expect(typeof result.OS).toBe('string');
+        expect(result.OS).toEqual(expect.any(String));
         expect(result.OS.length).toBeGreaterThan(0);
     });
 });

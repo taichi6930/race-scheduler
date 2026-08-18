@@ -66,7 +66,7 @@ export const buildETagFromContent = (content: string): string =>
  */
 export const buildETagFromUpdatedAt = (updatedAt: Date | string): string =>
     buildETagFromContent(
-        typeof updatedAt === 'string' ? updatedAt : updatedAt.toISOString(),
+        updatedAt instanceof Date ? updatedAt.toISOString() : updatedAt,
     );
 
 /**

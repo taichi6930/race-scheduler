@@ -178,13 +178,13 @@ const isStatus = (value: string): value is SpecStatus =>
  */
 const buildSpecEntry = (raw: RawFrontMatter, filePath: string): SpecEntry => {
     const { id, title, status } = raw;
-    if (typeof id !== 'string' || id === '') {
+    if (Array.isArray(id) || id === '') {
         throw new Error(`${filePath}: id が不正です`);
     }
-    if (typeof title !== 'string' || title === '') {
+    if (Array.isArray(title) || title === '') {
         throw new Error(`${filePath}: title が不正です`);
     }
-    if (typeof status !== 'string' || !isStatus(status)) {
+    if (Array.isArray(status) || !isStatus(status)) {
         throw new Error(
             `${filePath}: status が不正です（active|draft|deprecated のいずれか）`,
         );
@@ -207,7 +207,7 @@ const buildSpecEntry = (raw: RawFrontMatter, filePath: string): SpecEntry => {
         raceType: asStringArray(raw.raceType),
         requires,
         targets: asStringArray(raw.targets),
-        owner: typeof raw.owner === 'string' ? raw.owner : undefined,
+        owner: Array.isArray(raw.owner) ? undefined : raw.owner,
         related: asStringArray(raw.related),
         filePath,
     };

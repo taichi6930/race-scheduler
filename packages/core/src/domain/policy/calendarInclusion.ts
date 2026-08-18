@@ -96,11 +96,8 @@ const getStagePriorityInfo = (
 export const getPriority = (raceEntity: RaceEntity): number => {
     const { raceGrade, raceStage: stage, raceType } = raceEntity;
 
-    // raceGrade / stage のいずれかが文字列でなければ対象外（ガード節に分解し、複合条件を回避）
-    if (typeof raceGrade !== 'string') {
-        return 0;
-    }
-    if (typeof stage !== 'string') {
+    // stage は省略可能なフィールドのため、未設定なら対象外
+    if (stage === undefined) {
         return 0;
     }
 
@@ -124,10 +121,8 @@ const MECHANICAL_PRIORITY_THRESHOLD = 6;
 const isSpecifiedOverrideStage = (raceEntity: RaceEntity): boolean => {
     const { raceGrade, raceStage: stage, raceType } = raceEntity;
 
-    if (typeof raceGrade !== 'string') {
-        return false;
-    }
-    if (typeof stage !== 'string') {
+    // stage は省略可能なフィールドのため、未設定なら対象外
+    if (stage === undefined) {
         return false;
     }
 

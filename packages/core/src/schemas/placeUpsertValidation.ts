@@ -8,6 +8,7 @@ import {
     shouldHavePlaceGradeForMechanical,
     shouldHavePlaceHeldDaysForJra,
 } from '../domain/rule/raceInvariants';
+import { isStringValue } from '../utilities/validation';
 import { ValidationError } from '../utilities/validationError';
 import {
     dedupeByLastOccurrence,
@@ -24,7 +25,7 @@ const PlaceEntityUpsertItemSchema = z
          * Date型へ自動変換するpreprocessを持つ）
          */
         datetime: z.preprocess((value) => {
-            if (typeof value === 'string') {
+            if (isStringValue(value)) {
                 return new Date(value);
             }
             return value;

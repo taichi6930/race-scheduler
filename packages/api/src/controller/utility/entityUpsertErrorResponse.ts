@@ -11,7 +11,7 @@ import { badRequest, json, ValidationError } from '@race-schedule/core';
 export const entityUpsertParseErrorResponse = (error: unknown): Response => {
     if (error instanceof ValidationError) {
         const index = error.index;
-        if (typeof index === 'number') {
+        if (index !== undefined) {
             return json(
                 {
                     status: 400,

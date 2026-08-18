@@ -31,6 +31,7 @@
  *   bun scripts/release/generateReleaseSummary.ts > body.md
  */
 
+import { isNonNullObject } from '../lib/typeGuards';
 import { fetchMergedPrNumbersSinceTag, githubHeaders } from './commitPrLookup';
 import { extractLayerLabels, formatLayerPrefix } from './packageLabels';
 import {
@@ -100,8 +101,7 @@ export const fetchLatestReleaseTag = async (
     }
     const latestPublished = releases.find(
         (r) =>
-            typeof r === 'object' &&
-            r !== null &&
+            isNonNullObject(r) &&
             (r as { draft?: unknown }).draft === false &&
             (r as { prerelease?: unknown }).prerelease === false,
     ) as { tag_name?: string } | undefined;
