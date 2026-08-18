@@ -150,6 +150,7 @@ const isNonNullObject = (value: unknown): value is object =>
  * @param depth - 現在の再帰深さ（内部利用）
  * @returns 機密フィールドをマスクした値
  */
+// oxlint-disable-next-line anti-slop/no-unknown-returns -- ログに渡される値は形状不定（任意のオブジェクト・配列・プリミティブ）で、再帰的にそのまま返す関数のためunknownが唯一正直な型
 const maskSensitiveFields = (value: unknown, depth = 0): unknown => {
     if (depth > 5) return value; // 再帰深さ制限
     if (isNullish(value)) return value;

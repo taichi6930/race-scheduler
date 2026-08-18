@@ -108,6 +108,7 @@ const isNumericString = (value: string): boolean =>
  * 値を推測して型変換する
  * @param value
  */
+// oxlint-disable-next-line anti-slop/no-unknown-returns -- boolean/Date/number/stringのいずれかを推測で返すヒューリスティック。呼び出し元のparseQueryParamsが直後にZodスキーマでパース・検証するため、この時点ではunknownで正しい
 const normalizeValue = (value: string): unknown => {
     // boolean
     if (value === 'true') return true;

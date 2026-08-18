@@ -116,6 +116,10 @@ const isConstructorOrAccessorProperty = (
 ): boolean =>
     propertyName === 'constructor' || !!descriptor.get || !!descriptor.set;
 
+/* oxlint-disable anti-slop/no-unknown-returns -- @LogAllMethods は任意のクラスの
+   任意のメソッドを実行時にラップするリフレクションのため、ラップ対象・ラップ後の
+   戻り値の型を静的に知りようがない。unknownが唯一正直な型であり、この decorator の
+   外側（呼び出し元）には元のクラスの本来の型シグネチャがそのまま見える。 */
 /** ラップ後のメソッドの型（開始/終了/エラーのログ出力を挟んで元メソッドを呼ぶ）。 */
 type LoggedMethod = (this: unknown, ...args: unknown[]) => unknown;
 
@@ -180,6 +184,7 @@ const wrapMethodByKind = (
     method.constructor.name === 'AsyncFunction'
         ? wrapAsyncMethod(method, context)
         : wrapSyncMethod(method, context);
+/* oxlint-enable anti-slop/no-unknown-returns */
 
 /**
  * prototype 上の 1 プロパティについて、メソッドであればログ出力ラッパーに差し替える。
@@ -229,6 +234,7 @@ const wrapPropertyIfMethod = (
  * コンストラクタを受け付ける）と `unknown` を用い、`any` を排除している。
  * @param constructor
  */
+// oxlint-disable-next-line anti-slop/no-unknown-returns -- 任意のクラスを受け付けるジェネリック制約（上記コメント参照）。unknownが唯一正直な型
 export function LogAllMethods<T extends new (...args: never[]) => unknown>(
     constructor: T,
 ): T {
