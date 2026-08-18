@@ -194,6 +194,7 @@ const wrapMethodByKind = (
  * @param context - ログ出力コンテキスト（メソッド名は呼び出し側で上書きする）
  */
 const wrapPropertyIfMethod = (
+    // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- 任意のクラスのprototypeを受け取るリフレクションのため、値の型は不定でunknownが唯一正直な型
     prototype: Record<PropertyKey, unknown>,
     propertyName: string,
     context: Omit<LogContext, 'propertyName'>,

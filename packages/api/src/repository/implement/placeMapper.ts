@@ -77,6 +77,7 @@ const isRaceListAvailableValueMissing = (
  * 生 DB 行を検証する（RaceMapper / PlayerRepository の様式に準拠）。
  * @param row - Drizzle から返された生の place 行
  */
+// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Drizzleから返る生DB行をZodで検証する前の中間表現のため、Record<string, unknown>が正しい
 const validatePlaceRow = (row: Record<string, unknown>): PlaceRow => {
     const rowValidationResult = placeRowSchema.safeParse(row);
     if (!rowValidationResult.success) {
@@ -161,6 +162,7 @@ export const PlaceMapper = {
      * @returns 検証済みのPlaceEntity
      */
     toEntity(
+        // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- validatePlaceRowと同じ、検証前の生DB行
         row: Record<string, unknown>,
         options?: { includePlaceGrade?: boolean },
     ): PlaceEntity {

@@ -58,6 +58,7 @@ function validateEntry(entry: unknown, index: number): string[] {
         return [`${prefix}: オブジェクトである必要があります`];
     }
 
+    // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- この関数自体がJSON.parse結果の各フィールドを検証するバリデータのため、検証前の中間表現としてRecord<string, unknown>が正しい
     const record = entry as Record<string, unknown>;
 
     for (const field of REQUIRED_STRING_FIELDS) {

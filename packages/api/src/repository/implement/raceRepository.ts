@@ -511,6 +511,7 @@ export class RaceRepository implements IRaceRepository {
      * @param methodName - 呼び出し元メソッド名（ログ出力用）
      */
     private mapRaceRowSafely(
+        // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Drizzleから返る生DB行をRaceMapperで検証する前の中間表現のため、Record<string, unknown>が正しい
         row: Record<string, unknown>,
         methodName: 'fetch' | 'fetchByRaceId',
     ): RaceEntity | null {

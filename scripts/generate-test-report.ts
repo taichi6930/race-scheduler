@@ -348,6 +348,7 @@ const parseFlutterJsonl = (path: string): DynamicFile[] => {
     const roots = new Map<string, TestGroupNode>();
 
     for (const line of lines) {
+        // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- FlutterのJSONLレポーター出力を1行ずつJSON.parseした直後の中間表現。イベント種別ごとのフィールド検証はこの後で行う
         let event: Record<string, unknown>;
         try {
             event = JSON.parse(line);

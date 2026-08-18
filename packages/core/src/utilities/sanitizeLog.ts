@@ -144,13 +144,16 @@ const isNullish = (value: unknown): value is null | undefined =>
 const isNonNullObject = (value: unknown): value is object =>
     typeof value === 'object' && value !== null;
 
+/* oxlint-disable anti-slop/no-unknown-returns, anti-slop/no-unsafe-dictionary-type --
+   ログ・エラーに渡される値は形状不定（任意のオブジェクト・配列・プリミティブ）で、
+   このマスク処理はキー名だけを見て再帰的にそのまま返す。マスク後も元の値の形状を
+   保つ必要があるためunknown/Record<string, unknown>が唯一正直な型。 */
 /**
  * オブジェクト内の機密フィールドを再帰的にマスクする
  * @param value - マスク対象の値
  * @param depth - 現在の再帰深さ（内部利用）
  * @returns 機密フィールドをマスクした値
  */
-// oxlint-disable-next-line anti-slop/no-unknown-returns -- ログに渡される値は形状不定（任意のオブジェクト・配列・プリミティブ）で、再帰的にそのまま返す関数のためunknownが唯一正直な型
 const maskSensitiveFields = (value: unknown, depth = 0): unknown => {
     if (depth > 5) return value; // 再帰深さ制限
     if (isNullish(value)) return value;
@@ -206,3 +209,4 @@ export const sanitizeError = (error: unknown): Record<string, unknown> => {
     }
     return { message: maskSensitiveValuesInString(String(error)) };
 };
+/* oxlint-enable anti-slop/no-unknown-returns, anti-slop/no-unsafe-dictionary-type */

@@ -23,6 +23,7 @@ interface FormattableEntity {
  */
 export const formatEntities = <
     T extends FormattableEntity,
+    // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- augment関数の戻り値の上限型（呼び出し元entity種別ごとに形が異なる汎用拡張ポイント、crudController.tsのaugmentと同じ設計）
     A extends Record<string, unknown> = Record<string, never>,
 >(
     entities: T[],

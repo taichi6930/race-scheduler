@@ -11,6 +11,7 @@ export const isEnvFlagTrue = (key: string, env?: unknown): boolean => {
     const isFromEnv =
         typeof env === 'object' &&
         env !== null &&
+        // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- 任意のWorkerのenvバインディングを汎用的にキー検索するためのキャスト。'true'との厳密等価比較のみに使うため値の型に依存しない
         (env as Record<string, unknown>)[key] === 'true';
     return isFromEnv || process.env[key] === 'true';
 };

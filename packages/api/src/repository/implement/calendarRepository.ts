@@ -57,6 +57,7 @@ const isLabelValueMissing = (value: unknown): boolean =>
  * @param row - Drizzle から返された生の calendar_flag 行
  */
 const validateCalendarFlagRow = (
+    // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Drizzleから返る生DB行をZodで検証する前の中間表現のため、Record<string, unknown>が正しい
     row: Record<string, unknown>,
 ): CalendarFlagRow => {
     const rowValidationResult = calendarFlagRowSchema.safeParse(row);
@@ -88,6 +89,7 @@ const buildValidatedCalendarFlagEntity = (
  * Drizzle が返す calendar_flag 行（camelCase）をEntityに変換し、同時にスキーマで検証
  */
 const CalendarFlagMapper = {
+    // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- validateCalendarFlagRowと同じ、検証前の生DB行
     toEntity(row: Record<string, unknown>): CalendarFlagEntity {
         const validatedRow = validateCalendarFlagRow(row);
 
@@ -155,6 +157,7 @@ export class CalendarRepository implements ICalendarRepository {
      * @param row - DB から返された生の calendar_flag 行
      */
     private mapCalendarFlagRowSafely(
+        // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- validateCalendarFlagRowと同じ、検証前の生DB行
         row: Record<string, unknown>,
     ): CalendarFlagEntity | null {
         try {

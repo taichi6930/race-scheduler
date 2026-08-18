@@ -29,6 +29,7 @@ export interface CrudControllerConfig<TEntity, TFilter> {
     filterSchema: ZodType<TFilter>;
     parseUpsert: (body: unknown) => TEntity[];
     /** DTOへ追加フィールドを合成する関数（省略時は何も追加しない。race の isCalendarSpecified 等） */
+    // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- 呼び出し元（entity種別ごと）で追加フィールドの形が異なる汎用拡張ポイントのため、上限型としてRecord<string, unknown>が正しい
     augment?: (entity: TEntity) => Record<string, unknown>;
     /**
      * 一覧全体に対して非同期のバッチ問い合わせを行い、DTOへ追加フィールドを合成する関数
@@ -37,6 +38,7 @@ export interface CrudControllerConfig<TEntity, TFilter> {
      * 1件ずつのSQLではなくバッチ問い合わせが必要な場合（IN句での注目選手判定等）に、
      * 同期的な `augment` の代わりに使う。
      */
+    // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- augmentと同様、entity種別ごとに形が異なる汎用拡張ポイント
     augmentBatch?: (entities: TEntity[]) => Promise<Record<string, unknown>[]>;
 }
 

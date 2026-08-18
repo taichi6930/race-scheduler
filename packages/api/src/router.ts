@@ -349,6 +349,9 @@ const PLACE_GRADE_PARAM_DOC = {
  * @param config.includePlaceGrade - isDisplayPlaceGrade パラメータを含めるか
  * @returns parameters レスポンス用オブジェクト
  */
+/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- /place/docs・/race/docs が返す
+   人間向けAPIドキュメントJSONで、パラメータごとに持つフィールド（type/required/
+   description/example）が異なる。型検証される値ではないためRecord<string, unknown>で正しい。 */
 const buildEndpointParameters = (config: {
     gradeDescription: string;
     gradeExample: string;
@@ -403,6 +406,7 @@ const buildEndpointDocumentation = (config: {
     parameters: buildEndpointParameters(config),
     examples: config.examples,
 });
+/* oxlint-enable anti-slop/no-unsafe-dictionary-type */
 
 /** リクエスト相関ID（OBS-004）をやり取りする HTTP ヘッダー名 */
 const REQUEST_ID_HEADER = 'X-Request-Id';

@@ -52,6 +52,8 @@ export const parseQueryParams = <T>(
  * 分割を行わない挙動を維持する）。
  * @param searchParams
  */
+/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- 呼び出し元のparseQueryParamsが
+   直後にZodスキーマでパース・検証するため、この中間表現の時点ではRecord<string, unknown>で正しい */
 const normalizeSearchParams = (
     searchParams: URLSearchParams,
 ): Record<string, unknown> => {
@@ -85,6 +87,7 @@ const normalizeSearchParams = (
 
     return result;
 };
+/* oxlint-enable anti-slop/no-unsafe-dictionary-type */
 
 /**
  * 文字列がカンマ区切り値かどうかを判定する型ガード。

@@ -57,7 +57,11 @@ import {
     extractSpecTags,
     parseJUnitFile,
 } from './generate-test-report';
-import type { AllureEventCase } from './lib/allureFromEvents';
+import type {
+    AllureCaseStatus,
+    AllureEventCase,
+    AllureStatusDetails,
+} from './lib/allureFromEvents';
 import { buildCasesFromEvents } from './lib/allureFromEvents';
 import type { InspectorEvent } from './lib/bunInspectorClient';
 
@@ -219,6 +223,21 @@ const determineSeverity = (
     return 'normal';
 };
 
+/** Allureのネイティブ結果フォーマット（1テストケース分のresult.json）。 */
+interface AllureResultJson {
+    uuid: string;
+    historyId: string;
+    name: string;
+    fullName: string;
+    status: AllureCaseStatus;
+    stage: 'finished';
+    start: number;
+    stop: number;
+    labels: { name: string; value: string }[];
+    statusDetails?: AllureStatusDetails;
+    attachments?: { name: string; source: string; type: string }[];
+}
+
 const writeResult = (
     layerArg: string,
     epic: string,
@@ -229,7 +248,7 @@ const writeResult = (
     const feature = determinePackage(input.relPath);
     const packageLabel = toPackageLabel(input.relPath);
     const story = input.describePath.join(' > ') || basename(input.relPath);
-    const result: Record<string, unknown> = {
+    const result: AllureResultJson = {
         uuid: randomUUID(),
         historyId: buildHistoryId(
             layerArg,

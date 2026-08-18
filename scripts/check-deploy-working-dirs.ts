@@ -24,6 +24,7 @@ import { parse } from 'yaml';
 
 interface WorkflowStep {
     uses?: string;
+    // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- with:はuses先のActionごとに入力キーが異なるYAML設定で、実際に読む値は使用箇所でtypeof文字列ガード済み
     with?: Record<string, unknown>;
 }
 

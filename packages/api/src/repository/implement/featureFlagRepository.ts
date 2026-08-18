@@ -34,6 +34,7 @@ export class FeatureFlagRepository implements IFeatureFlagRepository {
      * @param row - DB から返された生の feature_flag 行
      */
     private parseFeatureFlagRow(
+        // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Drizzleから返る生DB行をZodで検証する前の中間表現のため、Record<string, unknown>が正しい
         row: Record<string, unknown>,
     ): FeatureFlagRow | null {
         const validationResult = featureFlagRowSchema.safeParse(row);
