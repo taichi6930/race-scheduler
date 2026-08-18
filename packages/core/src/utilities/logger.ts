@@ -189,7 +189,7 @@ const wrapMethodByKind = (
  * @param context - ログ出力コンテキスト（メソッド名は呼び出し側で上書きする）
  */
 const wrapPropertyIfMethod = (
-    prototype: object,
+    prototype: Record<PropertyKey, unknown>,
     propertyName: string,
     context: Omit<LogContext, 'propertyName'>,
 ): void => {

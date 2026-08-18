@@ -56,6 +56,9 @@ export interface IWebPushGateway {
     send: (
         subscription: WebPushSubscriptionKeys,
         payload: WebPushPayload,
+        // WebPushDispatchCacheはWeakMapキーとして使う意図的な不透明トークン型（上記コメント参照）。
+        // 中身を見ないため、データ形状を持つ型に置き換えると意図が伝わりにくくなる。
+        // oxlint-disable-next-line anti-slop/no-object-parameters
         dispatchCache?: WebPushDispatchCache,
     ) => Promise<WebPushSendResult>;
 }

@@ -21,7 +21,7 @@ export default defineConfig({
         'anti-slop/no-conditional-empty-object-spread': 'warn',
         'anti-slop/no-known-value-widening': 'warn',
         'anti-slop/no-module-mocking': 'warn',
-        'anti-slop/no-object-parameters': 'warn',
+        'anti-slop/no-object-parameters': 'error',
         'anti-slop/no-reflect-apply': 'warn',
         'anti-slop/no-reflect-get': 'warn',
         'anti-slop/no-runtime-typeof': 'warn',
