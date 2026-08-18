@@ -7,7 +7,7 @@
     },
     "files": {
         "ignoreUnknown": false,
-        "includes": ["**", "!private/**"]
+        "includes": ["**", "!private/**", "!tools/oxlint/anti-slop/**"]
     },
     "formatter": {
         "enabled": true,
