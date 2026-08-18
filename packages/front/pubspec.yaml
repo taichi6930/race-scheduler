@@ -50,7 +50,7 @@ dependencies:
   flutter_riverpod: ^3.4.2
 
   # Routing
-  go_router: ^17.4.0
+  go_router: ^17.5.0
 
   # HTTP Communication
   # DEP-010（2026-08-01調査）: pub.dev APIで全バージョンを確認したところ dio の
@@ -114,9 +114,9 @@ dev_dependencies:
   # Code generation
   # QDEV-11: build_runner/json_serializableはコード生成時にしか使わないビルドツール
   # のため実行時には不要。dependenciesに置くと依存解決の対象が広がりCIが重くなる。
-  build_runner: ^2.15.1
+  build_runner: ^2.16.0
   json_serializable: ^6.14.1
-  freezed: ^3.2.5
+  freezed: ^4.0.0-dev.3
 
   # url_launcher のテスト用フェイク実装に使用
   url_launcher_platform_interface: ^2.3.2
