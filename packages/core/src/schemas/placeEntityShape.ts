@@ -13,7 +13,7 @@ import { RaceCourseField } from './common';
  * `datetime` のみ両スキーマで検証強度が異なる（Entity側はDate型、Upsert側は
  * 文字列→Date変換の preprocess）ため、このshapeには含めず各schema側で個別に定義する。
  */
-export const createPlaceEntityBaseShape = () => ({
+export const createPlaceEntityBaseFields = () => ({
     /** 開催場ID（ユニーク） */
     placeId: PlaceIdSchema,
     /** レース種別（JRA/NAR/KEIRINなど） */

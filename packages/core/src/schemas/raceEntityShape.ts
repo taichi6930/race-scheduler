@@ -20,7 +20,7 @@ import { RaceCourseField } from './common';
  * 文字列→Date変換の preprocess・`RaceGradeField` による min(1) を課す）、
  * このshapeには含めず各schema側で個別に定義する。
  */
-export const createRaceEntityBaseShape = () => ({
+export const createRaceEntityBaseFields = () => ({
     /** レースID（ユニーク）*/
     raceId: RaceIdSchema,
     /** 開催場ID */

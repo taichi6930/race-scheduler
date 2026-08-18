@@ -15,7 +15,7 @@ import {
     formatZodIssues,
     RaceGradeField,
 } from './common';
-import { createRaceEntityBaseShape } from './raceEntityShape';
+import { createRaceEntityBaseFields } from './raceEntityShape';
 
 /**
  * RaceEntity配列のアップサートスキーマ
@@ -23,7 +23,7 @@ import { createRaceEntityBaseShape } from './raceEntityShape';
  */
 const RaceEntityUpsertItemSchema = z
     .object({
-        ...createRaceEntityBaseShape(),
+        ...createRaceEntityBaseFields(),
         datetime: z.preprocess((value) => {
             if (typeof value === 'string') return new Date(value);
             return value;

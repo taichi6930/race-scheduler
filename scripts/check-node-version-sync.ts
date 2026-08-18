@@ -21,7 +21,7 @@ const NVMRC_PATH = join(import.meta.dir, '../.nvmrc');
 const PACKAGE_JSON_PATH = join(import.meta.dir, '../package.json');
 const DEPENDABOT_PATH = join(import.meta.dir, '../.github/dependabot.yml');
 
-interface PackageJsonShape {
+interface PackageJson {
     engines?: { node?: string };
     devDependencies?: { '@types/node'?: string };
 }
@@ -47,7 +47,7 @@ export function extractMajorVersion(raw: string): number | null {
  */
 export function extractVersions(
     nvmrcContent: string,
-    packageJson: PackageJsonShape,
+    packageJson: PackageJson,
 ): {
     nvmrc: number | null;
     enginesNode: number | null;
@@ -103,7 +103,7 @@ if (import.meta.main) {
     const nvmrcContent = readFileSync(NVMRC_PATH, 'utf-8');
     const packageJson = JSON.parse(
         readFileSync(PACKAGE_JSON_PATH, 'utf-8'),
-    ) as PackageJsonShape;
+    ) as PackageJson;
     const dependabotContent = readFileSync(DEPENDABOT_PATH, 'utf-8');
 
     const versions = extractVersions(nvmrcContent, packageJson);

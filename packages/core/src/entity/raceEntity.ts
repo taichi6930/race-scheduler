@@ -7,7 +7,7 @@ import {
     raceCourseSuperRefine,
     raceStageRequiredSuperRefine,
 } from '../domain/rule/raceInvariants';
-import { createRaceEntityBaseShape } from '../schemas/raceEntityShape';
+import { createRaceEntityBaseFields } from '../schemas/raceEntityShape';
 
 /**
  * レース情報を表すエンティティのzod型定義
@@ -23,7 +23,7 @@ import { createRaceEntityBaseShape } from '../schemas/raceEntityShape';
  */
 export const RaceEntitySchema = z
     .object({
-        ...createRaceEntityBaseShape(),
+        ...createRaceEntityBaseFields(),
         /** 開催日付 */
         datetime: RaceDateTimeSchema,
         /** レース等級（raceType毎の有効なグレード値をバリデーション） */

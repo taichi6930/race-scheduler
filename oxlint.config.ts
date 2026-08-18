@@ -25,7 +25,7 @@ export default defineConfig({
         'anti-slop/no-reflect-apply': 'warn',
         'anti-slop/no-reflect-get': 'warn',
         'anti-slop/no-runtime-typeof': 'warn',
-        'anti-slop/no-shape-in-symbol-names': 'warn',
+        'anti-slop/no-shape-in-symbol-names': 'error',
         'anti-slop/no-unknown-parameters': 'warn',
         'anti-slop/no-unknown-returns': 'error',
         'anti-slop/no-unknown-type-aliases': 'warn',
