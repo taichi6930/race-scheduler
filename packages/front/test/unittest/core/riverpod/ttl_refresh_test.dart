@@ -23,10 +23,6 @@ final _counterProvider = FutureProvider<int>((ref) async {
 });
 
 void main() {
-  // QLIFE-01: scheduleTtlInvalidate が AppLifecycleListener を構築するため、
-  // WidgetsBinding の初期化が必要（plain test() では自動初期化されない）。
-  TestWidgetsFlutterBinding.ensureInitialized();
-
   setUp(() {
     _buildCount = 0;
   });
