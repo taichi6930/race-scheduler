@@ -35,11 +35,11 @@
  * | S7 | raceStage なしの KEIRIN | null |
  *
  * ### formatSummaryForCalendar
- * | ケース | レース種別 | レースステージ | isConfirmed | 期待値 |
- * |--------|-----------|------------|-------------|--------|
- * | T1 | JRA（ステージなし）| - | 省略 | raceName のみ |
- * | T2 | ステージありの KEIRIN | S級決勝 | 省略 | "S級決勝 レース名" |
- * | T3 | JRA（ステージなし）| - | false | "【未確定】raceName" |
+ * | ケース | レース種別 | レースステージ | 期待値 |
+ * |--------|-----------|------------|--------|
+ * | T1 | JRA（ステージなし）| - | raceName のみ |
+ * | T2 | ステージありの KEIRIN | S級決勝 | "S級決勝 レース名" |
+ * | T3 | JRA（ステージなし・isConfirmed: false）| - | raceName のみ（未確定でもタイトルに接頭辞を付けない） |
  *
  * ### getGoogleCalendarColor
  * | ケース | レース種別 | グレード | 期待値 |
@@ -251,10 +251,10 @@ describe('formatSummaryForCalendar', () => {
         );
     });
 
-    // T3: isConfirmed: false → 接頭辞「【未確定】」が付与される
-    it('T3: isConfirmedがfalseで「【未確定】」接頭辞を付与する', () => {
+    // T3: isConfirmed: false でも接頭辞を付与しない
+    it('T3: isConfirmedがfalseでも接頭辞を付与しない', () => {
         const entity = { ...JRA_ENTITY, isConfirmed: false };
-        expect(formatSummaryForCalendar(entity)).toBe('【未確定】有馬記念');
+        expect(formatSummaryForCalendar(entity)).toBe('有馬記念');
     });
 });
 
