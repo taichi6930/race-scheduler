@@ -10,6 +10,9 @@ import { isNonNullObject } from '../validation';
  * @returns 値が `'true'` の場合 true
  */
 export const isEnvFlagTrue = (key: string, env?: unknown): boolean => {
+    // SAFETY: isNonNullObject(env) で非nullオブジェクトであることを確認済みであり、
+    // 任意のWorker envバインディングをキー名で汎用的に検索するだけで、
+    // 値は 'true' との厳密等価比較にのみ使うため実際の値の型には依存しない。
     const isFromEnv =
         isNonNullObject(env) &&
         // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- 任意のWorkerのenvバインディングを汎用的にキー検索するためのキャスト。'true'との厳密等価比較のみに使うため値の型に依存しない

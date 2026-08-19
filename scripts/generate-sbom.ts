@@ -58,6 +58,8 @@ function collectDir(dir: string): SbomEntry[] {
         );
     }
 
+    // SAFETY: license-checker --json は「name@version」をキーとするオブジェクトを返す
+    // ドキュメント済みの固定フォーマットであり、result.status===0（実行成功）を上で確認済み
     const parsed = JSON.parse(result.stdout) as Record<
         string,
         LicenseCheckerEntry

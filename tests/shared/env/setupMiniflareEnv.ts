@@ -158,6 +158,7 @@ export const setupMiniflareEnv = async (): Promise<MiniflareTestEnv> => {
         // SAFETY: 上記の通りworkerd実装とアンビエント型の非互換は既知かつ無害。
         // oxlint-disable-next-line anti-slop/no-chained-type-assertions
         db: db as unknown as D1Database,
+        // SAFETY: 上記の通りworkerd実装とアンビエント型の非互換は既知かつ無害。
         // oxlint-disable-next-line anti-slop/no-chained-type-assertions
         r2: r2 as unknown as R2Bucket,
         dispose: () => mf.dispose(),

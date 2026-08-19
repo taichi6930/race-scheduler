@@ -15,6 +15,8 @@
 import type { CloudFlareEnv } from './cloudFlareEnv';
 import { validateEnv } from './validateEnv';
 
+// SAFETY: 初期値は未設定状態を表す undefined そのものであり、setEnv() 呼び出しまで
+// CloudFlareEnv 型の値が無いことを表現するために union 型として明示している（実行時の値は変わらない）。
 const _cache = { env: undefined as CloudFlareEnv | undefined };
 
 /**

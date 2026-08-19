@@ -60,6 +60,7 @@ function validateEntry(entry: unknown, index: number): string[] {
         return [`${prefix}: オブジェクトである必要があります`];
     }
 
+    // SAFETY: 直前の isNonNullObject / Array.isArray チェックで null でないオブジェクトかつ非配列であることを確認済みのため、フィールドアクセス用に Record<string, unknown> とみなせる
     // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- この関数自体がJSON.parse結果の各フィールドを検証するバリデータのため、検証前の中間表現としてRecord<string, unknown>が正しい
     const record = entry as Record<string, unknown>;
 
@@ -108,6 +109,7 @@ function loadAllowlist(path: string = ALLOWLIST_PATH): {
     try {
         parsed = JSON.parse(raw);
     } catch (error) {
+        // SAFETY: catch節に入るのはJSON.parseが例外を送出した場合のみで、JSの組み込みJSONパーサが投げるのは常にSyntaxError（Errorのサブクラス）である
         return {
             entries: [],
             errors: [`JSON構文エラー: ${(error as Error).message}`],
@@ -127,6 +129,7 @@ function loadAllowlist(path: string = ALLOWLIST_PATH): {
         return { entries: [], errors };
     }
 
+    // SAFETY: 直前のループで全エントリが validateEntry を通過し errors が空であることを確認済みのため、parsed は AllowlistEntry[] のスキーマを満たす
     return { entries: parsed as AllowlistEntry[], errors: [] };
 }
 

@@ -150,6 +150,8 @@ const main = (): void => {
     }
     const testFailed = process.argv.includes('--test-failed');
     const patchFailed = process.argv.includes('--patch-failed');
+    // SAFETY: gap.jsonはscripts/test-gap-analysis.tsが自スクリプト内で生成する成果物であり、
+    // GapReport形状はそのスクリプトの出力仕様と一致している
     const report = JSON.parse(readFileSync(gapJsonPath, 'utf8')) as GapReport;
     process.stdout.write(`${buildComment(report, testFailed, patchFailed)}\n`);
 };

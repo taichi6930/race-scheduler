@@ -48,6 +48,7 @@ if (gapJsonPath === undefined) {
     process.exit(1);
 }
 
+// SAFETY: gap.json は自前の `bun run test:gap:json` が生成する既知フォーマットの出力であり、GapReport の形状を制御できる
 const report = JSON.parse(readFileSync(gapJsonPath, 'utf-8')) as GapReport;
 
 const unexpectedGaps = report.results.flatMap((pkg) =>

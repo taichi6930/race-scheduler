@@ -94,6 +94,8 @@ export function buildLayerEdges(files: SourceFile[]): LayerEdge[] {
         }
     }
     return [...counts.entries()].map(([key, count]) => {
+        // SAFETY: keyは直前のループで`${fromLayer}->${toLayer}`として自前組み立てしたものであり、
+        // fromLayer/toLayerは共にLayer型（'->'を含まない値のみ）のため split結果は必ず[Layer, Layer]になる
         const [from, to] = key.split('->') as [Layer, Layer];
         return { from, to, count };
     });

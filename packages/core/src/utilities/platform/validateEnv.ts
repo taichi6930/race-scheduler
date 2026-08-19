@@ -52,6 +52,8 @@ const shouldValidateGooglePrivateKeyFormat = (
     requiredKeys: readonly (keyof CloudFlareEnv)[],
     env: CloudFlareEnv,
 ): boolean =>
+    // SAFETY: requiredKeys は `keyof CloudFlareEnv` の配列であり、
+    // 'GOOGLE_PRIVATE_KEY' との包含比較のために string[] として扱っても要素の実体は変わらない。
     (requiredKeys as readonly string[]).includes('GOOGLE_PRIVATE_KEY') &&
     Boolean(env.GOOGLE_PRIVATE_KEY);
 
@@ -81,6 +83,9 @@ const collectMissingRequiredKeys = (
 
     for (const key of requiredKeys) {
         // 後方互換: OVERSEAS_CALENDAR_ID が未設定でも旧キー WORLD_CALENDAR_ID があれば有効とみなす。
+        // SAFETY: API_REQUIRED_KEYS 等 requiredKeys に列挙されるキーは Cloudflare Workers の
+        // シークレット/環境変数（すべて文字列値）のみであり、CloudFlareEnv 上の他の非文字列
+        // プロパティはこの一覧に含まれないため、string | undefined として扱って安全。
         const value: string | undefined =
             key === 'OVERSEAS_CALENDAR_ID'
                 ? (env.OVERSEAS_CALENDAR_ID ?? env.WORLD_CALENDAR_ID)
