@@ -42,6 +42,7 @@ async function main(): Promise<void> {
     const publicKeyRaw = new Uint8Array(
         await crypto.subtle.exportKey('raw', keyPair.publicKey),
     );
+    // SAFETY: Web Crypto の exportKey は format に 'jwk' を渡した場合、仕様上必ず JsonWebKey を返す
     const privateKeyJwk = (await crypto.subtle.exportKey(
         'jwk',
         keyPair.privateKey,

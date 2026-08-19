@@ -32,6 +32,9 @@ const isAuthorized = async (c: Context): Promise<boolean> => {
     // c.env は Workers 本番では常に定義されるが、bindings を渡さずに
     // app.request(...) を呼ぶテスト等では undefined になりうるため、
     // フェイルクローズを保つ目的で空オブジェクトへフォールバックする。
+    // SAFETY: 空オブジェクトへのフォールバック時は下記の env.SERVICE_AUTH_TOKEN 等の
+    // プロパティアクセスが undefined を返すだけであり、認証トークン不一致として
+    // フェイルクローズされるため、CloudFlareEnv として扱っても安全側に倒れる。
     const env = (c.env ?? {}) as CloudFlareEnv;
     const expectedToken =
         env.SERVICE_AUTH_TOKEN ?? process.env.SERVICE_AUTH_TOKEN;

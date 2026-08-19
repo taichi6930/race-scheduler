@@ -29,6 +29,7 @@ export const formatEntities = <
     entities: T[],
     augment?: (entity: T) => A,
 ): (Omit<T, 'datetime'> & { datetime: string } & A)[] => {
+    // SAFETY: augment省略時はA既定値がRecord<string, never>になるため、必須プロパティを持たず{}が常に適合する
     return entities.map((entity) => ({
         ...entity,
         ...(augment?.(entity) ?? ({} as A)),

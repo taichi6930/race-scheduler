@@ -161,6 +161,9 @@ const maskSensitiveFields = (value: unknown, depth = 0): unknown => {
     }
 
     const result: Record<string, unknown> = {};
+    // SAFETY: 直前の isNonNullObject(value) と Array.isArray(value) の分岐により、
+    // ここに到達する value は配列ではない非nullオブジェクトであることが確定しており、
+    // Object.entries で列挙する目的のキー付きレコードとして扱って安全。
     for (const [key, entryValue] of Object.entries(
         value as Record<string, unknown>,
     )) {
@@ -197,6 +200,9 @@ export const sanitizeError = (error: unknown): Record<string, unknown> => {
         };
     }
     if (isNonNullObject(error)) {
+        // SAFETY: maskSensitiveFields はオブジェクト入力に対しては同じキー集合を持つ
+        // Record を返す実装（配列分岐は isNonNullObject の対象外の値には来ない）ため、
+        // 戻り値を Record<string, unknown> として扱って安全。
         return maskSensitiveFields(error) as Record<string, unknown>;
     }
     return { message: maskSensitiveValuesInString(String(error)) };

@@ -41,6 +41,8 @@ export function extractTodoFixme(
         if (!match) {
             continue;
         }
+        // SAFETY: RE_MARKERの捕捉グループ1は `(TODO|FIXME)` のみを候補とする選言のため、
+        // matchが成立した時点でmatch[1]は必ず'TODO'か'FIXME'のいずれかになる
         entries.push({
             file: filePath,
             line: index + 1,

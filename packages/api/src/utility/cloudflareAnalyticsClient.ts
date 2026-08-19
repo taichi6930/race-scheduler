@@ -83,6 +83,9 @@ export async function fetchWorkerErrorStats(
         return null;
     }
 
+    // SAFETY: Cloudflare GraphQL Analytics APIのレスポンス形状はドキュメントで固定されており、
+    // 以降のフィールドアクセスは全てoptional chaining + デフォルト値でガードしているため、
+    // 万一形状がズレても例外にはならず errorCount/subrequestCount が undefined→0扱いになるだけ
     const json = (await response.json()) as GraphQlResponseBody;
 
     if ((json.errors?.length ?? 0) > 0) {

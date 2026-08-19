@@ -92,6 +92,7 @@ function checkDir(dir: string): Violation[] {
         );
     }
 
+    // SAFETY: license-checker --json は「パッケージ名 → licenses情報」というドキュメント化された固定出力形式であり、直前でexit code 0（成功）も確認済み
     const parsed = JSON.parse(result.stdout) as Record<
         string,
         LicenseCheckerEntry

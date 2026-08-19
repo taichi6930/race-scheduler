@@ -269,6 +269,7 @@ export class RaceRepository implements IRaceRepository {
         ].filter((query): query is NonNullable<typeof query> => Boolean(query));
         // buildRaceInsertQuery は entities（chunk）が非空である前提で常に定義済みの
         // クエリを返すため、queries は必ず1件以上になる（db.batch()が要求する非空タプル）。
+        // SAFETY: 上記の理由によりqueriesは常に1件以上のため、db.batch()が要求する非空タプル型へのアサーションは安全
         await this.drizzleGateway.db.batch(
             queries as [
                 (typeof queries)[number],

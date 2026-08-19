@@ -20,6 +20,8 @@ export interface RaceFactoryOverrides {
     overrides?: Partial<RaceEntity>;
 }
 
+// SAFETY: テストファクトリの固定デフォルト値であり、有効な日付文字列・実在する開催場コード
+// （'05'=JRA東京）・正のレース番号を直接指定しているため、各ブランド型の実行時制約を常に満たす。
 const DEFAULTS = {
     raceType: RaceType.JRA,
     datetime: new Date('2026-04-26T10:00:00+09:00') as RaceDateTime,
@@ -141,6 +143,8 @@ export const RaceFactory = {
         return Array.from({ length: count }, (_, index) =>
             RaceFactory.create({
                 ...input,
+                // SAFETY: input.raceNumber ?? 1 は既に RaceNumber（正の整数）であり、
+                // 非負の index を加算しても正の整数のまま保たれるため、再キャストは安全。
                 raceNumber: ((input.raceNumber ?? 1) + index) as RaceNumber,
                 ...variantAt?.(index),
             }),

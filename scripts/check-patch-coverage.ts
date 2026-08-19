@@ -92,6 +92,7 @@ const main = (): void => {
         );
     }
 
+    // SAFETY: gap.json は自前の `bun run test:gap:json` が生成する既知フォーマットの出力であり、GapReport の形状を制御できる
     const report = JSON.parse(readFileSync(gapJsonPath, 'utf8')) as GapReport;
     const changedFiles = readChangedFiles(changedFilesPath);
     const blockingGaps = findBlockingGaps(report, changedFiles);

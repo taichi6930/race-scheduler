@@ -64,6 +64,8 @@ interface PullRequestApiResponse {
     labels?: ({ name?: string | null } | null)[] | null;
 }
 
+// SAFETY: 直前の typeof/null チェックで value がオブジェクトであることを確認済みのため、
+// プロパティの型を絞り込むための一時的なキャストは安全（型ガード関数自身の実装）
 const isPullRequestApiResponse = (
     value: unknown,
 ): value is PullRequestApiResponse =>
@@ -99,6 +101,9 @@ export const fetchLatestReleaseTag = async (
             'GitHub releases一覧のレスポンス形式が想定と異なります',
         );
     }
+    // SAFETY: isNonNullObject(r) の通過後にキャストしており、draft/prerelease が
+    // false のGitHub releaseオブジェクトのみに絞り込めるため、続く tag_name の
+    // オプショナルアクセスも安全
     const latestPublished = releases.find(
         (r) =>
             isNonNullObject(r) &&

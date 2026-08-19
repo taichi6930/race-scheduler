@@ -40,6 +40,8 @@ export const fetchPrSemverLevel = async (params: {
     if (!Array.isArray(json)) {
         return undefined;
     }
+    // SAFETY: isNonNullObject(entry) がtrueの分岐でのみキャストしており、
+    // オブジェクトであることを確認済みのためnameプロパティへの読み取りは安全
     const names = json
         .map((entry) =>
             isNonNullObject(entry)
@@ -91,10 +93,14 @@ export const fetchCommitMessagesSinceTag = async (params: {
         );
     }
     const json: unknown = await response.json();
+    // SAFETY: commitsプロパティを読み出すための一時キャスト。直後のArray.isArrayで
+    // ランタイム検証しており、非配列なら例外を投げて先へ進ませない
     const commits = (json as { commits?: unknown }).commits;
     if (!Array.isArray(commits)) {
         throw new Error('compare APIのレスポンス形式が想定と異なります');
     }
+    // SAFETY: GitHub compare APIのcommits配列は各要素が `commit.message` を持つ
+    // ドキュメント化された形状であり、直前のArray.isArrayで配列自体は検証済み
     return (commits as CompareCommit[]).map((c) => c.commit.message);
 };
 

@@ -44,6 +44,7 @@ const extractReferencedScripts = (docFiles: string[]): Set<string> => {
         try {
             content = readFileSync(file, 'utf-8');
         } catch (error) {
+            // SAFETY: node:fs の readFileSync が投げる例外はErrnoExceptionであり、code プロパティで判定できる
             if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
                 continue;
             }
@@ -61,6 +62,7 @@ const extractReferencedScripts = (docFiles: string[]): Set<string> => {
  * @returns package.json 内で定義済みのスクリプト名の集合
  */
 const loadDefinedScripts = (): Set<string> => {
+    // SAFETY: このリポジトリ自身の package.json を読むだけであり、scripts は任意項目として扱い ?? {} でフォールバックする
     const pkg = JSON.parse(readFileSync('package.json', 'utf-8')) as {
         scripts?: Record<string, string>;
     };

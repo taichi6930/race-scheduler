@@ -161,6 +161,8 @@ const buildXmlCaseInputs = (inputPath: string): AllureEventCase[] => {
 const tryParseEventsFile = (eventsPath: string): InspectorEvent[] | null => {
     if (!existsSync(eventsPath)) return null;
     try {
+        // SAFETY: bun test --reporter=... が出力する自前フォーマットの events.jsonl であり、
+        // 各行の構造は本スクリプトが期待するInspectorEvent形状で固定されている（不正な行はtry/catchでnullにフォールバック）
         return readFileSync(eventsPath, 'utf8')
             .split('\n')
             .filter((line) => line.length > 0)

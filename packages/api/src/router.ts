@@ -180,6 +180,8 @@ const NO_STORE_PATHS: readonly string[] = [
 const buildCorsMiddleware = (): ReturnType<typeof cors> =>
     cors({
         origin: (origin, c) => {
+            // SAFETY: cors()のorigin コールバックはHonoのEnv型引数を持たないためc.envの型情報が失われるが、
+            // 実体はCloudflare WorkersのバインディングでCORS_ALLOWED_ORIGINSは任意のstring環境変数として設定される
             const envOriginsRaw = (
                 c.env as { CORS_ALLOWED_ORIGINS?: string } | undefined
             )?.CORS_ALLOWED_ORIGINS;
@@ -1086,6 +1088,9 @@ const buildRouter = (): Hono => {
     // コメント参照）。
     router.get('/health', async (c: Context) => {
         try {
+            // SAFETY: この router.get ハンドラは c: Context として汎用型で受け取っているが、
+            // 実行時はCloudflare Workersのfetchハンドラから呼ばれ、DIコンテナ初期化（ensureDIInitialized）
+            // と同じ CloudFlareEnv 形状のbindingsが渡ってくる
             await (c.env as CloudFlareEnv).DB.prepare('SELECT 1').first();
             return c.json({ status: 'ok', package: 'api' }, 200);
         } catch (error) {

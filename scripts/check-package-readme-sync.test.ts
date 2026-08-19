@@ -56,6 +56,7 @@ describe('checkSync', () => {
             },
         ];
         const issues = checkSync(rows, ['api'], () => false);
+        // SAFETY: expect.stringContaining() はbun:testの非対称マッチャーで実行時はstringを期待するdetailフィールドに埋め込まれ、toEqualが構造的に比較するだけで実際にstringとして使われることはない
         expect(issues).toEqual([
             {
                 kind: 'broken-link',
@@ -69,6 +70,7 @@ describe('checkSync', () => {
 
     it('[T-05] 実ディレクトリが表に無い場合はundocumented-packageを検出すること', () => {
         const issues = checkSync([], ['newpkg'], () => true);
+        // SAFETY: expect.stringContaining() はbun:testの非対称マッチャーで実行時はstringを期待するdetailフィールドに埋め込まれ、toEqualが構造的に比較するだけで実際にstringとして使われることはない
         expect(issues).toEqual([
             {
                 kind: 'undocumented-package',

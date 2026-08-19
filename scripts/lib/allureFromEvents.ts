@@ -64,11 +64,21 @@ interface ConsoleMessageAddedParams {
     };
 }
 
+// SAFETY: 呼び出し側で event.m === 'TestReporter.found' を確認した上でのみ渡されるため、
+// bunのInspector Protocol仕様上paramsの形状はFoundParams固定
 const asFoundParams = (p: unknown): FoundParams => p as FoundParams;
+// SAFETY: 呼び出し側で event.m === 'TestReporter.start'/'end' を確認した上でのみ渡されるため、
+// bunのInspector Protocol仕様上paramsの形状はIdParams（idを含む）固定
 const asIdParams = (p: unknown): IdParams => p as IdParams;
+// SAFETY: 呼び出し側で event.m === 'TestReporter.end' を確認した上でのみ渡されるため、
+// bunのInspector Protocol仕様上paramsの形状はEndParams固定
 const asEndParams = (p: unknown): EndParams => p as EndParams;
+// SAFETY: 呼び出し側で event.m === 'LifecycleReporter.error' を確認した上でのみ渡されるため、
+// bunのInspector Protocol仕様上paramsの形状はLifecycleErrorParams固定
 const asLifecycleErrorParams = (p: unknown): LifecycleErrorParams =>
     p as LifecycleErrorParams;
+// SAFETY: 呼び出し側で event.m === 'Console.messageAdded' を確認した上でのみ渡されるため、
+// bunのInspector Protocol仕様上paramsの形状はConsoleMessageAddedParams固定
 const asConsoleMessageAddedParams = (p: unknown): ConsoleMessageAddedParams =>
     p as ConsoleMessageAddedParams;
 

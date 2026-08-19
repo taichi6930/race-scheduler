@@ -103,6 +103,8 @@ type BuildSymbolMapFsDeps = Parameters<typeof buildSymbolMap>[1];
 
 describe('resolveModuleFile', () => {
     it('[T-09] <dir>/x.ts が存在する場合はそのパスを返すこと', () => {
+        // SAFETY: resolveModuleFile が実際に呼ぶのは existsSync/statSync のみ（string引数）で、
+        // node:fs のフルシグネチャを満たすモックは不要なためテスト用の最小実装へキャストしている
         // oxlint-disable-next-line anti-slop/no-chained-type-assertions
         const fsDeps = {
             existsSync: (p: string) => p.endsWith('x.ts'),
@@ -114,6 +116,8 @@ describe('resolveModuleFile', () => {
     });
 
     it('[T-10] x.ts が無く x/index.ts が存在する場合はディレクトリindexを返すこと', () => {
+        // SAFETY: resolveModuleFile が実際に呼ぶのは existsSync/statSync のみ（string引数）で、
+        // node:fs のフルシグネチャを満たすモックは不要なためテスト用の最小実装へキャストしている
         // oxlint-disable-next-line anti-slop/no-chained-type-assertions
         const fsDeps = {
             existsSync: (p: string) => p.endsWith('index.ts'),
@@ -125,6 +129,8 @@ describe('resolveModuleFile', () => {
     });
 
     it('[T-11] どちらも存在しない場合はnullを返すこと', () => {
+        // SAFETY: resolveModuleFile が実際に呼ぶのは existsSync/statSync のみ（string引数）で、
+        // node:fs のフルシグネチャを満たすモックは不要なためテスト用の最小実装へキャストしている
         // oxlint-disable-next-line anti-slop/no-chained-type-assertions
         const fsDeps = {
             existsSync: () => false,
@@ -141,6 +147,9 @@ describe('buildSymbolMap', () => {
         const files = new Map<string, string>([
             ['/core/src/withBarrel/index.ts', "export * from './a';"],
         ]);
+        // SAFETY: buildSymbolMap が実際に呼ぶのは readdirSync/readFileSync/existsSync/statSync のみ
+        // （いずれもstring引数）で、node:fs のフルシグネチャを満たすモックは不要なため
+        // テスト用の最小実装へキャストしている
         // oxlint-disable-next-line anti-slop/no-chained-type-assertions
         const fsDeps = {
             readdirSync: () => [
@@ -166,6 +175,9 @@ describe('buildSymbolMap', () => {
             ],
             ['/core/src/mixed/a.ts', 'export const A = 1;'],
         ]);
+        // SAFETY: buildSymbolMap が実際に呼ぶのは readdirSync/readFileSync/existsSync/statSync のみ
+        // （いずれもstring引数）で、node:fs のフルシグネチャを満たすモックは不要なため
+        // テスト用の最小実装へキャストしている
         // oxlint-disable-next-line anti-slop/no-chained-type-assertions
         const fsDeps = {
             readdirSync: () => [{ name: 'mixed', isDirectory: () => true }],

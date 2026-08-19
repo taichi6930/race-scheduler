@@ -47,6 +47,7 @@ export function extractAppNameSources(
     indexHtmlContent: string,
     appDartContent: string,
 ): AppNameSources {
+    // SAFETY: manifest.json はこのリポジトリが管理する固定フォーマットのファイルであり、name/short_name/description は任意項目として扱う
     const manifest = JSON.parse(manifestContent) as {
         name?: string;
         short_name?: string;

@@ -121,8 +121,13 @@ describe('runInspectorSession', () => {
 
         expect(result.connected).toBe(true);
         expect(received).toHaveLength(2);
+        // SAFETY: 上のfakeサーバーがTestReporter.found/endの2件のみを送信しており、
+        // runInspectorSessionのonEventはInspectorEvent({t, m, p})を渡す契約のため、
+        // received[0]は既知の形状を持つ
         expect((received[0] as { m: string }).m).toBe('TestReporter.found');
+        // SAFETY: 同上（fakeサーバーが送信した2件目はTestReporter.end）
         expect((received[1] as { m: string }).m).toBe('TestReporter.end');
+        // SAFETY: 同上（received[0]はInspectorEvent形状のためtフィールドを持つ）
         expect((received[0] as { t: number }).t).toEqual(expect.any(Number));
     });
 
