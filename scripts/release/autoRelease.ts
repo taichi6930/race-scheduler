@@ -267,6 +267,8 @@ interface CreatedReleaseResponse {
     prerelease: boolean;
 }
 
+// SAFETY: 直前の typeof/null チェックで value がオブジェクトであることを確認済みのため、
+// プロパティの型を絞り込むための一時的なキャストは安全（型ガード関数自身の実装）
 const isCreatedReleaseResponse = (
     value: unknown,
 ): value is CreatedReleaseResponse =>

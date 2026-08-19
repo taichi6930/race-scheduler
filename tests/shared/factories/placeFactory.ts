@@ -18,6 +18,8 @@ export interface PlaceFactoryOverrides {
     overrides?: Partial<PlaceEntity>;
 }
 
+// SAFETY: テストファクトリの固定デフォルト値であり、有効な日付文字列・実在する開催場コード
+// （'05'=JRA東京）を直接指定しているため、ブランド型としての実行時制約を常に満たす。
 const DEFAULTS = {
     raceType: RaceType.JRA,
     datetime: new Date('2026-04-26T10:00:00+09:00') as RaceDateTime,
@@ -70,6 +72,8 @@ export const PlaceFactory = {
     ): PlaceEntity[] {
         return Array.from({ length: count }, (_, index) => {
             const baseDate = input.datetime ?? DEFAULTS.datetime;
+            // SAFETY: baseDate は既に RaceDateTime（有効な Date）であり、日数を加算しても
+            // Date として不正にはならないため、ブランド型への再キャストは安全。
             const datetime = new Date(
                 baseDate.getTime() + index * 24 * 60 * 60 * 1000,
             ) as RaceDateTime;

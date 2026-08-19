@@ -29,6 +29,7 @@ interface WranglerPackageJson {
     dependencies?: Record<string, string>;
 }
 
+// SAFETY: このリポジトリ自身の package.json を読むだけであり、devDependencies は任意項目として ?. で扱う
 const rootPkg = JSON.parse(
     readFileSync('package.json', 'utf-8'),
 ) as RootPackageJson;
@@ -43,6 +44,7 @@ if (!pinnedMiniflare) {
 
 let wranglerPkg: WranglerPackageJson;
 try {
+    // SAFETY: node_modules配下のwrangler本体のpackage.jsonはnpmパッケージの標準フォーマットであり、version/dependenciesは任意項目として ?. で扱う
     wranglerPkg = JSON.parse(
         readFileSync('node_modules/wrangler/package.json', 'utf-8'),
     ) as WranglerPackageJson;

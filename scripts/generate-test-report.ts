@@ -327,6 +327,8 @@ const insertFlutterCase = (
     let cursor = root;
     for (const groupName of groupNames) {
         if (groupName === '') continue;
+        // SAFETY: find条件で c.kind === 'group' に絞り込んだ直後のため、見つかった要素は
+        // 必ず TestGroupNode（TestGroupNode | TestCaseNode の判別可能union）
         let child = cursor.children.find(
             (c) => c.kind === 'group' && c.name === groupName,
         ) as TestGroupNode | undefined;
@@ -356,15 +358,23 @@ const parseFlutterJsonl = (path: string): DynamicFile[] => {
             continue;
         }
         if (event.type === 'suite' && event.suite) {
+            // SAFETY: event.type==='suite' を確認済みで、flutter test --reporter=json は
+            // suiteイベント時にsuiteフィールドが{id,path}形状であることが仕様上保証されている
             const s = event.suite as FlutterSuite;
             suites.set(s.id, s);
         } else if (event.type === 'group' && event.group) {
+            // SAFETY: event.type==='group' を確認済みで、flutter test --reporter=json は
+            // groupイベント時にgroupフィールドが{id,name}形状であることが仕様上保証されている
             const g = event.group as { id: number; name: string };
             groupNames.set(g.id, g.name);
         } else if (event.type === 'testStart' && event.test) {
+            // SAFETY: event.type==='testStart' を確認済みで、flutter test --reporter=json は
+            // testStartイベント時にtestフィールドが本ファイル定義のFlutterTest形状であることが仕様上保証されている
             const t = event.test as FlutterTest;
             tests.set(t.id, t);
         } else if (event.type === 'testDone') {
+            // SAFETY: testDoneイベントのtestIDは対応するtestStartイベントのtest.idと同じ
+            // 数値であることがflutter test --reporter=jsonの仕様で保証されている
             const t = tests.get(event.testID as number);
             if (!t || t.hidden) continue;
             const suite = suites.get(t.suiteID);
@@ -375,6 +385,8 @@ const parseFlutterJsonl = (path: string): DynamicFile[] => {
                 root = { kind: 'group', name: basename(relPath), children: [] };
                 roots.set(relPath, root);
             }
+            // SAFETY: testDoneイベントのresultフィールドはflutter test --reporter=jsonの
+            // 仕様上必ず文字列（'success'等のステータス名）で返される
             const result = event.result as string;
             const status: TestStatus = event.skipped
                 ? 'skip'
@@ -568,6 +580,8 @@ const loadSpecCoverageData = (): SpecCoverageReport | null => {
     const path = join(RAW_DIR, 'spec-coverage.json');
     if (!existsSync(path)) return null;
     try {
+        // SAFETY: spec-coverage.jsonはscripts/spec-coverage.ts --jsonが本リポジトリ内で
+        // 生成する自前フォーマットであり、SpecCoverageReport形状はその出力仕様と一致している
         return JSON.parse(readFileSync(path, 'utf8')) as SpecCoverageReport;
     } catch {
         return null;

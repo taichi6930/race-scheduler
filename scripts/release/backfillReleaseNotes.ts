@@ -61,6 +61,9 @@ export const fetchAllReleases = async (
         if (!Array.isArray(json) || json.length === 0) {
             break;
         }
+        // SAFETY: 直前のArray.isArrayで配列であることは検証済み。要素の形状は
+        // GitHub Releases APIのドキュメント化されたレスポンス形状（tag_name等）に
+        // 準拠している前提でキャストしている
         releases.push(...(json as GithubReleaseSource[]));
         if (json.length < 100) {
             break;

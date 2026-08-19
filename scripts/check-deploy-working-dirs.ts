@@ -48,6 +48,7 @@ interface WorkflowFile {
  * @returns 重複を除いた `packages/X` 形式のパス一覧
  */
 export function extractWorkingDirectories(workflowContent: string): string[] {
+    // SAFETY: このリポジトリ自身が管理する deploy-*-reusable.yml を読むだけであり、以降の参照は全て `?.`/`?? {}` によるオプショナル扱いで、未知の形状でも例外にはならない
     const doc = parse(workflowContent) as WorkflowFile;
     const dirs = new Set<string>();
     for (const job of Object.values(doc.jobs ?? {})) {

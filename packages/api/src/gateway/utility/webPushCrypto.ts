@@ -222,6 +222,8 @@ function resolveVapidCredentials(): VapidCredentials {
     // 型ガード isVapidConfigured により privateKey/subject も string と分かっているが、
     // 型述語の対象は publicKey のみのため、ここでは非nullアサーションではなく
     // 事前に取得済みの値をそのまま使う（実行時は既に検証済み）。
+    // SAFETY: 直前の isVapidConfigured(publicKey, privateKey, subject) が true を返した時点で
+    // privateKey/subject もともに string（undefinedではない）であることが検証済み
     return {
         publicKey,
         privateKey: privateKey as string,

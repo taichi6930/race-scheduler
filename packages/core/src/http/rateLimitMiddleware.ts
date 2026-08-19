@@ -181,6 +181,10 @@ export const rateLimitMiddleware = (
     exemptRoutes: readonly ServiceAuthExemptRoute[],
 ): MiddlewareHandler => {
     return async (c: Context, next: Next) => {
+        // SAFETY: c.env が undefined の場合（bindings未設定のテスト等）は空オブジェクトへ
+        // フォールバックするだけで、直後の resolveRateLimiter は該当バインディングが
+        // 存在しなければフェイルオープン（next()呼び出し）する設計のため、
+        // CloudFlareEnv として扱っても安全に扱われる。
         const env = (c.env ?? {}) as CloudFlareEnv;
         const limiter = resolveRateLimiter(env, c.req.method);
         if (!limiter) {
