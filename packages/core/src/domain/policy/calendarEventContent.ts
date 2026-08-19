@@ -186,6 +186,9 @@ export const GoogleCalendarColorKeyMap = {
         GⅡ: 'TOMATO',
         開催: 'GRAPHITE',
     },
+    // SAFETY: 各競技（jra/nar/keirin/boatrace/autorace）キーは RaceType の実際の値と一致し、
+    // 各グレード名も GradeType の値・色キーも GoogleCalendarColorKey の値のみで構成された
+    // リテラルオブジェクトのため、より広い Record 型として扱っても値の実体は変わらない。
 } as Record<RaceType, Record<GradeType, GoogleCalendarColorKey>>;
 
 /**

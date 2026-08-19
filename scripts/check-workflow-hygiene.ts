@@ -65,6 +65,7 @@ const cacheLessJobs: string[] = [];
 for (const file of listWorkflowFiles(WORKFLOWS_DIR)) {
     const path = join(WORKFLOWS_DIR, file);
     const content = readFileSync(path, 'utf-8');
+    // SAFETY: このリポジトリ自身が管理する .github/workflows/*.yml を読むだけであり、以降の参照は全て `?.`/`?? {}` によるオプショナル扱いで、未知の形状でも例外にはならない
     const doc = parse(content) as WorkflowFile;
     const jobs = doc.jobs ?? {};
 

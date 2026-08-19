@@ -117,6 +117,7 @@ describe('checkDrift', () => {
         const yamlDeps = new Map([['foo', '^1.0.0']]);
         const lockPackages = new Map();
         const issues = checkDrift(yamlDeps, lockPackages);
+        // SAFETY: expect.stringContaining() はbun:testの非対称マッチャーで実行時はstringを期待するdetailフィールドに埋め込まれ、toEqualが構造的に比較するだけで実際にstringとして使われることはない
         expect(issues).toEqual([
             {
                 name: 'foo',
