@@ -153,6 +153,26 @@ export const buildReleaseNoteWritePayload = (params: {
     source_repo: params.sourceRepo,
 });
 
+/**
+ * release_note テーブルへのdual-writeを実行できるかどうかを判定する。
+ * 実行しない場合は、欠けている環境変数名を含む警告メッセージを返す
+ * （`MAIN_API_URL`/`SERVICE_AUTH_TOKEN` が未設定のままdual-writeが継続的に
+ * スキップされていても、これまではCIログに何も残らず気づけなかったため）。
+ */
+export const resolveDualWriteSkipReason = (params: {
+    mainApiUrl?: string;
+    serviceAuthToken?: string;
+}): string | null => {
+    if (params.mainApiUrl && params.serviceAuthToken) {
+        return null;
+    }
+    const missingVars = [
+        !params.mainApiUrl && 'MAIN_API_URL',
+        !params.serviceAuthToken && 'SERVICE_AUTH_TOKEN',
+    ].filter((name): name is string => Boolean(name));
+    return `${missingVars.join(' / ')} が未設定のため、release_noteテーブルへのdual-writeをスキップしました`;
+};
+
 /** 自動リリースの判定・実行を行う。実行結果の説明文字列を返す。 */
 export const runAutoRelease = async (
     params: RunAutoReleaseParams,
@@ -231,6 +251,8 @@ export const runAutoRelease = async (
                 `release_noteテーブルへのdual-writeに失敗しましたが、リリース作成自体は続行します: ${error}`,
             );
         }
+    } else {
+        console.warn(resolveDualWriteSkipReason(params));
     }
 
     return `自動リリースを作成しました: ${nextVersion}（${eligibility.reason}）`;

@@ -29,6 +29,14 @@
  * |---|------|------|
  * | T-14 | GitHub Releaseレスポンス（name/bodyあり）+ sourceRepo | releaseの全フィールド + source_repo を含むオブジェクト |
  * | T-15 | name/bodyがnull | nullがそのまま維持される |
+ *
+ * ### resolveDualWriteSkipReason
+ * | # | mainApiUrl / serviceAuthToken | 期待 |
+ * |---|-------------------------------|------|
+ * | T-16 | 両方あり | null（スキップしない） |
+ * | T-17 | 両方なし | 'MAIN_API_URL / SERVICE_AUTH_TOKEN が未設定...' |
+ * | T-18 | mainApiUrlのみなし | 'MAIN_API_URL が未設定...' |
+ * | T-19 | serviceAuthTokenのみなし | 'SERVICE_AUTH_TOKEN が未設定...' |
  */
 import { describe, expect, it } from 'bun:test';
 
@@ -36,6 +44,7 @@ import {
     buildReleaseNoteWritePayload,
     computeNextVersion,
     determineAutoReleaseEligibility,
+    resolveDualWriteSkipReason,
 } from './autoRelease';
 
 describe('computeNextVersion', () => {
@@ -190,5 +199,41 @@ describe('buildReleaseNoteWritePayload', () => {
 
         expect(result.name).toBeNull();
         expect(result.body).toBeNull();
+    });
+});
+
+describe('resolveDualWriteSkipReason', () => {
+    it('T-16_両方設定されている場合_nullを返す', () => {
+        const result = resolveDualWriteSkipReason({
+            mainApiUrl: 'https://example.com',
+            serviceAuthToken: 'token',
+        });
+
+        expect(result).toBeNull();
+    });
+
+    it('T-17_両方とも未設定の場合_両方の変数名を含む警告を返す', () => {
+        const result = resolveDualWriteSkipReason({});
+
+        expect(result).toContain('MAIN_API_URL');
+        expect(result).toContain('SERVICE_AUTH_TOKEN');
+    });
+
+    it('T-18_mainApiUrlのみ未設定の場合_MAIN_API_URLのみ含む警告を返す', () => {
+        const result = resolveDualWriteSkipReason({
+            serviceAuthToken: 'token',
+        });
+
+        expect(result).toContain('MAIN_API_URL');
+        expect(result).not.toContain('SERVICE_AUTH_TOKEN');
+    });
+
+    it('T-19_serviceAuthTokenのみ未設定の場合_SERVICE_AUTH_TOKENのみ含む警告を返す', () => {
+        const result = resolveDualWriteSkipReason({
+            mainApiUrl: 'https://example.com',
+        });
+
+        expect(result).not.toContain('MAIN_API_URL');
+        expect(result).toContain('SERVICE_AUTH_TOKEN');
     });
 });
