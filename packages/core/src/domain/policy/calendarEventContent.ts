@@ -212,27 +212,16 @@ export const formatStageForCalendar = (
     }
 };
 
-/** 未確定（公式発表前・推測登録）のレースをカレンダータイトルで示す接頭辞。 */
-const UNCONFIRMED_SUMMARY_PREFIX = '【未確定】';
-
 /**
  * Calendarのタイトルに使用する文字列を生成
- *
- * 同一raceEntityに対する formatStageForCalendar の呼び出しは常に同じ結果になるため、
- * 1回だけ計算した値を再利用する（PERF-139: 従来は分岐判定用と文字列組み立て用で
- * 2回呼び出していた）。
  * @param raceEntity - レースエンティティ
  * @returns カレンダーイベントのタイトルに使用する文字列
  */
 export const formatSummaryForCalendar = (raceEntity: RaceEntity): string => {
     const stage = formatStageForCalendar(raceEntity);
-    const summary =
-        stage === null
-            ? raceEntity.raceName
-            : `${stage} ${raceEntity.raceName}`;
-    return raceEntity.isConfirmed === false
-        ? `${UNCONFIRMED_SUMMARY_PREFIX}${summary}`
-        : summary;
+    return stage === null
+        ? raceEntity.raceName
+        : `${stage} ${raceEntity.raceName}`;
 };
 
 /**
