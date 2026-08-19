@@ -88,6 +88,7 @@ describe('コンポーネントテスト: ReleaseNote Router → Controller → 
             published_at: '2026-08-16T00:00:00Z',
             draft: false,
             prerelease: false,
+            source_repo: 'race-scheduler',
         });
     });
 
@@ -133,6 +134,7 @@ describe('コンポーネントテスト: ReleaseNote Router → Controller → 
                 published_at: '2026-08-16T00:00:00Z',
                 draft: false,
                 prerelease: false,
+                source_repo: 'race-scheduler',
             },
         ]);
     });

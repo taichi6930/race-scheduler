@@ -80,6 +80,7 @@ describe('ReleaseNoteRepository', () => {
                     published_at: '2026-08-16T00:00:00Z',
                     draft: false,
                     prerelease: false,
+                    source_repo: 'race-scheduler',
                 },
                 {
                     tag_name: 'v1.0.0',
@@ -88,6 +89,7 @@ describe('ReleaseNoteRepository', () => {
                     published_at: '2026-01-01T00:00:00Z',
                     draft: false,
                     prerelease: false,
+                    source_repo: 'race-schedule',
                 },
             ]);
         });
@@ -114,6 +116,7 @@ describe('ReleaseNoteRepository', () => {
                     published_at: '2026-08-20T00:00:00Z',
                     draft: true,
                     prerelease: true,
+                    source_repo: 'race-scheduler',
                 },
             ]);
         });
@@ -155,6 +158,7 @@ describe('ReleaseNoteRepository', () => {
                     published_at: '2026-08-01T00:00:00Z',
                     draft: false,
                     prerelease: false,
+                    source_repo: 'race-schedule',
                 },
             ]);
         });

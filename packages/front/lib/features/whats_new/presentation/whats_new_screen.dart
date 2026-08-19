@@ -8,6 +8,7 @@ import '../../../design/typography.dart';
 import '../../../design/molecules/empty_state.dart';
 import '../../../design/molecules/error_retry_card.dart';
 import '../../../design/molecules/loading_skeleton_list.dart';
+import '../../../design/atoms/pill.dart';
 import '../../../design/atoms/refresh_icon_button.dart';
 import '../../../design/atoms/surface_card.dart';
 import '../../../domain/entities/release_note_category.dart';
@@ -114,6 +115,19 @@ class _WhatsNewBody extends StatelessWidget {
   }
 }
 
+/// [sourceRepo] から更新履歴カードに表示するラベルを求める。
+///
+/// race-schedule/race-scheduler分割後、両リポジトリのリリースが同じ一覧に
+/// 混在するため、名前が似ている2つのリポジトリのどちらのリリースか
+/// 一目で区別できるよう、公開状態（race-schedulerは公開、race-scheduleは
+/// 非公開）で表示する。未知の値・未設定（旧データ）の場合はバッジ自体を
+/// 表示しない。
+String? _sourceRepoLabel(String? sourceRepo) => switch (sourceRepo) {
+  'race-scheduler' => '公開',
+  'race-schedule' => '非公開',
+  _ => null,
+};
+
 /// 1リリース分（バージョン見出し＋カテゴリ別の箇条書き）を表示するカード。
 class _ReleaseCard extends StatelessWidget {
   const _ReleaseCard({required this.release});
@@ -137,6 +151,21 @@ class _ReleaseCard extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                 ),
               ),
+              if (_sourceRepoLabel(release.sourceRepo) case final label?) ...[
+                const SizedBox(width: 6),
+                Pill(
+                  backgroundColor: colors.surface2,
+                  borderRadius: 5,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 1,
+                  ),
+                  child: Text(
+                    label,
+                    style: AppTypography.caption.copyWith(color: colors.ink3),
+                  ),
+                ),
+              ],
               const SizedBox(width: 8),
               Text(
                 formatJapaneseDateLabel(release.publishedAt),

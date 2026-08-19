@@ -31,6 +31,7 @@ export class ReleaseNoteRepository implements IReleaseNoteRepository {
             published_at: row.publishedAt,
             draft: row.draft !== 0,
             prerelease: row.prerelease !== 0,
+            source_repo: row.sourceRepo,
         }));
     }
 

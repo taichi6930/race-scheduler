@@ -14,6 +14,12 @@ export const releaseNoteSchema = z.object({
     published_at: z.string().nullable(),
     draft: z.boolean(),
     prerelease: z.boolean(),
+    // GitHub Releases APIには存在しないfront独自の追加フィールド。front側の
+    // 更新履歴画面でどちらのリポジトリ由来か表示する（race-schedule/race-scheduler
+    // 分割後、片方だけ見て「どっちのリポジトリのものか分かりにくい」ため）ために
+    // optionalで追加する。実際のGitHub APIレスポンスをこのスキーマでパースしても
+    // undefinedになるだけで、GitHub API互換という設計意図は壊れない。
+    source_repo: z.enum(['race-schedule', 'race-scheduler']).optional(),
 });
 
 /** {@link releaseNoteSchema} の推論型 */
