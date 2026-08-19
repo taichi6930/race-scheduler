@@ -128,7 +128,10 @@ export const GOOGLE_CALENDAR_ALL_COLORS: readonly GoogleCalendarColorDefinition[
 /**
  * 各競技ごとのグレード→色キーマップをRaceTypeでまとめる
  */
-export const GoogleCalendarColorKeyMap = {
+export // SAFETY: 各競技（jra/nar/keirin/boatrace/autorace）キーは RaceType の実際の値と一致し、
+// 各グレード名も GradeType の値・色キーも GoogleCalendarColorKey の値のみで構成された
+// リテラルオブジェクトのため、より広い Record 型として扱っても値の実体は変わらない。
+const GoogleCalendarColorKeyMap = {
     jra: {
         GⅠ: 'BLUEBERRY',
         GⅡ: 'TOMATO',
@@ -186,9 +189,6 @@ export const GoogleCalendarColorKeyMap = {
         GⅡ: 'TOMATO',
         開催: 'GRAPHITE',
     },
-    // SAFETY: 各競技（jra/nar/keirin/boatrace/autorace）キーは RaceType の実際の値と一致し、
-    // 各グレード名も GradeType の値・色キーも GoogleCalendarColorKey の値のみで構成された
-    // リテラルオブジェクトのため、より広い Record 型として扱っても値の実体は変わらない。
 } as Record<RaceType, Record<GradeType, GoogleCalendarColorKey>>;
 
 /**
