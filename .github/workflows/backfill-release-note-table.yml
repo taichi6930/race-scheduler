@@ -40,9 +40,23 @@ jobs:
         with:
           setup-node: 'false'
 
+      # 既定の secrets.GITHUB_TOKEN はこのリポジトリ（race-scheduler）にしかアクセスできず、
+      # 分割元の race-schedule（private化済み）を対象に含めると HTTP 404 で失敗する。
+      # race-schedule-bot App は race-schedule 側の各ワークフローでも同じ BOT_APP_ID で
+      # 利用されており両リポジトリにインストール済みのため、App トークンをクロスリポジトリ
+      # スコープで発行して両リポジトリを読めるようにする。
+      - name: Create GitHub App Token
+        uses: ./.github/actions/create-github-app-token
+        id: app-token
+        with:
+          app-id: ${{ secrets.BOT_APP_ID }}
+          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
+          owner: taichi6930
+          repositories: race-schedule,race-scheduler
+
       - name: Generate backfill SQL
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         run: bun scripts/release/backfillReleaseNotes.ts > /tmp/backfill-release-notes.sql
 
       - name: Show generated SQL summary
