@@ -99,6 +99,8 @@ export const fetchJobTimings = (repo: string, runId: number): JobTiming[] => {
         '--jq',
         '.jobs[] | {name, started_at, completed_at, conclusion}',
     ]);
+    // SAFETY: 直前の --jq フィルタで `{name, started_at, completed_at, conclusion}` の
+    // 形状に絞って出力させているため、各行のJSON.parse結果はJobTimingの形状と一致する
     return output
         .trim()
         .split('\n')

@@ -134,6 +134,9 @@ export const runInspectorSession = async (
         ws.addEventListener('close', () => resolve(), { once: true });
     });
     ws.addEventListener('message', (ev) => {
+        // SAFETY: Inspector Protocolはテキストフレーム（JSON文字列）のみを送信する
+        // 仕様のためev.dataはstring。パース結果はInspector Protocolの既知の
+        // メッセージ形状（設計書§2参照）に準拠する前提でキャストしている
         const msg = JSON.parse(ev.data as string) as RawInspectorMessage;
         if (!msg.method || !isRelevantInspectorMethod(msg.method)) return;
         opts.onEvent(toInspectorEvent(Date.now(), msg.method, msg.params));

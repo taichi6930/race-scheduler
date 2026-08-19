@@ -608,6 +608,8 @@ const emptySummaryCell = (): ReportSummaryCell => ({
 });
 
 const buildSummary = (files: ReportFile[]): Report['summary'] => {
+    // SAFETY: 空オブジェクトで初期化した直後、下のループで LAYERS の全キーを埋めるため、
+    // この関数が返す時点では Report['summary'] の必須キーが全て揃っている
     const summary = {} as Report['summary'];
     for (const layer of LAYERS) summary[layer] = {};
     for (const file of files) {

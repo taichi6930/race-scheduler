@@ -122,17 +122,17 @@ export const shouldHavePlaceHeldDaysForJra = (data: {
 }): boolean =>
     data.placeHeldDays !== undefined || data.raceType !== RaceType.JRA;
 
-// SAFETY: 単一要素のリテラル配列を Zod issue の path（string[]）として渡すための
-// 型の広げ直しであり、要素は固定の 'placeHeldDays' 一つだけなので実行時の値は変わらない。
 export const PLACE_HELD_DAYS_REQUIRED_ERROR = {
     message: 'placeHeldDays is required for JRA',
+    // SAFETY: 単一要素のリテラル配列を Zod issue の path（string[]）として渡すための
+    // 型の広げ直しであり、要素は固定の 'placeHeldDays' 一つだけなので実行時の値は変わらない。
     path: ['placeHeldDays'] as string[],
 };
 
-// SAFETY: 単一要素のリテラル配列を Zod issue の path（string[]）として渡すための
-// 型の広げ直しであり、要素は固定の 'raceStage' 一つだけなので実行時の値は変わらない。
 export const RACE_STAGE_REQUIRED_ERROR = {
     message: 'raceStage is required for KEIRIN/AUTORACE/BOATRACE',
+    // SAFETY: 単一要素のリテラル配列を Zod issue の path（string[]）として渡すための
+    // 型の広げ直しであり、要素は固定の 'raceStage' 一つだけなので実行時の値は変わらない。
     path: ['raceStage'] as string[],
 };
 

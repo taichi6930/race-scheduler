@@ -39,6 +39,9 @@ export const BATCH_TARGETS = [
  * @returns value が BatchTarget なら true
  */
 export function isBatchTarget(value: unknown): value is BatchTarget {
+    // SAFETY: BatchTarget自体がstringの部分集合のユニオン型のため、BATCH_TARGETSの要素は
+    // 全て実体としてstring。string[].includes(value: string)を呼ぶための型の緩和であり、
+    // 直前のtypeof value === 'string'によりvalueもstringに絞り込み済み
     return (
         typeof value === 'string' &&
         (BATCH_TARGETS as readonly string[]).includes(value)

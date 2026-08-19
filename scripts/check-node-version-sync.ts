@@ -101,6 +101,7 @@ export function findVersionMismatches(versions: {
 
 if (import.meta.main) {
     const nvmrcContent = readFileSync(NVMRC_PATH, 'utf-8');
+    // SAFETY: このリポジトリ自身の package.json を読むだけであり、engines/devDependenciesは任意項目として ?. で扱う
     const packageJson = JSON.parse(
         readFileSync(PACKAGE_JSON_PATH, 'utf-8'),
     ) as PackageJson;
