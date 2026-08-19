@@ -29,6 +29,17 @@ inputs:
   private-key:
     description: GitHub App private key
     required: true
+  owner:
+    description: |
+      トークンの対象オーナー（省略時はこのリポジトリのみ）。Appがインストール済みの
+      同オーナー配下の全リポジトリへアクセスするクロスリポジトリトークンが必要な場合に指定する
+      （例: race-scheduler から race-schedule のprivateリポジトリを参照する場合）。
+    required: false
+    default: ''
+  repositories:
+    description: 'トークンの対象リポジトリ（カンマ区切り、ownerと併用）。省略時はこのリポジトリのみ。'
+    required: false
+    default: ''
 
 outputs:
   token:
@@ -44,3 +55,5 @@ runs:
       with:
         app-id: ${{ inputs.app-id }}
         private-key: ${{ inputs.private-key }}
+        owner: ${{ inputs.owner }}
+        repositories: ${{ inputs.repositories }}
