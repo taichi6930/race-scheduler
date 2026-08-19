@@ -21,7 +21,6 @@ class FakeReleaseRemoteDataSource implements IReleaseRemoteDataSource {
             '- レース結果の確定タイミングを表示するようになりました\n\n'
             '## 🎉 改善\n'
             '- 通知の重複を解消しました',
-        sourceRepo: 'race-scheduler',
       ),
       ReleaseModel(
         tagName: 'v1.2.0',
@@ -30,7 +29,6 @@ class FakeReleaseRemoteDataSource implements IReleaseRemoteDataSource {
             .subtract(const Duration(days: 14))
             .toIso8601String(),
         body: '## 🔧 バックエンドのみ\n- APIのレスポンス速度を改善しました',
-        sourceRepo: 'race-schedule',
       ),
     ];
   }

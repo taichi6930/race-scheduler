@@ -20,10 +20,6 @@ abstract class ReleaseNoteCategoryEntryEntity
 /// カテゴリ見出しが1つも見つからなかった場合（旧形式のリリース等）は
 /// 空リストになる。空リストのリリースは一覧画面での表示対象外
 /// （[visibleReleaseNotes]）とする（NFR-02）。
-///
-/// [sourceRepo] はリリースの取得元リポジトリ（'race-schedule' /
-/// 'race-scheduler'）。race-schedule/race-scheduler分割後、更新履歴画面で
-/// どちらのリポジトリ由来のリリースか一目で分かるようにするために保持する。
 @freezed
 abstract class ReleaseNoteEntity with _$ReleaseNoteEntity {
   const factory ReleaseNoteEntity({
@@ -31,6 +27,5 @@ abstract class ReleaseNoteEntity with _$ReleaseNoteEntity {
     String? name,
     required DateTime publishedAt,
     required List<ReleaseNoteCategoryEntryEntity> categories,
-    String? sourceRepo,
   }) = _ReleaseNoteEntity;
 }

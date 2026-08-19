@@ -68,6 +68,7 @@ describe('Admin Router', () => {
             saveUiLayout: () => Promise.resolve({ sections: [] }),
             previewUiLayout: () => Promise.resolve(undefined),
             fetchUpcomingKeirinRaces: () => Promise.resolve([]),
+            fetchReleaseNotes: () => Promise.resolve([]),
         };
         container.register<IMainApiGateway>(DI_TOKENS.MainApiGateway, {
             useValue: mainApiGateway,

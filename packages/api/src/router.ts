@@ -58,6 +58,7 @@ import { BatchLockController } from './controller/batchLockController';
 import { CalendarController } from './controller/calendarController';
 import { DebugController } from './controller/debugController';
 import { InternalFeatureFlagsController } from './controller/internalFeatureFlagsController';
+import { InternalReleaseNoteController } from './controller/internalReleaseNoteController';
 import { InternalUiLayoutController } from './controller/internalUiLayoutController';
 import { PlaceController } from './controller/placeController';
 import { PlayerController } from './controller/playerController';
@@ -903,6 +904,28 @@ const registerReleaseNoteRoutes = (router: Hono): void => {
 };
 
 /**
+ * 更新履歴の運用者専用エンドポイント（`GET /internal/release-notes`）を登録する。
+ * `packages/admin` からのみ `X-Service-Auth-Token`（`requireServiceAuth`）経由で
+ * 呼ばれる想定のため、公開ドキュメントには載せず `SERVICE_AUTH_EXEMPT_ROUTES` にも
+ * 免除エントリを追加しない。分割元の非公開リポジトリ（race-schedule）分も含む全件を
+ * 返す点が `registerReleaseNoteRoutes` の公開GETとの違い。
+ * @param router - 登録対象の Hono アプリケーション
+ */
+const registerInternalReleaseNoteRoutes = (router: Hono): void => {
+    registerMethodDispatch(
+        router,
+        '/internal/release-notes',
+        InternalReleaseNoteController,
+        [
+            {
+                httpMethod: 'get',
+                invoke: (controller) => controller.list(),
+            },
+        ],
+    );
+};
+
+/**
  * APIドキュメント（OpenAPI仕様 + Scalarによるインタラクティブなビューア）を登録する。
  * front-publicなエンドポイント（`SERVICE_AUTH_EXEMPT_ROUTES`で免除）と同じ範囲を
  * `openApiSpec` にまとめており、front以外の開発者・利用者もブラウザで一覧できる。
@@ -1092,6 +1115,7 @@ const buildRouter = (): Hono => {
     registerBatchLockRoutes(router);
     registerBackfillRoutes(router);
     registerInternalFeatureFlagsRoutes(router);
+    registerInternalReleaseNoteRoutes(router);
     registerInternalUiLayoutRoutes(router);
 
     return router;

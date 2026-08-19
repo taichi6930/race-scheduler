@@ -27,7 +27,8 @@ import { ReleaseNoteController } from '../../../src/controller/releaseNoteContro
 import type { IReleaseNoteUsecase } from '../../../src/usecase/interface/IReleaseNoteUsecase';
 
 interface MockReleaseNoteUsecase {
-    list: Mock<IReleaseNoteUsecase['list']>;
+    listPublic: Mock<IReleaseNoteUsecase['listPublic']>;
+    listAll: Mock<IReleaseNoteUsecase['listAll']>;
     upsert: Mock<IReleaseNoteUsecase['upsert']>;
 }
 
@@ -55,7 +56,8 @@ const VALID_WRITE_BODY: ReleaseNoteWrite = {
 const createMockUsecase = (
     overrides: Partial<MockReleaseNoteUsecase> = {},
 ): MockReleaseNoteUsecase => ({
-    list: mock(() => Promise.resolve(VALID_RELEASE_NOTES)),
+    listPublic: mock(() => Promise.resolve(VALID_RELEASE_NOTES)),
+    listAll: mock(() => Promise.resolve(VALID_RELEASE_NOTES)),
     upsert: mock(() => Promise.resolve(undefined)),
     ...overrides,
 });
@@ -75,7 +77,7 @@ describe('api/controller/ReleaseNoteController', () => {
 
         it('2: usecaseが例外を投げた場合は500を返すこと', async () => {
             const usecase = createMockUsecase({
-                list: mock(() => {
+                listPublic: mock(() => {
                     throw new Error('boom');
                 }),
             });

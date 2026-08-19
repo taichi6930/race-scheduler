@@ -17,11 +17,16 @@
  * | 10 | previewUiLayout | fetchWithTimeoutが404で失敗 | undefinedを返す（例外を投げない） | Branch |
  * | 11 | previewUiLayout | fetchWithTimeoutが404以外で失敗 | エラーが呼び出し元へ伝播する | Branch |
  * | 12 | fetchUpcomingKeirinRaces | 正常系 | GET /raceをstartDate/finishDate/raceTypeList=keirinで叩きraces[]を返す | Line |
+ * | 13 | fetchReleaseNotes | 正常系 | GET /internal/release-notes を叩きリリースノート配列を返す | Line |
  */
 import 'reflect-metadata';
 
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { type RaceDetailUiConfig, RaceType } from '@race-schedule/core';
+import {
+    type RaceDetailUiConfig,
+    RaceType,
+    type ReleaseNote,
+} from '@race-schedule/core';
 
 import type { BackfillFilter } from '../../../../src/dto/backfillResult';
 import type { FeatureFlagStatus } from '../../../../src/dto/featureFlagStatus';
@@ -319,5 +324,30 @@ describe('MainApiGateway', () => {
             /^\d{4}-\d{2}-\d{2}$/,
         );
         expect(result).toEqual([race]);
+    });
+
+    it('#13: fetchReleaseNotesはGET /internal/release-notesを叩きリリースノート配列を返す', async () => {
+        const note: ReleaseNote = {
+            tag_name: 'v1.0.0',
+            name: 'v1.0.0',
+            body: '本文',
+            published_at: '2026-08-16T00:00:00Z',
+            draft: false,
+            prerelease: false,
+            source_repo: 'race-schedule',
+        };
+        let capturedUrl: string | undefined;
+        globalThis.fetch = mock((url: string) => {
+            capturedUrl = url;
+            return Promise.resolve(
+                new Response(JSON.stringify([note]), { status: 200 }),
+            );
+        }) as unknown as typeof fetch;
+
+        const result = await gateway.fetchReleaseNotes();
+
+        const url = new URL(capturedUrl ?? '');
+        expect(url.pathname).toBe('/internal/release-notes');
+        expect(result).toEqual([note]);
     });
 });

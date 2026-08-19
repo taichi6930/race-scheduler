@@ -12,6 +12,7 @@
  * | 5  | fetchUiLayout 呼び出し        | gateway.fetchUiLayout へraceTypeを渡して委譲し結果を返す      | Line     |
  * | 6  | saveUiLayout 呼び出し         | gateway.saveUiLayout へraceType/configを渡して委譲し結果を返す | Line    |
  * | 7  | previewUiLayout 呼び出し      | gateway.previewUiLayout へconfig/raceIdを渡して委譲し結果を返す | Line   |
+ * | 8  | fetchReleaseNotes 呼び出し    | gateway.fetchReleaseNotes へ委譲し結果を返す                 | Line     |
  */
 import 'reflect-metadata';
 
@@ -59,6 +60,7 @@ const createRepository = (flags: FeatureFlagStatus[] = SAMPLE_FLAGS) => {
         saveUiLayout: mock(() => Promise.resolve({ sections: [] })),
         previewUiLayout: mock(() => Promise.resolve(undefined)),
         fetchUpcomingKeirinRaces: mock(() => Promise.resolve([])),
+        fetchReleaseNotes: mock(() => Promise.resolve([])),
     };
 
     return {
@@ -158,5 +160,14 @@ describe('MainApiRepository', () => {
             'keirin202608021036',
         );
         expect(result).toBeUndefined();
+    });
+
+    it('#8: fetchReleaseNotesはgatewayへ委譲し結果を返す', async () => {
+        const { mainApiGateway, repository } = createRepository();
+
+        const result = await repository.fetchReleaseNotes();
+
+        expect(mainApiGateway.fetchReleaseNotes).toHaveBeenCalled();
+        expect(result).toEqual([]);
     });
 });

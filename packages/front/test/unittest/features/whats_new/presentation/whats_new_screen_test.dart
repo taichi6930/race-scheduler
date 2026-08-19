@@ -10,9 +10,6 @@
 // | T-06 | 更新ボタンをタップ                           | releaseNotesProviderが再取得される           |
 // | T-07 | データ取得成功                               | lastSeenReleaseTagProviderが最新タグに更新される |
 // | T-08 | 空状態（QEMP-08）でリンクをタップ            | GitHubのリリースページのURLでlaunchUrlが呼ばれる |
-// | T-09 | sourceRepoがrace-scheduler                   | 「公開」バッジが表示される                    |
-// | T-10 | sourceRepoがrace-schedule                    | 「非公開」バッジが表示される                  |
-// | T-11 | sourceRepoが未設定                           | バッジが表示されない                          |
 
 import 'dart:async';
 
@@ -41,12 +38,10 @@ ReleaseNoteEntity _release(
       items: ['通知の重複を解消しました'],
     ),
   ],
-  String? sourceRepo,
 }) => ReleaseNoteEntity(
   tagName: tagName,
   publishedAt: publishedAt,
   categories: categories,
-  sourceRepo: sourceRepo,
 );
 
 Future<Widget> _buildApp(
@@ -210,55 +205,6 @@ void main() {
       fake.lastLaunchedUrl,
       'https://github.com/taichi6930/race-scheduler/releases',
     );
-  });
-
-  testWidgets('[T-09] sourceRepoがrace-schedulerの場合_公開バッジが表示される', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      await _buildApp(
-        () async => [
-          _release(
-            'v1.2.0',
-            DateTime(2026, 8, 1),
-            sourceRepo: 'race-scheduler',
-          ),
-        ],
-      ),
-    );
-    await tester.pump();
-    await tester.pump();
-
-    expect(find.text('公開'), findsOneWidget);
-  });
-
-  testWidgets('[T-10] sourceRepoがrace-scheduleの場合_非公開バッジが表示される', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      await _buildApp(
-        () async => [
-          _release('v1.2.0', DateTime(2026, 8, 1), sourceRepo: 'race-schedule'),
-        ],
-      ),
-    );
-    await tester.pump();
-    await tester.pump();
-
-    expect(find.text('非公開'), findsOneWidget);
-  });
-
-  testWidgets('[T-11] sourceRepoが未設定の場合_バッジが表示されない', (tester) async {
-    await tester.pumpWidget(
-      await _buildApp(
-        () async => [_release('v1.2.0', DateTime(2026, 8, 1))],
-      ),
-    );
-    await tester.pump();
-    await tester.pump();
-
-    expect(find.text('公開'), findsNothing);
-    expect(find.text('非公開'), findsNothing);
   });
 }
 

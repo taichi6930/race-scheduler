@@ -68,6 +68,7 @@ describe('コンポーネントテスト: Backfill Router → Controller → Use
             saveUiLayout: mock(() => Promise.resolve({ sections: [] })),
             previewUiLayout: mock(() => Promise.resolve(undefined)),
             fetchUpcomingKeirinRaces: mock(() => Promise.resolve([])),
+            fetchReleaseNotes: mock(() => Promise.resolve([])),
         };
 
         container.register<IMainApiGateway>(DI_TOKENS.MainApiGateway, {

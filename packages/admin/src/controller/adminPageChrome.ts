@@ -65,6 +65,7 @@ const NAV_ITEMS = [
     { path: '/flags', label: '機能フラグ管理' },
     { path: '/backfill', label: 'バックフィル実行' },
     { path: '/race-detail-layout', label: 'レース詳細レイアウト編集キット' },
+    { path: '/release-notes', label: '更新履歴（全リポジトリ）' },
 ] as const;
 
 /**

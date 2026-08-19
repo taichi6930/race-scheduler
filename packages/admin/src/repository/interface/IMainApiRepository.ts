@@ -2,6 +2,7 @@ import type {
     RaceDetailUi,
     RaceDetailUiConfig,
     RaceType,
+    ReleaseNote,
 } from '@race-schedule/core';
 
 import type {
@@ -75,4 +76,7 @@ export interface IMainApiRepository {
      * @returns レース要約の一覧
      */
     fetchUpcomingKeirinRaces: (days: number) => Promise<RaceSummary[]>;
+
+    /** 分割元の非公開リポジトリ（race-schedule）分も含む、全リリースノートを取得する。 */
+    fetchReleaseNotes: () => Promise<ReleaseNote[]>;
 }

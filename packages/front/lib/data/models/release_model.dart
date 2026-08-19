@@ -16,7 +16,6 @@ abstract class ReleaseModel with _$ReleaseModel {
     @JsonKey(name: 'published_at') String? publishedAt,
     @JsonKey(name: 'draft') @Default(false) bool draft,
     @JsonKey(name: 'prerelease') @Default(false) bool prerelease,
-    @JsonKey(name: 'source_repo') String? sourceRepo,
   }) = _ReleaseModel;
 
   factory ReleaseModel.fromJson(Map<String, dynamic> json) =>
@@ -30,7 +29,6 @@ abstract class ReleaseModel with _$ReleaseModel {
       name: name,
       publishedAt: _parsePublishedAt(publishedAt),
       categories: parseReleaseNoteBody(body),
-      sourceRepo: sourceRepo,
     );
   }
 }

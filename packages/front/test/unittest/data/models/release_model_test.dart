@@ -9,9 +9,6 @@
 // | T-05 | toEntity: published_at が null              | UNIXエポック（最古扱い）にフォールバックする       |
 // | T-06 | toEntity: published_at が不正な日時文字列   | UNIXエポック（最古扱い）にフォールバックする       |
 // | T-07 | toEntity: bodyがカテゴリ見出しを含む        | categoriesにパース結果が反映される                |
-// | T-08 | source_repoあり                             | sourceRepoにマッピングされる                       |
-// | T-09 | source_repo未指定                           | sourceRepoがnullのまま保持される                   |
-// | T-10 | toEntity: source_repoあり                    | entity.sourceRepoに反映される                      |
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:front/data/models/release_model.dart';
@@ -57,25 +54,6 @@ void main() {
 
       expect(model.draft, isFalse);
       expect(model.prerelease, isFalse);
-    });
-
-    test('[T-08] source_repoありの場合_sourceRepoにマッピングされる', () {
-      final model = ReleaseModel.fromJson({
-        'tag_name': 'v1.2.0',
-        'published_at': '2026-08-01T00:00:00Z',
-        'source_repo': 'race-scheduler',
-      });
-
-      expect(model.sourceRepo, 'race-scheduler');
-    });
-
-    test('[T-09] source_repo未指定の場合_nullのまま保持される', () {
-      final model = ReleaseModel.fromJson({
-        'tag_name': 'v1.2.0',
-        'published_at': '2026-08-01T00:00:00Z',
-      });
-
-      expect(model.sourceRepo, isNull);
     });
   });
 
@@ -125,18 +103,6 @@ void main() {
           items: ['通知の重複を解消しました'],
         ),
       ]);
-    });
-
-    test('[T-10] source_repoありの場合_entity.sourceRepoに反映される', () {
-      const model = ReleaseModel(
-        tagName: 'v1.2.0',
-        publishedAt: '2026-08-01T00:00:00Z',
-        sourceRepo: 'race-schedule',
-      );
-
-      final entity = model.toEntity();
-
-      expect(entity.sourceRepo, 'race-schedule');
     });
   });
 }
