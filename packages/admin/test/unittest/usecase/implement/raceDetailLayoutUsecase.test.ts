@@ -68,6 +68,7 @@ const createUsecase = () => {
             Promise.resolve({ schemaVersion: 1 as const, sections: [] }),
         ),
         fetchUpcomingKeirinRaces: mock(() => Promise.resolve(UNSORTED_RACES)),
+        fetchReleaseNotes: mock(() => Promise.resolve([])),
     };
 
     return {

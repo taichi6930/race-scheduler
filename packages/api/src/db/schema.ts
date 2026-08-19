@@ -314,7 +314,9 @@ export const releaseNote = sqliteTable(
         publishedAt: text('published_at'),
         draft: integer('draft').notNull().default(0),
         prerelease: integer('prerelease').notNull().default(0),
-        sourceRepo: text('source_repo').notNull(),
+        sourceRepo: text('source_repo')
+            .notNull()
+            .$type<'race-schedule' | 'race-scheduler'>(),
         createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
     },
     (table) => [

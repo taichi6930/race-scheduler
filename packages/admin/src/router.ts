@@ -21,6 +21,8 @@
  * - POST /race-detail-layout/api      レイアウト構成保存
  * - POST /race-detail-layout/api/preview  保存せずに解決結果を取得
  * - GET  /race-detail-layout/api/races    プレビュー候補のレース一覧取得
+ * - GET  /release-notes            更新履歴（全リポジトリ）一覧画面（HTML）
+ * - GET  /release-notes/api        更新履歴一覧取得（非公開リポジトリ分含む）
  * @module router
  */
 
@@ -47,6 +49,7 @@ import {
 } from './controller/errorPages';
 import { FeatureFlagsController } from './controller/featureFlagsController';
 import { RaceDetailLayoutController } from './controller/raceDetailLayoutController';
+import { ReleaseNotesController } from './controller/releaseNotesController';
 import { isProductionAdmin } from './utility/isProductionAdmin';
 
 /** リクエスト相関ID（OBS-004）をやり取りする HTTP ヘッダー名 */
@@ -111,6 +114,7 @@ function registerSecurityHeadersMiddleware(router: Hono): void {
                 ['/flags', ADMIN_PAGE_CSP],
                 ['/backfill', ADMIN_PAGE_CSP],
                 ['/race-detail-layout', ADMIN_PAGE_CSP],
+                ['/release-notes', ADMIN_PAGE_CSP],
             ]),
         }),
     );
@@ -227,6 +231,22 @@ function registerRaceDetailLayoutRoutes(router: Hono): void {
 }
 
 /**
+ * 更新履歴（全リポジトリ）閲覧のルートを登録する。
+ * @param router - 登録対象の Hono アプリケーション
+ */
+function registerReleaseNotesRoutes(router: Hono): void {
+    router.get('/release-notes', () => {
+        const controller = container.resolve(ReleaseNotesController);
+        return controller.page();
+    });
+    router.get('/release-notes/api', (c: Context) => {
+        EnvStore.setEnv(c.env);
+        const controller = container.resolve(ReleaseNotesController);
+        return controller.list();
+    });
+}
+
+/**
  * Hono ルーターを構築する。
  * ルート登録（副作用）を関数内へ閉じ込め、no-top-level-side-effects を満たす。
  * @returns 構築済みの Hono ルーター
@@ -244,6 +264,7 @@ function buildRouter(): Hono {
     registerFeatureFlagsRoutes(router);
     registerBackfillRoutes(router);
     registerRaceDetailLayoutRoutes(router);
+    registerReleaseNotesRoutes(router);
 
     return router;
 }

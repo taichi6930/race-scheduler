@@ -28,12 +28,14 @@ export class ReleaseNoteController {
     ) {}
 
     /**
-     * 全リリースノートを公開日時の新しい順で返す。
+     * 公開リポジトリ（race-scheduler）由来のリリースノートを公開日時の新しい順で返す。
+     * 分割元の非公開リポジトリ（race-schedule）分は含まない（`packages/admin` の
+     * `GET /internal/release-notes` 経由でのみ参照できる）。
      * @returns リリースノート配列を含むレスポンス
      */
     public async get(): Promise<Response> {
         try {
-            const releaseNotes = await this.usecase.list();
+            const releaseNotes = await this.usecase.listPublic();
             return json(releaseNotes, 200);
         } catch (error) {
             return handleControllerError(error, 'ReleaseNoteController.get');

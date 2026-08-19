@@ -6,6 +6,7 @@ import {
     type RaceDetailUi,
     type RaceDetailUiConfig,
     RaceType,
+    type ReleaseNote,
     withServiceAuthHeader,
 } from '@race-schedule/core';
 import { injectable } from 'tsyringe';
@@ -166,5 +167,12 @@ export class MainApiGateway implements IMainApiGateway {
             headers: withServiceAuthHeader(),
         });
         return response.races;
+    }
+
+    public async fetchReleaseNotes(): Promise<ReleaseNote[]> {
+        const url = new URL('/internal/release-notes', getMainApiUrl());
+        return fetchWithTimeout<ReleaseNote[]>(url, {
+            headers: withServiceAuthHeader(),
+        });
     }
 }

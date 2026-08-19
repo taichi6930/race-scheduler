@@ -3,6 +3,7 @@ import {
     type RaceDetailUi,
     type RaceDetailUiConfig,
     type RaceType,
+    type ReleaseNote,
 } from '@race-schedule/core';
 import { inject, injectable } from 'tsyringe';
 
@@ -77,5 +78,9 @@ export class MainApiRepository implements IMainApiRepository {
         days: number,
     ): Promise<RaceSummary[]> {
         return this.mainApiGateway.fetchUpcomingKeirinRaces(days);
+    }
+
+    public async fetchReleaseNotes(): Promise<ReleaseNote[]> {
+        return this.mainApiGateway.fetchReleaseNotes();
     }
 }

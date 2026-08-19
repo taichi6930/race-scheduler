@@ -2,6 +2,7 @@ import type {
     RaceDetailUi,
     RaceDetailUiConfig,
     RaceType,
+    ReleaseNote,
 } from '@race-schedule/core';
 
 import type {
@@ -71,4 +72,12 @@ export interface IMainApiGateway {
      * @returns レース要約の一覧（開催日時の昇順は保証しない。呼び出し側でソートする）
      */
     fetchUpcomingKeirinRaces: (days: number) => Promise<RaceSummary[]>;
+
+    /**
+     * 分割元の非公開リポジトリ（race-schedule）分も含む、全リリースノートを
+     * 公開日時の新しい順で取得する。frontの更新履歴画面（`GET /release-notes`）は
+     * 公開リポジトリ（race-scheduler）分のみを返すため、非公開分はこの管理画面
+     * 専用エンドポイント（`/internal/release-notes`）経由でのみ参照できる。
+     */
+    fetchReleaseNotes: () => Promise<ReleaseNote[]>;
 }

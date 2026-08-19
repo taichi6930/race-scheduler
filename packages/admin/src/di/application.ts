@@ -4,9 +4,11 @@ import { container } from 'tsyringe';
 import { BackfillUsecase } from '../usecase/implement/backfillUsecase';
 import { FeatureFlagsUsecase } from '../usecase/implement/featureFlagsUsecase';
 import { RaceDetailLayoutUsecase } from '../usecase/implement/raceDetailLayoutUsecase';
+import { ReleaseNotesUsecase } from '../usecase/implement/releaseNotesUsecase';
 import type { IBackfillUsecase } from '../usecase/interface/IBackfillUsecase';
 import type { IFeatureFlagsUsecase } from '../usecase/interface/IFeatureFlagsUsecase';
 import type { IRaceDetailLayoutUsecase } from '../usecase/interface/IRaceDetailLayoutUsecase';
+import type { IReleaseNotesUsecase } from '../usecase/interface/IReleaseNotesUsecase';
 
 /**
  * アプリケーション層（Usecase）のDI登録
@@ -20,5 +22,8 @@ export function registerApplication(): void {
     });
     container.register<IRaceDetailLayoutUsecase>(DI_TOKENS.UiLayoutUsecase, {
         useClass: RaceDetailLayoutUsecase,
+    });
+    container.register<IReleaseNotesUsecase>(DI_TOKENS.ReleaseNoteUsecase, {
+        useClass: ReleaseNotesUsecase,
     });
 }

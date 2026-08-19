@@ -86,6 +86,7 @@ describe('コンポーネントテスト: RaceDetailLayout Router → Controller
                 Promise.resolve({ schemaVersion: 1 as const, sections: [] }),
             ),
             fetchUpcomingKeirinRaces: mock(() => Promise.resolve(SAMPLE_RACES)),
+            fetchReleaseNotes: mock(() => Promise.resolve([])),
         };
 
         container.register<IMainApiGateway>(DI_TOKENS.MainApiGateway, {

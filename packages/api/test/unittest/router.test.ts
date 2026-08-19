@@ -835,6 +835,7 @@ describe('サービス間認証: ルート分類の回帰防止（SECAUTH-08）'
         'POST /internal/batch-lock/release',
         'GET /internal/feature-flags',
         'POST /internal/feature-flags',
+        'GET /internal/release-notes',
         'GET /internal/ui-layout',
         'POST /internal/ui-layout',
         'POST /internal/ui-layout/preview',
