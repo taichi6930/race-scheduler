@@ -101,10 +101,18 @@ if (import.meta.main) {
 
     const allReleases: (GithubReleaseSource & { sourceRepo: string })[] = [];
     for (const source of sources) {
-        const releases = await fetchAllReleases({ githubToken, ...source });
-        allReleases.push(
-            ...releases.map((r) => ({ ...r, sourceRepo: source.repo })),
-        );
+        try {
+            const releases = await fetchAllReleases({ githubToken, ...source });
+            allReleases.push(
+                ...releases.map((r) => ({ ...r, sourceRepo: source.repo })),
+            );
+        } catch (error) {
+            // 1リポジトリの取得失敗（例: privateリポジトリへのアクセス権不足）で
+            // 他リポジトリ分まで巻き込んで全滅させない（部分成功を許容する）。
+            console.error(
+                `${source.owner}/${source.repo} のリリース取得に失敗したためスキップします: ${error}`,
+            );
+        }
     }
 
     console.log(buildInsertStatements(allReleases));
