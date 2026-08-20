@@ -112,6 +112,11 @@ export class AuthUsecase implements IAuthUsecase {
         );
         if (!invite) return null;
 
+        // SAFETY: credentialResponseはunknown型だが、controller側の
+        // RegistrationVerifyRequestSchema（WebauthnResponseSchema）でid/rawId/typeが
+        // 非空文字列・responseがオブジェクトであることを検証済み。それより深部の妥当性は
+        // verifyRegistrationが@simplewebauthn/serverの例外を捕捉してnull（検証失敗）へ
+        // 正規化するため、形の合わない入力はフェイルクローズする
         const verified = await verifyRegistration(
             config,
             input.credentialResponse as RegistrationResponseJSON,
@@ -193,6 +198,11 @@ export class AuthUsecase implements IAuthUsecase {
         if (!challenge) return null;
         if (challenge.purpose !== 'login') return null;
 
+        // SAFETY: credentialResponseはunknown型だが、controller側の
+        // LoginVerifyRequestSchema（WebauthnResponseSchema）でid/rawId/typeが非空文字列・
+        // responseがオブジェクトであることを検証済み。直後に参照するresponse.idも同スキーマで
+        // 非空文字列が保証されている。それより深部の妥当性はverifyAuthenticationが
+        // @simplewebauthn/serverの例外を捕捉してnull（検証失敗）へ正規化する（フェイルクローズ）
         const response = input.credentialResponse as AuthenticationResponseJSON;
         const storedCredential = await this.authRepository.findCredentialById(
             response.id,

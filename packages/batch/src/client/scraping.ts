@@ -114,6 +114,11 @@ export async function syncScrapingNarRaceByDateRange(
     );
 }
 
+/** placeId をキーとした開催回数・開催日数の情報マップ。 */
+interface PlaceHeldDaysMap {
+    [placeId: string]: PlaceHeldDays;
+}
+
 /**
  * placeIdList のうち、指定チャンクに含まれるIDだけを残した placeHeldDaysMap を作る
  * @param placeIdChunk 対象チャンクの開催場IDリスト
@@ -123,8 +128,8 @@ export async function syncScrapingNarRaceByDateRange(
 function pickPlaceHeldDaysForChunk(
     placeIdChunk: string[],
     placeHeldDaysMap: Record<string, PlaceHeldDays>,
-): Record<string, PlaceHeldDays> {
-    const chunkMap: Record<string, PlaceHeldDays> = {};
+): PlaceHeldDaysMap {
+    const chunkMap: PlaceHeldDaysMap = {};
     for (const placeId of placeIdChunk) {
         const heldDays = placeHeldDaysMap[placeId];
         if (heldDays) {

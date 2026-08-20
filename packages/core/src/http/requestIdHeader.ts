@@ -10,6 +10,11 @@
 
 import { getRequestId } from '../utilities/requestContext';
 
+/** HTTPヘッダー名 → 値の対応表。 */
+interface HeaderRecord {
+    [name: string]: string;
+}
+
 /** リクエスト相関ID（OBS-004）をやり取りする HTTP ヘッダー名 */
 export const REQUEST_ID_HEADER = 'X-Request-Id';
 
@@ -24,7 +29,7 @@ export const REQUEST_ID_HEADER = 'X-Request-Id';
  */
 export const withRequestIdHeader = (
     headers?: Record<string, string>,
-): Record<string, string> => {
+): HeaderRecord => {
     const requestId = getRequestId();
     if (!requestId) {
         return { ...headers };

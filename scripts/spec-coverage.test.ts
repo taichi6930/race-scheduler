@@ -78,11 +78,11 @@ import {
 } from './spec-coverage';
 
 const buildRawSpecFile = (overrides: Record<string, string> = {}): string => {
-    const defaults: Record<string, string> = {
+    const defaults = {
         id: 'SPEC-CAL-001',
         title: '登録フラグ ON のレースは常に掲載する',
         status: 'active',
-    };
+    } satisfies Record<string, string>;
     const merged = { ...defaults, ...overrides };
     return [
         '---',

@@ -22,11 +22,16 @@ import {
 
 import { syncUptimeCheckIssue } from './uptimeCheckNotifier';
 
+/** 監視対象キー→`/health`エンドポイントURLの対応表。未知のキーも引けるよう文字列キーで参照する。 */
+interface TargetUrlMap {
+    readonly [targetKey: string]: string;
+}
+
 /**
  * 監視対象キーと`/health`エンドポイントURLの対応（uptime-check.ymlと同一）。
  * admin（障害対応そのものに使う画面）はQRUN-02で対象に追加した。
  */
-const TARGET_URLS: Record<string, string> = {
+const TARGET_URLS: TargetUrlMap = {
     api: 'https://race-schedule-prod.tn-product.workers.dev/health',
     admin: 'https://race-schedule-admin-prod.tn-product.workers.dev/health',
     batch: 'https://race-schedule-batch-prod.tn-product.workers.dev/health',
@@ -59,15 +64,19 @@ const MAX_PING_ATTEMPTS = 3;
  */
 const PING_RETRY_BASE_DELAY_MS = 100;
 
+/** `/health`への疎通1回分の結果。httpStatusはネットワークエラー・タイムアウト時に0。 */
+interface PingHealthResult {
+    healthy: boolean;
+    httpStatus: number;
+}
+
 /**
  * 対象URLへ`/health`のHTTP GETを1回だけ行い、疎通結果を返す。
  * タイムアウト・ネットワークエラー時はhealthy:false, httpStatus:0を返す
  * （例外は投げない）。
  * @param targetUrl
  */
-async function attemptPingHealth(
-    targetUrl: string,
-): Promise<{ healthy: boolean; httpStatus: number }> {
+async function attemptPingHealth(targetUrl: string): Promise<PingHealthResult> {
     try {
         const response = await fetch(targetUrl, {
             signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
@@ -92,10 +101,8 @@ async function attemptPingHealth(
  * いずれの試行も例外は投げない（`attemptPingHealth`が内部で捕捉するため）。
  * @param targetUrl
  */
-async function pingHealth(
-    targetUrl: string,
-): Promise<{ healthy: boolean; httpStatus: number }> {
-    let lastResult: { healthy: boolean; httpStatus: number } = {
+async function pingHealth(targetUrl: string): Promise<PingHealthResult> {
+    let lastResult: PingHealthResult = {
         healthy: false,
         httpStatus: 0,
     };

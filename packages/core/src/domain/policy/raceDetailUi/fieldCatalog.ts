@@ -3,14 +3,14 @@ import { getJstHours, getJstMinutes } from '../../../utilities/dateJst';
 import { RaceType } from '../../model/valueObject/raceType';
 
 /** `競技` フィールドの表示ラベル（front `DisciplineIcon.labelFor` と対応）。 */
-const RACE_TYPE_LABEL_JA: Record<RaceType, string> = {
+const RACE_TYPE_LABEL_JA = {
     [RaceType.JRA]: 'JRA',
     [RaceType.NAR]: '地方競馬',
     [RaceType.OVERSEAS]: '海外競馬',
     [RaceType.KEIRIN]: '競輪',
     [RaceType.BOATRACE]: '競艇',
     [RaceType.AUTORACE]: 'オートレース',
-};
+} satisfies Record<RaceType, string>;
 
 /**
  * 発走時刻を `HH:mm` 形式で組み立てる。海外競馬はJST表記であることを明示する
@@ -81,10 +81,7 @@ interface RaceDetailFieldDefinition {
  * （race-detail-sdui-design.md §1.2: 編集対象は「フィールド参照」であって
  * 自由テキストではない）。
  */
-export const RACE_DETAIL_FIELDS: Record<
-    RaceDetailFieldKey,
-    RaceDetailFieldDefinition
-> = {
+export const RACE_DETAIL_FIELDS = {
     time: { defaultLabel: '発走', resolve: formatTimeField },
     raceType: {
         defaultLabel: '競技',
@@ -105,4 +102,4 @@ export const RACE_DETAIL_FIELDS: Record<
     },
     stage: { defaultLabel: 'ステージ', resolve: formatStageField },
     condition: { defaultLabel: '条件', resolve: formatConditionField },
-};
+} satisfies Record<RaceDetailFieldKey, RaceDetailFieldDefinition>;

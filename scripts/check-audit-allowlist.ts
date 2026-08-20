@@ -32,6 +32,12 @@ interface AllowlistEntry {
     reviewBy: string;
 }
 
+/** allowlist の読み込み結果（検証済みエントリとスキーマ違反メッセージ）。 */
+interface AllowlistLoadResult {
+    entries: AllowlistEntry[];
+    errors: string[];
+}
+
 const ROOT = process.cwd();
 const ALLOWLIST_PATH = join(ROOT, 'docs/security/audit-allowlist.json');
 
@@ -93,10 +99,7 @@ function validateEntry(entry: unknown, index: number): string[] {
  * @param path allowlistファイルのパス（既定: `docs/security/audit-allowlist.json`）
  * @returns 検証結果（entries: 検証済みエントリ、errors: スキーマ違反メッセージ）
  */
-function loadAllowlist(path: string = ALLOWLIST_PATH): {
-    entries: AllowlistEntry[];
-    errors: string[];
-} {
+function loadAllowlist(path: string = ALLOWLIST_PATH): AllowlistLoadResult {
     let raw: string;
     try {
         raw = readFileSync(path, 'utf8');

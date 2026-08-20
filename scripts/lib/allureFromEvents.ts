@@ -118,13 +118,26 @@ const buildStatusDetails = (
     };
 };
 
-const STATUS_MAP: Record<
-    EndParams['status'],
-    (errors: LifecycleErrorParams[]) => {
+/** bunのテスト終了ステータスをAllureのケース結果へ変換する関数。 */
+interface StatusConverter {
+    (
+        errors: LifecycleErrorParams[],
+    ): {
         status: AllureCaseStatus;
         statusDetails?: AllureStatusDetails;
-    }
-> = {
+    };
+}
+
+/** bunのテスト終了ステータス（{@link EndParams.status}）ごとの変換関数。 */
+interface StatusMap {
+    pass: StatusConverter;
+    fail: StatusConverter;
+    skip: StatusConverter;
+    todo: StatusConverter;
+    timeout: StatusConverter;
+}
+
+const STATUS_MAP: StatusMap = {
     // pass: pendingErrors は握りつぶし例外の可能性があるため破棄する（設計書 §4 必須の注意1）
     pass: () => ({ status: 'passed' }),
     fail: (errors) => ({

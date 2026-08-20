@@ -11,6 +11,11 @@ import type {
     IBackfillUsecase,
 } from '../interface/IBackfillUsecase';
 
+/** placeId をキーとした開催回数・開催日数の情報マップ。 */
+interface PlaceHeldDaysMap {
+    [placeId: string]: PlaceHeldDays;
+}
+
 /**
  * 開催場エンティティ一覧から、JRAのplaceHeldDaysを持つもののみを
  * `placeId -> placeHeldDays` のマップへ変換する。
@@ -19,8 +24,8 @@ import type {
  */
 const buildPlaceHeldDaysMap = (
     placeEntityList: PlaceEntity[],
-): Record<string, PlaceHeldDays> => {
-    const map: Record<string, PlaceHeldDays> = {};
+): PlaceHeldDaysMap => {
+    const map: PlaceHeldDaysMap = {};
     for (const entity of placeEntityList) {
         if (entity.placeHeldDays) {
             map[entity.placeId] = entity.placeHeldDays;

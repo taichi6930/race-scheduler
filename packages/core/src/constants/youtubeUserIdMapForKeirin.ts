@@ -1,10 +1,12 @@
+import type { YoutubeUserIdMap } from './youtubeUserIdMap';
+
 /**
  * 競輪のYoutubeのユーザーIDを取得する
  * @param placeName
  * @returns YoutubeのライブURL
  */
 
-export const YoutubeUserIdMapForKeirin: Record<string, string> = {
+export const YoutubeUserIdMapForKeirin: YoutubeUserIdMap = {
     函館: 'rinrin-hakodate-Keirin',
     青森: 'もりんちゃんねる葵萌輪',
     いわき平: 'iwakitairakeirin',

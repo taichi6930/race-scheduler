@@ -65,9 +65,16 @@ interface DynamicFile {
     root: TestGroupNode;
 }
 
+/** テスト結果の pass/fail/skip 件数。 */
+interface TestTotals {
+    pass: number;
+    fail: number;
+    skip: number;
+}
+
 interface ReportFile extends StaticFile {
     executed: boolean;
-    totals: { pass: number; fail: number; skip: number };
+    totals: TestTotals;
     root: TestGroupNode | null;
 }
 
@@ -194,15 +201,20 @@ const scanStaticFiles = (): StaticFile[] => {
 
 // ---- JUnit XML パース（bun test --reporter=junit の出力） ----
 
+/** XMLタグの属性名 → 属性値。 */
+interface XmlAttrs {
+    [name: string]: string;
+}
+
 interface XmlTag {
     close: boolean;
     name: string;
-    attrs: Record<string, string>;
+    attrs: XmlAttrs;
     selfClose: boolean;
 }
 
-const parseAttrs = (attrStr: string): Record<string, string> => {
-    const attrs: Record<string, string> = {};
+const parseAttrs = (attrStr: string): XmlAttrs => {
+    const attrs: XmlAttrs = {};
     for (const m of attrStr.matchAll(/([a-zA-Z:_-]+)="([^"]*)"/g)) {
         attrs[m[1]] = decodeXmlEntities(m[2]);
     }
@@ -417,16 +429,13 @@ interface LayerRunSpec {
     outfile: string;
 }
 
-const BASE_ENV: Record<string, string> = {
+const BASE_ENV = {
     NODE_ENV: 'ci_local',
     TZ: 'jst',
     HTML_FETCH_DELAY_MS: '0',
-};
+} satisfies Record<string, string>;
 
-const LAYER_RUN_SPECS: Record<
-    'ut' | 'component' | 'sit' | 'uat',
-    LayerRunSpec
-> = {
+const LAYER_RUN_SPECS = {
     ut: {
         layer: 'ut',
         args: ['test', 'packages/*/test/unittest'],
@@ -451,7 +460,7 @@ const LAYER_RUN_SPECS: Record<
         env: { NODE_ENV: 'ci_local', TZ: 'jst' },
         outfile: join(RAW_DIR, 'uat.xml'),
     },
-};
+} satisfies Record<'ut' | 'component' | 'sit' | 'uat', LayerRunSpec>;
 
 const runBunLayer = async (spec: LayerRunSpec): Promise<void> => {
     console.log(`▶ ${spec.layer} を実行中...`);
@@ -525,9 +534,7 @@ const runCommand = async (layersArg: string): Promise<void> => {
 
 // ---- build サブコマンド: 静的スキャン + raw 結果 を統合し report.json / index.html を生成 ----
 
-const sumTotals = (
-    node: TestGroupNode,
-): { pass: number; fail: number; skip: number } => {
+const sumTotals = (node: TestGroupNode): TestTotals => {
     const totals = { pass: 0, fail: 0, skip: 0 };
     const visit = (n: TestNode): void => {
         if (n.kind === 'case') totals[n.status]++;

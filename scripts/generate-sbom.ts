@@ -30,16 +30,19 @@ export interface SbomEntry {
     licenses: string[];
 }
 
+/** `name@version` 形式のキーを分解した結果。 */
+interface NameVersion {
+    name: string;
+    version: string;
+}
+
 /**
  * `license-checker`の出力キー（例: `lodash@4.17.21`、スコープ付きは`@types/node@20.1.0`）
  * を name/version に分解する。
  * @param key - license-checkerが出力するパッケージキー
  * @returns 分解済みのパッケージ名とバージョン
  */
-export function parseNameVersion(key: string): {
-    name: string;
-    version: string;
-} {
+export function parseNameVersion(key: string): NameVersion {
     const lastAt = key.lastIndexOf('@');
     // スコープ付きパッケージの先頭@（index 0）はバージョン区切りではないため無視する
     if (lastAt <= 0) return { name: key, version: 'unknown' };

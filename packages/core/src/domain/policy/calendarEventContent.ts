@@ -126,12 +126,20 @@ export const GOOGLE_CALENDAR_ALL_COLORS: readonly GoogleCalendarColorDefinition[
     Object.values(GoogleCalendarColor);
 
 /**
+ * RaceType ごとの「グレード名 → カレンダー色キー」対応表の型。
+ * グレード名は競技ごとに存在するものだけを持つため、未定義のグレードは
+ * 参照側で既定色へフォールバックする。
+ */
+interface GoogleCalendarColorKeyTable
+    extends Record<
+        RaceType,
+        Partial<Record<GradeType, GoogleCalendarColorKey>>
+    > {}
+
+/**
  * 各競技ごとのグレード→色キーマップをRaceTypeでまとめる
  */
-export // SAFETY: 各競技（jra/nar/keirin/boatrace/autorace）キーは RaceType の実際の値と一致し、
-// 各グレード名も GradeType の値・色キーも GoogleCalendarColorKey の値のみで構成された
-// リテラルオブジェクトのため、より広い Record 型として扱っても値の実体は変わらない。
-const GoogleCalendarColorKeyMap = {
+export const GoogleCalendarColorKeyMap: GoogleCalendarColorKeyTable = {
     jra: {
         GⅠ: 'BLUEBERRY',
         GⅡ: 'TOMATO',
@@ -189,7 +197,7 @@ const GoogleCalendarColorKeyMap = {
         GⅡ: 'TOMATO',
         開催: 'GRAPHITE',
     },
-} as Record<RaceType, Record<GradeType, GoogleCalendarColorKey>>;
+};
 
 /**
  * Stageが指定されたグレードのセットをRaceTypeごとに定義
@@ -247,14 +255,14 @@ export const getGoogleCalendarColor = (
  * raceType ごとの開催地サフィックス（「◯◯競馬場」等）。
  * 開催地文字列は「raceCourse + サフィックス」だけなので switch を表引きに置き換える。
  */
-const LOCATION_SUFFIX_BY_RACE_TYPE: Record<RaceType, string> = {
+const LOCATION_SUFFIX_BY_RACE_TYPE = {
     [RaceType.JRA]: '競馬場',
     [RaceType.NAR]: '競馬場',
     [RaceType.OVERSEAS]: '競馬場',
     [RaceType.KEIRIN]: '競輪場',
     [RaceType.AUTORACE]: 'オートレース場',
     [RaceType.BOATRACE]: 'ボートレース場',
-};
+} satisfies Record<RaceType, string>;
 
 /**
  * カレンダーイベントの開催地を構築
