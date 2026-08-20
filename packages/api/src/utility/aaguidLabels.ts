@@ -26,34 +26,50 @@ const KNOWN_AAGUID_LABELS: AaguidLabelMap = {
     'fbfc3007-154e-4ecc-8c0b-6e020557d7bd': 'iCloudキーチェーン (Safari)',
 };
 
+/** User-Agent の判定パターン1件（正規表現→表示ラベル）。 */
+interface UserAgentPattern {
+    readonly pattern: RegExp;
+    readonly label: string;
+}
+
+/** OS 判定パターン。先頭から順に評価するため、より限定的なものを先に置く。 */
+const OS_PATTERNS: readonly UserAgentPattern[] = [
+    { pattern: /iPhone|iPad/, label: 'iOS' },
+    { pattern: /Android/, label: 'Android' },
+    { pattern: /Mac OS X/, label: 'macOS' },
+    { pattern: /Windows/, label: 'Windows' },
+    { pattern: /Linux/, label: 'Linux' },
+];
+
+/** ブラウザ判定パターン。Edge/Chrome は Safari のUAを含むため、この順序を保つこと。 */
+const BROWSER_PATTERNS: readonly UserAgentPattern[] = [
+    { pattern: /Edg\//, label: 'Edge' },
+    { pattern: /Chrome\//, label: 'Chrome' },
+    { pattern: /Firefox\//, label: 'Firefox' },
+    { pattern: /Safari\//, label: 'Safari' },
+];
+
+/**
+ * 判定パターン表を先頭から評価し、最初に一致したラベルを返す。
+ * @param patterns - 判定パターン表
+ * @param userAgent - リクエストのUser-Agentヘッダー値
+ */
+const matchUserAgentLabel = (
+    patterns: readonly UserAgentPattern[],
+    userAgent: string,
+): string | null =>
+    patterns.find((entry) => entry.pattern.test(userAgent))?.label ?? null;
+
 /**
  * User-Agent文字列から「ブラウザ / OS」程度の短い要約を取り出す。
  * ponytail: 網羅的なUAパースは行わない（表示用の初期値サジェストが目的で、
- * 判定を誤っても本人がdeviceLabelを編集すれば済むため）。上限=下記の主要な
+ * 判定を誤っても本人がdeviceLabelを編集すれば済むため）。上限=上記の主要な
  * ブラウザ/OSのみ、アップグレード経路=判定パターンの追記。
  * @param userAgent - リクエストのUser-Agentヘッダー値
  */
 const summarizeUserAgent = (userAgent: string): string | null => {
-    const os = /iPhone|iPad/.test(userAgent)
-        ? 'iOS'
-        : /Android/.test(userAgent)
-          ? 'Android'
-          : /Mac OS X/.test(userAgent)
-            ? 'macOS'
-            : /Windows/.test(userAgent)
-              ? 'Windows'
-              : /Linux/.test(userAgent)
-                ? 'Linux'
-                : null;
-    const browser = /Edg\//.test(userAgent)
-        ? 'Edge'
-        : /Chrome\//.test(userAgent)
-          ? 'Chrome'
-          : /Firefox\//.test(userAgent)
-            ? 'Firefox'
-            : /Safari\//.test(userAgent)
-              ? 'Safari'
-              : null;
+    const os = matchUserAgentLabel(OS_PATTERNS, userAgent);
+    const browser = matchUserAgentLabel(BROWSER_PATTERNS, userAgent);
 
     const hasBothBrowserAndOs = browser !== null && os !== null;
     if (hasBothBrowserAndOs) return `${browser} / ${os}`;
