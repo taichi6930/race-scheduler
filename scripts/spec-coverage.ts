@@ -127,9 +127,9 @@ const NOTES = [
 
 // ---- front-matter パース ----
 
-/** front-matter の生データ（キー → スカラー文字列 or 文字列配列）。 */
+/** front-matter の生データ（キー → スカラー文字列 or 文字列配列、キー自体が無ければ undefined）。 */
 interface RawFrontMatter {
-    [key: string]: string | string[];
+    [key: string]: string | string[] | undefined;
 }
 
 /**
@@ -173,7 +173,7 @@ const asStringArray = (value: string | string[] | undefined): string[] => {
 const isLayer = (value: string): value is Layer =>
     LAYERS.some((layer) => layer === value);
 
-const isStatus = (value: string): value is SpecStatus =>
+const isStatus = (value: string | undefined): value is SpecStatus =>
     STATUSES.some((status) => status === value);
 
 /**
@@ -184,10 +184,10 @@ const isStatus = (value: string): value is SpecStatus =>
  */
 const buildSpecEntry = (raw: RawFrontMatter, filePath: string): SpecEntry => {
     const { id, title, status } = raw;
-    if (Array.isArray(id) || id === '') {
+    if (id === undefined || Array.isArray(id) || id === '') {
         throw new Error(`${filePath}: id が不正です`);
     }
-    if (Array.isArray(title) || title === '') {
+    if (title === undefined || Array.isArray(title) || title === '') {
         throw new Error(`${filePath}: title が不正です`);
     }
     if (Array.isArray(status) || !isStatus(status)) {
