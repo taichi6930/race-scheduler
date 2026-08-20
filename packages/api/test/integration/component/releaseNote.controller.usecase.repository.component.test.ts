@@ -7,15 +7,18 @@
  * 層構造: Router（実HTTP） → ReleaseNoteController → ReleaseNoteUsecase →
  * ReleaseNoteRepository → DrizzleGateway → D1
  *
- * `GET /release-notes` は `SERVICE_AUTH_EXEMPT_ROUTES` に登録済みの公開エンドポイントのため、
- * 認証ヘッダー無しで到達できることも合わせて検証する。`POST /release-notes` は
+ * `GET /release-notes` は `APP_AUTH_ROUTES` で `service-or-session`（front招待制
+ * クローズド化、router.ts）のため、ここでは calendar/scraping Worker等からの
+ * サービス間呼び出しを模してサービス間認証ヘッダーを付与する（front自身は
+ * セッション認証で呼ぶ想定だが、その経路は別途セッション認証のテストで担保する）。
+ * `POST /release-notes` は既定の `service-only` のまま、
  * `X-Service-Auth-Token`（`scripts/release/autoRelease.ts`専用）を要求する。
  *
  * ## シナリオテーブル
  *
  * | #                | リクエスト                          | 期待                                      |
  * |--------------------|----------------------------------------|---------------------------------------------|
- * | RELEASE-NOTE-1    | データ無しで認証ヘッダー無しGET       | 200・空配列                                |
+ * | RELEASE-NOTE-1    | データ無しでサービス間認証ありGET     | 200・空配列                                |
  * | RELEASE-NOTE-2    | race-schedule/race-scheduler混在で投入後にGET | 200・race-schedulerのみ・published_atの新しい順 |
  * | RELEASE-NOTE-3    | 認証ヘッダー無しでPOST                | 401                                          |
  * | RELEASE-NOTE-4    | 正しいトークンでPOST（新規）→GET      | 201・GETに反映される                        |
@@ -52,8 +55,10 @@ describe('コンポーネントテスト: ReleaseNote Router → Controller → 
         container.clearInstances();
     });
 
-    it('RELEASE-NOTE-1: データ無し・認証ヘッダー無しでGETした場合は200・空配列を返すこと', async () => {
-        const response = await requestApi(d1, '/release-notes');
+    it('RELEASE-NOTE-1: データ無し・サービス間認証ヘッダーありでGETした場合は200・空配列を返すこと', async () => {
+        const response = await requestApi(d1, '/release-notes', {
+            headers: { [SERVICE_AUTH_HEADER]: MOCK_SERVICE_AUTH_TOKEN },
+        });
         const body = (await response.json()) as ReleaseNote[];
 
         expect(response.status).toBe(200);
@@ -85,7 +90,9 @@ describe('コンポーネントテスト: ReleaseNote Router → Controller → 
             },
         ]);
 
-        const response = await requestApi(d1, '/release-notes');
+        const response = await requestApi(d1, '/release-notes', {
+            headers: { [SERVICE_AUTH_HEADER]: MOCK_SERVICE_AUTH_TOKEN },
+        });
         const body = (await response.json()) as ReleaseNote[];
 
         expect(response.status).toBe(200);
@@ -134,7 +141,9 @@ describe('コンポーネントテスト: ReleaseNote Router → Controller → 
 
         expect(postResponse.status).toBe(201);
 
-        const getResponse = await requestApi(d1, '/release-notes');
+        const getResponse = await requestApi(d1, '/release-notes', {
+            headers: { [SERVICE_AUTH_HEADER]: MOCK_SERVICE_AUTH_TOKEN },
+        });
         const body = (await getResponse.json()) as ReleaseNote[];
         expect(body).toEqual([
             {
@@ -175,7 +184,9 @@ describe('コンポーネントテスト: ReleaseNote Router → Controller → 
             body: JSON.stringify({ ...note, body: '更新後の本文' }),
         });
 
-        const getResponse = await requestApi(d1, '/release-notes');
+        const getResponse = await requestApi(d1, '/release-notes', {
+            headers: { [SERVICE_AUTH_HEADER]: MOCK_SERVICE_AUTH_TOKEN },
+        });
         const body = (await getResponse.json()) as ReleaseNote[];
         expect(body).toHaveLength(1);
         expect(body[0]?.body).toBe('更新後の本文');

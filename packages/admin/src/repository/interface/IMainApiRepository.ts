@@ -11,6 +11,8 @@ import type {
     BackfillRaceResult,
 } from '../../dto/backfillResult';
 import type { FeatureFlagStatus } from '../../dto/featureFlagStatus';
+import type { InviteIssueResult } from '../../dto/invite';
+import type { ParticipantSummary } from '../../dto/participant';
 import type { RaceSummary } from '../../dto/raceSummary';
 
 /**
@@ -79,4 +81,14 @@ export interface IMainApiRepository {
 
     /** 分割元の非公開リポジトリ（race-schedule）分も含む、全リリースノートを取得する。 */
     fetchReleaseNotes: () => Promise<ReleaseNote[]>;
+
+    /**
+     * 招待を新規発行する。
+     * @param memo - 運用者専用の管理メモ（本人には見せない）。無ければnull
+     * @returns 発行された招待トークン
+     */
+    issueInvite: (memo: string | null) => Promise<InviteIssueResult>;
+
+    /** 招待から登録済みの全参加者（クレデンシャル単位）の一覧を取得する。 */
+    fetchParticipants: () => Promise<ParticipantSummary[]>;
 }

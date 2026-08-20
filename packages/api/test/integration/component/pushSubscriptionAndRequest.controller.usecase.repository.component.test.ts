@@ -6,8 +6,9 @@
  *
  * 層構造: Router（実HTTP） → Controller → Usecase → Repository → InMemory D1（Drizzle）
  *
- * これらのエンドポイントは `SERVICE_AUTH_EXEMPT_ROUTES`（reason: 'pending-user-auth'、
- * J-4所有権検証の実装待ち）のため、認証ヘッダー無しで通る想定である。
+ * これらのエンドポイントは `APP_AUTH_ROUTES` で `session-only`（router.ts、front招待制
+ * クローズド化）のため、`insertTestSession`（`test/common/sessionAuth.ts`）でInMemory D1へ
+ * 有効なuser/credential/sessionを直接投入し、Authorizationヘッダーを付与して呼ぶ。
  * controller を直接呼ばず、本番と同じ `router`（Hono app）に実HTTPリクエストを送る
  * （`requestApi` ヘルパー経由）。
  *
@@ -47,6 +48,7 @@ import { useInMemoryDB } from '../../../../../tests/shared/env';
 import * as schema from '../../../src/db/schema';
 import { createInMemoryD1Database } from '../../common/inMemoryD1';
 import { requestApi } from '../../common/requestApi';
+import { insertTestSession } from '../../common/sessionAuth';
 import { setupGlobalMocks } from '../../common/setupGlobalMocks';
 
 const ENDPOINT = 'https://push.example.com/subscription/behav';
@@ -56,6 +58,8 @@ describe('コンポーネントテスト: Push Subscription/Request Router → C
     let restoreEnv: () => void;
     let db: DrizzleD1Database<typeof schema>;
     let d1: D1Database;
+    /** session-only ルートのため、テスト用セッションのAuthorizationヘッダー */
+    let sessionHeaders: Record<string, string>;
 
     beforeAll(() => {
         restoreEnv = useInMemoryDB();
@@ -65,10 +69,11 @@ describe('コンポーネントテスト: Push Subscription/Request Router → C
         restoreEnv();
     });
 
-    beforeEach(() => {
+    beforeEach(async () => {
         d1 = createInMemoryD1Database();
         db = drizzle(d1, { schema });
         setupGlobalMocks(d1);
+        sessionHeaders = await insertTestSession(db);
     });
 
     afterEach(() => {
@@ -79,7 +84,7 @@ describe('コンポーネントテスト: Push Subscription/Request Router → C
         // Act
         const response = await requestApi(d1, '/push/subscription', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...sessionHeaders },
             body: JSON.stringify({
                 endpoint: ENDPOINT,
                 keys: { p256dh: 'p256dh-value', auth: 'auth-value' },
@@ -99,7 +104,7 @@ describe('コンポーネントテスト: Push Subscription/Request Router → C
         // Arrange
         const subscribeResponse = await requestApi(d1, '/push/subscription', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...sessionHeaders },
             body: JSON.stringify({
                 endpoint: ENDPOINT,
                 keys: { p256dh: 'p256dh-value', auth: 'auth-value' },
@@ -110,7 +115,7 @@ describe('コンポーネントテスト: Push Subscription/Request Router → C
         // Act
         const response = await requestApi(d1, '/push/subscription', {
             method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...sessionHeaders },
             body: JSON.stringify({ endpoint: ENDPOINT }),
         });
 
@@ -124,7 +129,7 @@ describe('コンポーネントテスト: Push Subscription/Request Router → C
         // Arrange
         const subscribeResponse = await requestApi(d1, '/push/subscription', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...sessionHeaders },
             body: JSON.stringify({
                 endpoint: ENDPOINT,
                 keys: { p256dh: 'p256dh-value', auth: 'auth-value' },
@@ -137,7 +142,7 @@ describe('コンポーネントテスト: Push Subscription/Request Router → C
         // Act
         const response = await requestApi(d1, '/push/request', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...sessionHeaders },
             body: JSON.stringify({
                 subscriptionId,
                 raceId: RACE_ID,
@@ -158,7 +163,7 @@ describe('コンポーネントテスト: Push Subscription/Request Router → C
         // Arrange
         const subscribeResponse = await requestApi(d1, '/push/subscription', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...sessionHeaders },
             body: JSON.stringify({
                 endpoint: ENDPOINT,
                 keys: { p256dh: 'p256dh-value', auth: 'auth-value' },
@@ -169,7 +174,7 @@ describe('コンポーネントテスト: Push Subscription/Request Router → C
         };
         await requestApi(d1, '/push/request', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...sessionHeaders },
             body: JSON.stringify({
                 subscriptionId,
                 raceId: RACE_ID,
@@ -182,7 +187,7 @@ describe('コンポーネントテスト: Push Subscription/Request Router → C
         // Act
         const response = await requestApi(d1, '/push/request', {
             method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...sessionHeaders },
             body: JSON.stringify({ subscriptionId, raceId: RACE_ID }),
         });
 
@@ -196,7 +201,7 @@ describe('コンポーネントテスト: Push Subscription/Request Router → C
         // Act
         const response = await requestApi(d1, '/push/subscription', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...sessionHeaders },
             body: JSON.stringify({
                 endpoint: ENDPOINT,
                 keys: { p256dh: 'p256dh-value', auth: 'auth-value' },
@@ -219,7 +224,7 @@ describe('コンポーネントテスト: Push Subscription/Request Router → C
         // Arrange（同一endpoint = 同一idの行を対象にするため、endpointは変えない）
         const subscribeResponse = await requestApi(d1, '/push/subscription', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...sessionHeaders },
             body: JSON.stringify({
                 endpoint: ENDPOINT,
                 keys: { p256dh: 'p256dh-value', auth: 'auth-value' },
@@ -235,6 +240,7 @@ describe('コンポーネントテスト: Push Subscription/Request Router → C
             headers: {
                 'Content-Type': 'application/json',
                 'X-Push-Subscription-Secret': secret,
+                ...sessionHeaders,
             },
             body: JSON.stringify({
                 endpoint: ENDPOINT,
@@ -255,7 +261,7 @@ describe('コンポーネントテスト: Push Subscription/Request Router → C
         // Arrange
         await requestApi(d1, '/push/subscription', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...sessionHeaders },
             body: JSON.stringify({
                 endpoint: ENDPOINT,
                 keys: { p256dh: 'p256dh-value', auth: 'auth-value' },
@@ -268,6 +274,7 @@ describe('コンポーネントテスト: Push Subscription/Request Router → C
             headers: {
                 'Content-Type': 'application/json',
                 'X-Push-Subscription-Secret': 'wrong-secret',
+                ...sessionHeaders,
             },
             body: JSON.stringify({
                 endpoint: ENDPOINT,

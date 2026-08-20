@@ -87,6 +87,8 @@ describe('コンポーネントテスト: RaceDetailLayout Router → Controller
             ),
             fetchUpcomingKeirinRaces: mock(() => Promise.resolve(SAMPLE_RACES)),
             fetchReleaseNotes: mock(() => Promise.resolve([])),
+            issueInvite: mock(() => Promise.resolve({ token: 'invite-token' })),
+            fetchParticipants: mock(() => Promise.resolve([])),
         };
 
         container.register<IMainApiGateway>(DI_TOKENS.MainApiGateway, {

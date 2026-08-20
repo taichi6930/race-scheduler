@@ -135,6 +135,7 @@ describe('コンポーネントテスト: InternalUiLayout Router → Controller
         const detailResponse = await requestApi(
             d1,
             `/ui/race-detail?raceId=${race.raceId}`,
+            { headers: { [SERVICE_AUTH_HEADER]: MOCK_SERVICE_AUTH_TOKEN } },
         );
         const detail = (await detailResponse.json()) as RaceDetailUi;
 

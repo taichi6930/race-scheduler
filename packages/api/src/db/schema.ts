@@ -387,6 +387,20 @@ export const session = sqliteTable('session', {
 });
 
 /**
+ * WebAuthnのchallenge一時保存（options生成→verifyの2往復をまたぐため）。
+ * 消費時（verify成功/失敗いずれも）に削除する使い捨ての値。
+ * 0042_webauthn_challenge.sqlite.sql参照。
+ */
+export const webauthnChallenge = sqliteTable('webauthn_challenge', {
+    id: text('id').primaryKey(),
+    challenge: text('challenge').notNull(),
+    purpose: text('purpose').notNull().$type<'register' | 'login'>(),
+    inviteToken: text('invite_token'),
+    expiresAt: text('expires_at').notNull(),
+    createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+/**
  * お気に入りレース（user単位、段階2）。raceへの外部キー制約は付けない
  * （calendar_flagと同じく、参照先レースの削除を気にしない設計）。
  * 0041_favorite.sqlite.sql参照。

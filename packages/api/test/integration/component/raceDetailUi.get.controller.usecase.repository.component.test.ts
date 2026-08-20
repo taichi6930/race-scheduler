@@ -23,6 +23,7 @@ import type { D1Database } from '@cloudflare/workers-types';
 import {
     type RaceDetailUi,
     RaceType,
+    SERVICE_AUTH_HEADER,
     toJstISOString,
     validateLocationCode,
 } from '@race-schedule/core';
@@ -34,8 +35,12 @@ import { useInMemoryDB } from '../../../../../tests/shared/env';
 import { RaceFactory } from '../../../../../tests/shared/factories';
 import * as schema from '../../../src/db/schema';
 import { createInMemoryD1Database } from '../../common/inMemoryD1';
+import { MOCK_SERVICE_AUTH_TOKEN } from '../../common/mockHonoEnv';
 import { requestApi } from '../../common/requestApi';
 import { setupGlobalMocks } from '../../common/setupGlobalMocks';
+
+/** GET /ui/race-detail は service-or-session のため、サービス間認証ヘッダーを既定で付与する */
+const AUTH_HEADERS = { [SERVICE_AUTH_HEADER]: MOCK_SERVICE_AUTH_TOKEN };
 
 /** インメモリD1（Drizzle経由）へ 1 件のKEIRINレースを投入する（raceStageも投入） */
 const insertKeirinRace = async (
@@ -96,6 +101,7 @@ describe('コンポーネントテスト: GET /ui/race-detail Router → Control
         const response = await requestApi(
             d1,
             `/ui/race-detail?raceId=${race.raceId}`,
+            { headers: AUTH_HEADERS },
         );
         const body = (await response.json()) as RaceDetailUi;
 
@@ -126,6 +132,7 @@ describe('コンポーネントテスト: GET /ui/race-detail Router → Control
         const response = await requestApi(
             d1,
             '/ui/race-detail?raceId=keirin202608023699',
+            { headers: AUTH_HEADERS },
         );
 
         expect(response.status).toBe(404);

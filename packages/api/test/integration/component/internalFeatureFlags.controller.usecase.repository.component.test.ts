@@ -92,7 +92,9 @@ describe('コンポーネントテスト: InternalFeatureFlags Router → Contro
                 ?.storedEnabled,
         ).toBe(true);
 
-        const announcementResponse = await requestApi(d1, '/ui/announcement');
+        const announcementResponse = await requestApi(d1, '/ui/announcement', {
+            headers: { [SERVICE_AUTH_HEADER]: MOCK_SERVICE_AUTH_TOKEN },
+        });
         const announcement =
             (await announcementResponse.json()) as Announcement;
 

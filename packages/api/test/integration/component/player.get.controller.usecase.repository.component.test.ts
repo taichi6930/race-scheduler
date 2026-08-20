@@ -9,6 +9,10 @@
  * （`requestApi` ヘルパー経由。詳細・設計方針は place.get...component.test.ts のコメントおよび
  * .claude/docs/testing-conventions.md §コンポーネントテスト を参照）。
  *
+ * `GET /player` は `APP_AUTH_ROUTES` で `session-only`（router.ts）のため、
+ * `insertTestSession`（`test/common/sessionAuth.ts`）でInMemory D1へ有効な
+ * user/credential/sessionを直接投入し、Authorizationヘッダーを付与して呼ぶ。
+ *
  * ## シナリオテーブル（Player GET Router → Controller → Usecase → Repository → InMemoryDB）
  *
  * | #        | 投入データ                    | リクエスト条件           | 期待                          |
@@ -39,6 +43,7 @@ import { PlayerFactory } from '../../../../../tests/shared/factories';
 import * as schema from '../../../src/db/schema';
 import { createInMemoryD1Database } from '../../common/inMemoryD1';
 import { requestApi } from '../../common/requestApi';
+import { insertTestSession } from '../../common/sessionAuth';
 import { setupGlobalMocks } from '../../common/setupGlobalMocks';
 
 /** インメモリD1（Drizzle経由）へ 1 件の PlayerEntity を投入する */
@@ -63,6 +68,8 @@ describe('コンポーネントテスト: Player GET Router → Controller → U
     let restoreEnv: () => void;
     let db: DrizzleD1Database<typeof schema>;
     let d1: D1Database;
+    /** GET /player は session-only のため、テスト用セッションのAuthorizationヘッダー */
+    let sessionHeaders: Record<string, string>;
 
     beforeAll(() => {
         restoreEnv = useInMemoryDB();
@@ -72,10 +79,11 @@ describe('コンポーネントテスト: Player GET Router → Controller → U
         restoreEnv();
     });
 
-    beforeEach(() => {
+    beforeEach(async () => {
         d1 = createInMemoryD1Database();
         db = drizzle(d1, { schema });
         setupGlobalMocks(d1);
+        sessionHeaders = await insertTestSession(db);
     });
 
     afterEach(() => {
@@ -92,7 +100,9 @@ describe('コンポーネントテスト: Player GET Router → Controller → U
 
         // Act
         const params = new URLSearchParams({ raceTypeList: 'jra' });
-        const response = await requestApi(d1, `/player?${params.toString()}`);
+        const response = await requestApi(d1, `/player?${params.toString()}`, {
+            headers: sessionHeaders,
+        });
         const body = (await response.json()) as PlayerGetResponseBody;
 
         // Assert
@@ -113,7 +123,9 @@ describe('コンポーネントテスト: Player GET Router → Controller → U
 
         // Act
         const params = new URLSearchParams({ raceTypeList: 'jra' });
-        const response = await requestApi(d1, `/player?${params.toString()}`);
+        const response = await requestApi(d1, `/player?${params.toString()}`, {
+            headers: sessionHeaders,
+        });
         const body = (await response.json()) as PlayerGetResponseBody;
 
         // Assert
@@ -145,7 +157,9 @@ describe('コンポーネントテスト: Player GET Router → Controller → U
 
         // Act
         const params = new URLSearchParams({ raceTypeList: 'jra' });
-        const response = await requestApi(d1, `/player?${params.toString()}`);
+        const response = await requestApi(d1, `/player?${params.toString()}`, {
+            headers: sessionHeaders,
+        });
         const body = (await response.json()) as PlayerGetResponseBody;
 
         // Assert
@@ -162,7 +176,9 @@ describe('コンポーネントテスト: Player GET Router → Controller → U
 
         // Act
         const params = new URLSearchParams({ raceTypeList: 'nar' });
-        const response = await requestApi(d1, `/player?${params.toString()}`);
+        const response = await requestApi(d1, `/player?${params.toString()}`, {
+            headers: sessionHeaders,
+        });
         const body = (await response.json()) as PlayerGetResponseBody;
 
         // Assert

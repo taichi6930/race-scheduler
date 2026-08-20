@@ -18,6 +18,8 @@
  * | 11 | previewUiLayout | fetchWithTimeoutが404以外で失敗 | エラーが呼び出し元へ伝播する | Branch |
  * | 12 | fetchUpcomingKeirinRaces | 正常系 | GET /raceをstartDate/finishDate/raceTypeList=keirinで叩きraces[]を返す | Line |
  * | 13 | fetchReleaseNotes | 正常系 | GET /internal/release-notes を叩きリリースノート配列を返す | Line |
+ * | 14 | issueInvite | 正常系 | POST /auth/invite にmemoを渡し発行結果を返す | Line |
+ * | 15 | fetchParticipants | 正常系 | GET /auth/participants を叩きparticipants[]を返す | Line |
  */
 import 'reflect-metadata';
 
@@ -30,6 +32,7 @@ import {
 
 import type { BackfillFilter } from '../../../../src/dto/backfillResult';
 import type { FeatureFlagStatus } from '../../../../src/dto/featureFlagStatus';
+import type { ParticipantSummary } from '../../../../src/dto/participant';
 import type { RaceSummary } from '../../../../src/dto/raceSummary';
 import { MainApiGateway } from '../../../../src/gateway/implement/mainApiGateway';
 
@@ -349,5 +352,54 @@ describe('MainApiGateway', () => {
         const url = new URL(capturedUrl ?? '');
         expect(url.pathname).toBe('/internal/release-notes');
         expect(result).toEqual([note]);
+    });
+
+    it('#14: issueInviteはPOST /auth/inviteにmemoを渡し発行結果を返す', async () => {
+        let capturedUrl: string | undefined;
+        let capturedInit: RequestInit | undefined;
+        globalThis.fetch = mock((url: string, init?: RequestInit) => {
+            capturedUrl = url;
+            capturedInit = init;
+            return Promise.resolve(
+                new Response(JSON.stringify({ token: 'invite-token' }), {
+                    status: 201,
+                }),
+            );
+        }) as unknown as typeof fetch;
+
+        const result = await gateway.issueInvite('テストメモ');
+
+        const url = new URL(capturedUrl ?? '');
+        expect(url.pathname).toBe('/auth/invite');
+        expect(capturedInit?.method).toBe('POST');
+        expect(capturedInit?.body).toBe(JSON.stringify({ memo: 'テストメモ' }));
+        expect(result).toEqual({ token: 'invite-token' });
+    });
+
+    it('#15: fetchParticipantsはGET /auth/participantsを叩きparticipants[]を返す', async () => {
+        const participant: ParticipantSummary = {
+            userId: 'user-1',
+            nickname: 'にっくねーむ',
+            inviteMemo: 'メモ',
+            credentialId: 'credential-1',
+            deviceLabel: 'iPhone',
+            lastUsedAt: '2026-08-19T00:00:00.000Z',
+            userCreatedAt: '2026-08-01T00:00:00.000Z',
+        };
+        let capturedUrl: string | undefined;
+        globalThis.fetch = mock((url: string) => {
+            capturedUrl = url;
+            return Promise.resolve(
+                new Response(JSON.stringify({ participants: [participant] }), {
+                    status: 200,
+                }),
+            );
+        }) as unknown as typeof fetch;
+
+        const result = await gateway.fetchParticipants();
+
+        const url = new URL(capturedUrl ?? '');
+        expect(url.pathname).toBe('/auth/participants');
+        expect(result).toEqual([participant]);
     });
 });

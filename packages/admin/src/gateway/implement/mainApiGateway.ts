@@ -17,6 +17,8 @@ import type {
     BackfillRaceResult,
 } from '../../dto/backfillResult';
 import type { FeatureFlagStatus } from '../../dto/featureFlagStatus';
+import type { InviteIssueResult } from '../../dto/invite';
+import type { ParticipantSummary } from '../../dto/participant';
 import type { RaceSummary } from '../../dto/raceSummary';
 import { getMainApiUrl } from '../../utility/mainApiConfig';
 import type { IMainApiGateway } from '../interface/IMainApiGateway';
@@ -24,6 +26,11 @@ import type { IMainApiGateway } from '../interface/IMainApiGateway';
 /** メインAPI `/internal/feature-flags` のレスポンス */
 interface FeatureFlagListResponse {
     flags: FeatureFlagStatus[];
+}
+
+/** メインAPI `GET /auth/participants` のレスポンス */
+interface ParticipantsResponse {
+    participants: ParticipantSummary[];
 }
 
 /** メインAPI `GET /race` のレスポンス（レース詳細レイアウト編集キットが使う項目のみ） */
@@ -174,5 +181,24 @@ export class MainApiGateway implements IMainApiGateway {
         return fetchWithTimeout<ReleaseNote[]>(url, {
             headers: withServiceAuthHeader(),
         });
+    }
+
+    public async issueInvite(memo: string | null): Promise<InviteIssueResult> {
+        const url = new URL('/auth/invite', getMainApiUrl());
+        return fetchWithTimeout<InviteIssueResult>(url, {
+            method: 'POST',
+            headers: withServiceAuthHeader({
+                'Content-Type': 'application/json',
+            }),
+            body: JSON.stringify({ memo }),
+        });
+    }
+
+    public async fetchParticipants(): Promise<ParticipantSummary[]> {
+        const url = new URL('/auth/participants', getMainApiUrl());
+        const response = await fetchWithTimeout<ParticipantsResponse>(url, {
+            headers: withServiceAuthHeader(),
+        });
+        return response.participants;
     }
 }

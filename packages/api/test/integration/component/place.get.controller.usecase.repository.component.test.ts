@@ -38,6 +38,7 @@ import {
 import type { D1Database } from '@cloudflare/workers-types';
 import {
     RaceType,
+    SERVICE_AUTH_HEADER,
     toJstISOString,
     validateLocationCode,
 } from '@race-schedule/core';
@@ -49,8 +50,12 @@ import { useInMemoryDB } from '../../../../../tests/shared/env';
 import { PlaceFactory } from '../../../../../tests/shared/factories';
 import * as schema from '../../../src/db/schema';
 import { createInMemoryD1Database } from '../../common/inMemoryD1';
+import { MOCK_SERVICE_AUTH_TOKEN } from '../../common/mockHonoEnv';
 import { requestApi } from '../../common/requestApi';
 import { setupGlobalMocks } from '../../common/setupGlobalMocks';
+
+/** GET /place は service-or-session のため、サービス間認証ヘッダーを既定で付与する */
+const AUTH_HEADERS = { [SERVICE_AUTH_HEADER]: MOCK_SERVICE_AUTH_TOKEN };
 
 /** インメモリD1（Drizzle経由）へ 1 件の PlaceEntity を投入する（place + 付随テーブル） */
 const insertPlace = async (
@@ -128,7 +133,9 @@ describe('コンポーネントテスト: Place GET Router → Controller → Us
             raceTypeList: 'jra',
             locationList: '05',
         });
-        const response = await requestApi(d1, `/place?${params.toString()}`);
+        const response = await requestApi(d1, `/place?${params.toString()}`, {
+            headers: AUTH_HEADERS,
+        });
         const body = (await response.json()) as PlaceGetResponseBody;
 
         // Assert
@@ -153,7 +160,9 @@ describe('コンポーネントテスト: Place GET Router → Controller → Us
             finishDate: '2026-05-02',
             raceTypeList: 'jra',
         });
-        const response = await requestApi(d1, `/place?${params.toString()}`);
+        const response = await requestApi(d1, `/place?${params.toString()}`, {
+            headers: AUTH_HEADERS,
+        });
         const body = (await response.json()) as PlaceGetResponseBody;
 
         // Assert
@@ -178,7 +187,9 @@ describe('コンポーネントテスト: Place GET Router → Controller → Us
             finishDate: '2026-04-27',
             raceTypeList: 'keirin',
         });
-        const response = await requestApi(d1, `/place?${params.toString()}`);
+        const response = await requestApi(d1, `/place?${params.toString()}`, {
+            headers: AUTH_HEADERS,
+        });
         const body = (await response.json()) as PlaceGetResponseBody;
 
         // Assert: DBのplace_grade → Repository → JSONシリアライズまで通した値を確認

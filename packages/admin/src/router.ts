@@ -23,6 +23,10 @@
  * - GET  /race-detail-layout/api/races    プレビュー候補のレース一覧取得
  * - GET  /release-notes            更新履歴（全リポジトリ）一覧画面（HTML）
  * - GET  /release-notes/api        更新履歴一覧取得（非公開リポジトリ分含む）
+ * - GET  /invite                   招待発行画面（HTML）
+ * - POST /invite/api               招待発行
+ * - GET  /participants             参加者一覧画面（HTML）
+ * - GET  /participants/api         参加者一覧取得
  * @module router
  */
 
@@ -48,6 +52,8 @@ import {
     renderServerErrorPage,
 } from './controller/errorPages';
 import { FeatureFlagsController } from './controller/featureFlagsController';
+import { InviteController } from './controller/inviteController';
+import { ParticipantsController } from './controller/participantsController';
 import { RaceDetailLayoutController } from './controller/raceDetailLayoutController';
 import { ReleaseNotesController } from './controller/releaseNotesController';
 import { isProductionAdmin } from './utility/isProductionAdmin';
@@ -115,6 +121,8 @@ function registerSecurityHeadersMiddleware(router: Hono): void {
                 ['/backfill', ADMIN_PAGE_CSP],
                 ['/race-detail-layout', ADMIN_PAGE_CSP],
                 ['/release-notes', ADMIN_PAGE_CSP],
+                ['/invite', ADMIN_PAGE_CSP],
+                ['/participants', ADMIN_PAGE_CSP],
             ]),
         }),
     );
@@ -247,6 +255,38 @@ function registerReleaseNotesRoutes(router: Hono): void {
 }
 
 /**
+ * 招待発行のルートを登録する。
+ * @param router - 登録対象の Hono アプリケーション
+ */
+function registerInviteRoutes(router: Hono): void {
+    router.get('/invite', () => {
+        const controller = container.resolve(InviteController);
+        return controller.page();
+    });
+    router.post('/invite/api', (c: Context) => {
+        EnvStore.setEnv(c.env);
+        const controller = container.resolve(InviteController);
+        return controller.issue(c.req.raw);
+    });
+}
+
+/**
+ * 参加者一覧のルートを登録する。
+ * @param router - 登録対象の Hono アプリケーション
+ */
+function registerParticipantsRoutes(router: Hono): void {
+    router.get('/participants', () => {
+        const controller = container.resolve(ParticipantsController);
+        return controller.page();
+    });
+    router.get('/participants/api', (c: Context) => {
+        EnvStore.setEnv(c.env);
+        const controller = container.resolve(ParticipantsController);
+        return controller.list();
+    });
+}
+
+/**
  * Hono ルーターを構築する。
  * ルート登録（副作用）を関数内へ閉じ込め、no-top-level-side-effects を満たす。
  * @returns 構築済みの Hono ルーター
@@ -265,6 +305,8 @@ function buildRouter(): Hono {
     registerBackfillRoutes(router);
     registerRaceDetailLayoutRoutes(router);
     registerReleaseNotesRoutes(router);
+    registerInviteRoutes(router);
+    registerParticipantsRoutes(router);
 
     return router;
 }

@@ -120,3 +120,28 @@ export const runWithInternalServiceCall = <T>(
  */
 export const isInternalServiceCall = (): boolean =>
     internalServiceCallStorage.getStore() ?? false;
+
+const currentUserIdStorage = new AsyncLocalStorage<string>();
+
+/**
+ * セッション認証済みリクエストの呼び出し元ユーザーIDを、このスコープ内の
+ * 非同期処理全体（`await` を挟んだ先も含む）に紐付けて実行する。
+ * `player_watch`/`favorite` 等のuser単位データへのアクセス範囲を、
+ * repository層が `getCurrentUserId()` を通じてクライアント入力に依存せず
+ * 決定できるようにする（クライアントが送るuserIdを信用しない設計、
+ * IDOR対策・SECURITY-08）。
+ * @param userId - 紐付けるユーザーID（session認証ミドルウェアが検証済みの値）
+ * @param fn - このスコープ内で実行する処理
+ * @returns `fn` の戻り値
+ */
+export const runWithCurrentUserId = <T>(userId: string, fn: () => T): T =>
+    currentUserIdStorage.run(userId, fn);
+
+/**
+ * 現在の非同期実行コンテキストに紐付いた認証済みユーザーIDを取得する。
+ * セッション認証ミドルウェアのスコープ外（サービス間認証のみの呼び出し・
+ * CLI・ユニットテスト等）から呼ばれた場合は `undefined`。
+ * @returns ユーザーID、紐付けが無ければ `undefined`
+ */
+export const getCurrentUserId = (): string | undefined =>
+    currentUserIdStorage.getStore();

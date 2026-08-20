@@ -24,6 +24,7 @@
     "dependencies": {
         "@race-schedule/core": "workspace:*",
         "@scalar/hono-api-reference": "^0.11.12",
+        "@simplewebauthn/server": "^13.1.1",
         "drizzle-orm": "^0.45.2",
         "hono": "^4.12.32",
         "reflect-metadata": "^0.2.2",

@@ -11,13 +11,16 @@ import type {
     BackfillRaceResult,
 } from '../../dto/backfillResult';
 import type { FeatureFlagStatus } from '../../dto/featureFlagStatus';
+import type { InviteIssueResult } from '../../dto/invite';
+import type { ParticipantSummary } from '../../dto/participant';
 import type { RaceSummary } from '../../dto/raceSummary';
 
 /**
  * メインAPI（@race-schedule/api）の機能フラグ管理エンドポイント
  * （`/internal/feature-flags`）・バックフィルエンドポイント
  * （`/internal/backfill/{place,race}`）・レイアウト構成エンドポイント
- * （`/internal/ui-layout*`）と通信するゲートウェイ
+ * （`/internal/ui-layout*`）・招待発行・参加者一覧エンドポイント
+ * （`/auth/invite`・`/auth/participants`）と通信するゲートウェイ
  */
 export interface IMainApiGateway {
     /** 登録済み機能フラグの状態一覧を取得する。 */
@@ -80,4 +83,14 @@ export interface IMainApiGateway {
      * 専用エンドポイント（`/internal/release-notes`）経由でのみ参照できる。
      */
     fetchReleaseNotes: () => Promise<ReleaseNote[]>;
+
+    /**
+     * 招待を新規発行する。
+     * @param memo - 運用者専用の管理メモ（本人には見せない）。無ければnull
+     * @returns 発行された招待トークン
+     */
+    issueInvite: (memo: string | null) => Promise<InviteIssueResult>;
+
+    /** 招待から登録済みの全参加者（クレデンシャル単位）の一覧を取得する。 */
+    fetchParticipants: () => Promise<ParticipantSummary[]>;
 }

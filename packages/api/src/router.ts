@@ -33,13 +33,13 @@ import type {
 import {
     API_REQUIRED_KEYS,
     appLogger,
+    badRequest,
     bodyLimitMiddleware,
     EnvStore,
     getAllowedOrigins,
     isCacheableGetResponse,
     isProductionEnvironment,
     rateLimitMiddleware,
-    requireServiceAuth,
     resolveRequestId,
     runWithRequestId,
     sanitizeError,
@@ -53,10 +53,12 @@ import type { InjectionToken } from 'tsyringe';
 import { container } from 'tsyringe';
 
 import { AnnouncementController } from './controller/announcementController';
+import { AuthController } from './controller/authController';
 import { BackfillController } from './controller/backfillController';
 import { BatchLockController } from './controller/batchLockController';
 import { CalendarController } from './controller/calendarController';
 import { DebugController } from './controller/debugController';
+import { FavoriteController } from './controller/favoriteController';
 import { InternalFeatureFlagsController } from './controller/internalFeatureFlagsController';
 import { InternalReleaseNoteController } from './controller/internalReleaseNoteController';
 import { InternalUiLayoutController } from './controller/internalUiLayoutController';
@@ -66,6 +68,8 @@ import { PushController } from './controller/pushController';
 import { RaceController } from './controller/raceController';
 import { ReleaseNoteController } from './controller/releaseNoteController';
 import { initializeDIForInMemory } from './di';
+import type { AppAuthRoute } from './middleware/appAuthMiddleware';
+import { requireAppAuth } from './middleware/appAuthMiddleware';
 import { openApiSpec } from './openapi/openApiSpec';
 import { createCacheControlMiddleware } from './utility/cacheControl';
 import { handleApiError } from './utility/errorHandler';
@@ -489,10 +493,10 @@ const registerCacheControlMiddleware = (router: Hono): void => {
 };
 
 /**
- * サービス間認証を免除するルート一覧（service-auth-design.md §4.5・§3.2 の
- * api Worker エンドポイント分類表と1:1で対応）。
- * ここに列挙されていないルートはすべて `requireServiceAuth` により保護される
- * （deny-by-default）。
+ * レート制限（`rateLimitMiddleware`）が「不特定多数から到達可能」と
+ * みなすルート一覧。認可そのもの（誰が呼べるか）は下記 `APP_AUTH_ROUTES` /
+ * `requireAppAuth` が担う（パスキー認証導入により`requireServiceAuth`単体運用から
+ * 移行した）。このリストは引き続き rateLimitMiddleware の入力としてのみ使う。
  */
 export const SERVICE_AUTH_EXEMPT_ROUTES: readonly ServiceAuthExemptRoute[] = [
     { method: 'OPTIONS', path: '*', reason: 'cors-preflight' },
@@ -521,6 +525,79 @@ export const SERVICE_AUTH_EXEMPT_ROUTES: readonly ServiceAuthExemptRoute[] = [
     { method: 'DELETE', path: '/push/request', reason: 'pending-user-auth' },
     { method: 'POST', path: '/push/test', reason: 'pending-user-auth' },
     { method: 'POST', path: '/push/dispatch', reason: 'has-own-auth' },
+    { method: 'GET', path: '/favorite', reason: 'pending-user-auth' },
+    { method: 'POST', path: '/favorite', reason: 'pending-user-auth' },
+    { method: 'DELETE', path: '/favorite', reason: 'pending-user-auth' },
+    {
+        method: 'PATCH',
+        path: '/auth/credential/*',
+        reason: 'pending-user-auth',
+    },
+    { method: 'POST', path: '/auth/invite/verify', reason: 'front-public' },
+    { method: 'POST', path: '/auth/register/options', reason: 'front-public' },
+    { method: 'POST', path: '/auth/register/verify', reason: 'front-public' },
+    { method: 'POST', path: '/auth/login/options', reason: 'front-public' },
+    { method: 'POST', path: '/auth/login/verify', reason: 'front-public' },
+    { method: 'POST', path: '/auth/logout', reason: 'front-public' },
+];
+
+/**
+ * front招待制クローズド化に伴う認可方針一覧（`requireAppAuth`が参照する）。
+ *
+ * 既存の `SERVICE_AUTH_EXEMPT_ROUTES`（二値: 免除/必須）と異なり、
+ * `GET /race`・`GET /place`等は calendar/scraping Workerからのサービス間呼び出しと
+ * frontブラウザからの閲覧の両方から呼ばれるため、`service-or-session`
+ * （どちらか一方があれば通す）という中間の方針を持たせる。
+ * ここに列挙されていないルートは `service-only` を既定とする（deny-by-default、
+ * 新しいルートを追加したときに認可を書き忘れても保護される側に倒れる）。
+ */
+export const APP_AUTH_ROUTES: readonly AppAuthRoute[] = [
+    { method: 'OPTIONS', path: '*', policy: 'public' },
+    { method: 'GET', path: '/health', policy: 'public' },
+    { method: 'GET', path: '/openapi.json', policy: 'public' },
+    { method: 'GET', path: '/docs', policy: 'public' },
+    { method: 'GET', path: '/place/docs', policy: 'public' },
+    { method: 'GET', path: '/race/docs', policy: 'public' },
+    { method: 'POST', path: '/push/dispatch', policy: 'public' }, // has-own-auth: PUSH_DISPATCH_TOKENで別途検証
+
+    // パスキー登録・ログイン自体はログイン前に呼ぶ必要があるため公開
+    { method: 'POST', path: '/auth/invite/verify', policy: 'public' },
+    { method: 'POST', path: '/auth/register/options', policy: 'public' },
+    { method: 'POST', path: '/auth/register/verify', policy: 'public' },
+    { method: 'POST', path: '/auth/login/options', policy: 'public' },
+    { method: 'POST', path: '/auth/login/verify', policy: 'public' },
+    { method: 'POST', path: '/auth/logout', policy: 'public' },
+
+    // frontの閲覧 + calendar/scraping Workerからのサービス間呼び出しの両方から呼ばれる
+    { method: 'GET', path: '/ui/announcement', policy: 'service-or-session' },
+    { method: 'GET', path: '/ui/race-detail', policy: 'service-or-session' },
+    { method: 'GET', path: '/release-notes', policy: 'service-or-session' },
+    { method: 'GET', path: '/calendar', policy: 'service-or-session' },
+    { method: 'GET', path: '/place', policy: 'service-or-session' },
+    { method: 'GET', path: '/race', policy: 'service-or-session' },
+    {
+        method: 'GET',
+        path: '/race/calendar-event',
+        policy: 'service-or-session',
+    },
+    { method: 'GET', path: '/race/players', policy: 'service-or-session' },
+
+    // frontの書き込み・自分専用データ。他Workerは呼ばない
+    { method: 'GET', path: '/player', policy: 'session-only' },
+    { method: 'POST', path: '/player', policy: 'session-only' },
+    { method: 'POST', path: '/push/subscription', policy: 'session-only' },
+    { method: 'DELETE', path: '/push/subscription', policy: 'session-only' },
+    { method: 'POST', path: '/push/request', policy: 'session-only' },
+    { method: 'DELETE', path: '/push/request', policy: 'session-only' },
+    { method: 'POST', path: '/push/test', policy: 'session-only' },
+    { method: 'GET', path: '/favorite', policy: 'session-only' },
+    { method: 'POST', path: '/favorite', policy: 'session-only' },
+    { method: 'DELETE', path: '/favorite', policy: 'session-only' },
+    { method: 'PATCH', path: '/auth/credential/*', policy: 'session-only' },
+
+    // admin専用（サービス間認証のみ）。他は既定のservice-onlyに委ねる
+    { method: 'POST', path: '/auth/invite', policy: 'service-only' },
+    { method: 'GET', path: '/auth/participants', policy: 'service-only' },
 ];
 
 /**
@@ -533,7 +610,7 @@ export const SERVICE_AUTH_EXEMPT_ROUTES: readonly ServiceAuthExemptRoute[] = [
  * @param router - 登録対象の Hono アプリケーション
  */
 const registerServiceAuthMiddleware = (router: Hono): void => {
-    router.use('*', requireServiceAuth(SERVICE_AUTH_EXEMPT_ROUTES));
+    router.use('*', requireAppAuth(APP_AUTH_ROUTES, ensureDIInitialized));
 };
 
 /**
@@ -722,6 +799,117 @@ const registerRacePlayersRoute = (router: Hono): void => {
             httpMethod: 'get',
             invoke: (controller, c) =>
                 controller.players(new URL(c.req.url).searchParams),
+        },
+    ]);
+};
+
+/**
+ * パスキー(WebAuthn)認証エンドポイントを登録する。
+ * `POST /auth/invite`・`GET /auth/participants` は admin からのみサービス間認証で、
+ * それ以外はfront（一部は未ログインの状態でも）から呼ばれる。
+ * @param router - 登録対象の Hono アプリケーション
+ */
+const registerAuthRoutes = (router: Hono): void => {
+    registerAuthAdminRoutes(router);
+    registerAuthCeremonyRoutes(router);
+};
+
+/**
+ * admin からのみサービス間認証で呼ばれる招待発行・参加者一覧。
+ * @param router
+ */
+const registerAuthAdminRoutes = (router: Hono): void => {
+    registerMethodDispatch(router, '/auth/invite', AuthController, [
+        {
+            httpMethod: 'post',
+            invoke: (controller, c) => controller.issueInvite(c.req.raw),
+        },
+    ]);
+    registerMethodDispatch(router, '/auth/participants', AuthController, [
+        {
+            httpMethod: 'get',
+            invoke: (controller) => controller.participants(),
+        },
+    ]);
+};
+
+/**
+ * frontから呼ばれる招待検証・登録・ログイン・ログアウト・端末名変更。
+ * @param router
+ */
+const registerAuthCeremonyRoutes = (router: Hono): void => {
+    registerMethodDispatch(router, '/auth/invite/verify', AuthController, [
+        {
+            httpMethod: 'post',
+            invoke: (controller, c) => controller.verifyInvite(c.req.raw),
+        },
+    ]);
+    registerMethodDispatch(router, '/auth/register/options', AuthController, [
+        {
+            httpMethod: 'post',
+            invoke: (controller, c) =>
+                controller.registrationOptions(c.req.raw),
+        },
+    ]);
+    registerMethodDispatch(router, '/auth/register/verify', AuthController, [
+        {
+            httpMethod: 'post',
+            invoke: (controller, c) => controller.registrationVerify(c.req.raw),
+        },
+    ]);
+    registerMethodDispatch(router, '/auth/login/options', AuthController, [
+        {
+            httpMethod: 'post',
+            invoke: (controller) => controller.loginOptions(),
+        },
+    ]);
+    registerMethodDispatch(router, '/auth/login/verify', AuthController, [
+        {
+            httpMethod: 'post',
+            invoke: (controller, c) => controller.loginVerify(c.req.raw),
+        },
+    ]);
+    registerMethodDispatch(router, '/auth/logout', AuthController, [
+        {
+            httpMethod: 'post',
+            invoke: (controller, c) => controller.logout(c.req.raw),
+        },
+    ]);
+    registerRenameCredentialRoute(router);
+};
+
+/**
+ * `PATCH /auth/credential/:id`（動的パスのためregisterMethodDispatchでは扱えない）。
+ * @param router
+ */
+const registerRenameCredentialRoute = (router: Hono): void => {
+    router.patch('/auth/credential/:id', async (c: Context) => {
+        try {
+            const credentialId = c.req.param('id');
+            if (!credentialId) return badRequest('idが不正です', 400);
+            ensureDIInitialized(c.env);
+            const controller = container.resolve(AuthController);
+            return await controller.renameCredential(c.req.raw, credentialId);
+        } catch (error) {
+            return handleApiError(c, error);
+        }
+    });
+};
+
+/**
+ * `GET/POST/DELETE /favorite`（お気に入りレース、user単位、段階2）を登録する。
+ * @param router - 登録対象の Hono アプリケーション
+ */
+const registerFavoriteRoutes = (router: Hono): void => {
+    registerMethodDispatch(router, '/favorite', FavoriteController, [
+        { httpMethod: 'get', invoke: (controller) => controller.fetch() },
+        {
+            httpMethod: 'post',
+            invoke: (controller, c) => controller.add(c.req.raw),
+        },
+        {
+            httpMethod: 'delete',
+            invoke: (controller, c) => controller.remove(c.req.raw),
         },
     ]);
 };
@@ -1115,6 +1303,8 @@ const buildRouter = (): Hono => {
     // Player エンドポイント
     registerCrud(router, '/player', PlayerController);
 
+    registerAuthRoutes(router);
+    registerFavoriteRoutes(router);
     registerPushRoutes(router);
     registerDebugRoutes(router);
     registerBatchLockRoutes(router);
