@@ -22,7 +22,13 @@ const MAX_ISSUE_LINES = 20;
 // "path/to/file.ts(12,5): error TS2345: message..."
 const TSC_ERROR_LINE = /^(.+?)\(\d+,\d+\): error TS\d+:/;
 
-const runTypeCheck = (): { exitCode: number; output: string } => {
+/** `tsc --noEmit` の実行結果（終了コードと結合出力）。 */
+interface TypeCheckResult {
+    exitCode: number;
+    output: string;
+}
+
+const runTypeCheck = (): TypeCheckResult => {
     const proc = Bun.spawnSync({
         cmd: ['bunx', 'tsc', '--noEmit'],
         stdout: 'pipe',

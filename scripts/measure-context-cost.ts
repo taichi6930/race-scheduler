@@ -38,7 +38,13 @@ interface CategoryCost {
     totalBytes: number;
 }
 
-function approxTokens(bytes: number): { low: number; high: number } {
+/** バイト数から概算したトークン数のレンジ。 */
+interface TokenRange {
+    low: number;
+    high: number;
+}
+
+function approxTokens(bytes: number): TokenRange {
     // 4 文字/トークン（英語寄り）〜 3 文字/トークン（日本語混在寄り）の概算レンジ。
     return { low: Math.round(bytes / 4), high: Math.round(bytes / 3) };
 }

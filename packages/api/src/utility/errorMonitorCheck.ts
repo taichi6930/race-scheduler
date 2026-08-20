@@ -21,11 +21,16 @@ import { appLogger, EnvStore, GithubIssueGateway } from '@race-schedule/core';
 import { fetchWorkerErrorStats } from './cloudflareAnalyticsClient';
 import { syncErrorMonitorIssue } from './errorMonitorNotifier';
 
+/** 監視対象キー→Cloudflareスクリプト名の対応表。未知のキーも引けるよう文字列キーで参照する。 */
+interface TargetScriptNameMap {
+    readonly [targetKey: string]: string;
+}
+
 /**
  * 監視対象キーとCloudflare上のスクリプト名の対応（error-monitor.ymlと同一）。
  * admin（障害対応そのものに使う画面）はQRUN-02で対象に追加した。
  */
-const TARGET_SCRIPT_NAMES: Record<string, string> = {
+const TARGET_SCRIPT_NAMES: TargetScriptNameMap = {
     api: 'race-schedule-prod',
     admin: 'race-schedule-admin-prod',
     batch: 'race-schedule-batch-prod',

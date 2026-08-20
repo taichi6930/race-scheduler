@@ -141,6 +141,14 @@ const isNullish = (value: unknown): value is null | undefined =>
    このマスク処理はキー名だけを見て再帰的にそのまま返す。マスク後も元の値の形状を
    保つ必要があるためunknown/Record<string, unknown>が唯一正直な型。 */
 /**
+ * サニタイズ済みのエラー情報。Error インスタンス由来なら `name`/`message`/`stack`、
+ * それ以外の値なら機密フィールドをマスクした任意のキーを持つ。
+ */
+interface SanitizedError {
+    [key: string]: unknown;
+}
+
+/**
  * オブジェクト内の機密フィールドを再帰的にマスクする
  * @param value - マスク対象の値
  * @param depth - 現在の再帰深さ（内部利用）
@@ -180,9 +188,9 @@ const maskSensitiveFields = (value: unknown, depth = 0): unknown => {
 /**
  * エラーオブジェクトを安全にシリアライズする（機密フィールドをマスク）
  * @param error - シリアライズ対象のエラー（Error インスタンスまたは任意の値）
- * @returns 機密フィールドをマスクした Record
+ * @returns 機密フィールドをマスクしたサニタイズ済みエラー情報
  */
-export const sanitizeError = (error: unknown): Record<string, unknown> => {
+export const sanitizeError = (error: unknown): SanitizedError => {
     if (error instanceof Error) {
         return {
             name: error.name,
@@ -201,9 +209,9 @@ export const sanitizeError = (error: unknown): Record<string, unknown> => {
     }
     if (isNonNullObject(error)) {
         // SAFETY: maskSensitiveFields はオブジェクト入力に対しては同じキー集合を持つ
-        // Record を返す実装（配列分岐は isNonNullObject の対象外の値には来ない）ため、
-        // 戻り値を Record<string, unknown> として扱って安全。
-        return maskSensitiveFields(error) as Record<string, unknown>;
+        // レコードを返す実装（配列分岐は isNonNullObject の対象外の値には来ない）ため、
+        // 戻り値を SanitizedError として扱って安全。
+        return maskSensitiveFields(error) as SanitizedError;
     }
     return { message: maskSensitiveValuesInString(String(error)) };
 };

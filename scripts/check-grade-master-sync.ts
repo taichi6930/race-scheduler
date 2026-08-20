@@ -28,6 +28,11 @@ const FRONT_PATH = join(
     '../packages/front/lib/domain/entities/grade_tier.dart',
 );
 
+/** raceType（小文字）→ そのraceTypeが持つgrade名一覧。 */
+interface GradeKeysMap {
+    [raceType: string]: string[];
+}
+
 /**
  * `GradeMaster` オブジェクトリテラルから `raceType (小文字) -> gradeName配列` を抽出する。
  * `[RaceType.XXX]: { grade: {...}, ... }` ブロックを走査し、ブロック内の
@@ -35,10 +40,8 @@ const FRONT_PATH = join(
  * @param content - gradeMaster.ts の内容
  * @returns raceType（小文字）ごとのgrade名配列
  */
-export function extractCoreGradeKeys(
-    content: string,
-): Record<string, string[]> {
-    const result: Record<string, string[]> = {};
+export function extractCoreGradeKeys(content: string): GradeKeysMap {
+    const result: GradeKeysMap = {};
     const blockRegex = /\[RaceType\.(\w+)\]:\s*\{([\s\S]*?)\n\s{4}\},/g;
     for (const blockMatch of content.matchAll(blockRegex)) {
         const raceType = blockMatch[1].toLowerCase();
@@ -59,10 +62,8 @@ export function extractCoreGradeKeys(
  * @param content - grade_tier.dart の内容
  * @returns raceType（小文字）ごとのgrade名配列
  */
-export function extractFrontGradeKeys(
-    content: string,
-): Record<string, string[]> {
-    const result: Record<string, string[]> = {};
+export function extractFrontGradeKeys(content: string): GradeKeysMap {
+    const result: GradeKeysMap = {};
     const blockRegex = /RaceType\.(\w+):\s*\{([\s\S]*?)\n\s{2}\},/g;
     for (const blockMatch of content.matchAll(blockRegex)) {
         const raceType = blockMatch[1];
@@ -84,8 +85,8 @@ export function extractFrontGradeKeys(
  * @returns front側で欠落しているgradeのメッセージ一覧（無ければ空配列）
  */
 export function findMissingGrades(
-    coreKeys: Record<string, string[]>,
-    frontKeys: Record<string, string[]>,
+    coreKeys: GradeKeysMap,
+    frontKeys: GradeKeysMap,
 ): string[] {
     const messages: string[] = [];
     for (const [raceType, grades] of Object.entries(coreKeys)) {

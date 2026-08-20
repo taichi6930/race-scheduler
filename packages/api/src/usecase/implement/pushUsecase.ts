@@ -83,6 +83,14 @@ interface SendAttempt {
     message?: string;
 }
 
+/** 送信失敗群の振り分け結果。 */
+interface FailedOutcomePartition {
+    /** 連続失敗回数が上限に達し、購読ごと削除する対象 */
+    exceeded: SendAttempt[];
+    /** クレームを解除して再試行する対象 */
+    retry: SendAttempt[];
+}
+
 /**
  * 連続失敗回数が上限（[MAX_CONSECUTIVE_FAILURES]）に達しているかを判定する。
  * @param failureCount - incrementFailureCount の戻り値（購読が既に存在しない
@@ -321,7 +329,7 @@ export class PushUsecase implements IPushUsecase {
     private partitionFailedOutcomes(
         attempts: SendAttempt[],
         failureCounts: Map<string, number>,
-    ): { exceeded: SendAttempt[]; retry: SendAttempt[] } {
+    ): FailedOutcomePartition {
         const exceeded: SendAttempt[] = [];
         const retry: SendAttempt[] = [];
         for (const attempt of attempts) {

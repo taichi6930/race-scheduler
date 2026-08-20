@@ -67,7 +67,12 @@ import type { InspectorEvent } from './lib/bunInspectorClient';
 
 const ROOT = process.cwd();
 
-const EPIC_LABEL_BY_LAYER_ARG: Record<string, string> = {
+/** レイヤー引数（ut/component/sit/uat）→ Allure の epic ラベル。 */
+interface EpicLabelByLayerArg {
+    [layerArg: string]: string;
+}
+
+const EPIC_LABEL_BY_LAYER_ARG: EpicLabelByLayerArg = {
     ut: 'UT',
     component: 'Component',
     sit: 'sIT',
