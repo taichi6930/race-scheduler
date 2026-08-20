@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+    blob,
     integer,
     primaryKey,
     sqliteTable,
@@ -325,4 +326,85 @@ export const releaseNote = sqliteTable(
             table.sourceRepo,
         ),
     ],
+);
+
+/**
+ * パスキー(WebAuthn)認証で招待を消費して登録した参加者。
+ * 0039_passkey_auth.sqlite.sql参照。
+ */
+export const user = sqliteTable('user', {
+    id: text('id').primaryKey(),
+    nickname: text('nickname').notNull(),
+    createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+/**
+ * WebAuthnの公開鍵クレデンシャル（1人が複数端末分持てる）。
+ * device_label/user_agentは表示専用（認証判定には使わない）。
+ * 0039_passkey_auth.sqlite.sql参照。
+ */
+export const credential = sqliteTable('credential', {
+    id: text('id').primaryKey(),
+    userId: text('user_id').notNull(),
+    publicKey: blob('public_key', { mode: 'buffer' }).notNull(),
+    signCount: integer('sign_count').notNull().default(0),
+    aaguid: text('aaguid'),
+    userAgent: text('user_agent'),
+    deviceLabel: text('device_label').notNull(),
+    lastUsedAt: text('last_used_at'),
+    createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+/**
+ * admin から発行する使い捨ての招待。memoは管理者専用のメモ（本人には非公開）。
+ * 0039_passkey_auth.sqlite.sql参照。
+ */
+export const invite = sqliteTable('invite', {
+    token: text('token').primaryKey(),
+    memo: text('memo'),
+    expiresAt: text('expires_at').notNull(),
+    usedByUserId: text('used_by_user_id'),
+    createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+/**
+ * ログイン後のセッション。APIリクエストのたびにexpiresAtを「今+7日」へ更新する
+ * スライディングウィンドウ方式（7日操作が無ければ失効）。
+ * 0039_passkey_auth.sqlite.sql参照。
+ */
+export const session = sqliteTable('session', {
+    token: text('token').primaryKey(),
+    userId: text('user_id').notNull(),
+    credentialId: text('credential_id').notNull(),
+    expiresAt: text('expires_at').notNull(),
+    createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+/**
+ * WebAuthnのchallenge一時保存（options生成→verifyの2往復をまたぐため）。
+ * 消費時（verify成功/失敗いずれも）に削除する使い捨ての値。
+ * 0042_webauthn_challenge.sqlite.sql参照。
+ */
+export const webauthnChallenge = sqliteTable('webauthn_challenge', {
+    id: text('id').primaryKey(),
+    challenge: text('challenge').notNull(),
+    purpose: text('purpose').notNull().$type<'register' | 'login'>(),
+    inviteToken: text('invite_token'),
+    expiresAt: text('expires_at').notNull(),
+    createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+/**
+ * お気に入りレース（user単位、段階2）。raceへの外部キー制約は付けない
+ * （calendar_flagと同じく、参照先レースの削除を気にしない設計）。
+ * 0041_favorite.sqlite.sql参照。
+ */
+export const favorite = sqliteTable(
+    'favorite',
+    {
+        userId: text('user_id').notNull(),
+        raceId: text('race_id').notNull(),
+        createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+    },
+    (table) => [primaryKey({ columns: [table.userId, table.raceId] })],
 );

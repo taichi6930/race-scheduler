@@ -8,10 +8,12 @@
 import { DI_TOKENS } from '@race-schedule/core';
 import { container } from 'tsyringe';
 
+import { AuthRepository } from '../repository/implement/authRepository';
 import { BackfillRepository } from '../repository/implement/backfillRepository';
 import { BatchLockRepository } from '../repository/implement/batchLockRepository';
 import { CalendarRepository } from '../repository/implement/calendarRepository';
 import { DebugRepository } from '../repository/implement/debugRepository';
+import { FavoriteRepository } from '../repository/implement/favoriteRepository';
 import { FeatureFlagRepository } from '../repository/implement/featureFlagRepository';
 import { PlaceRepository } from '../repository/implement/placeRepository';
 import { PlayerRepository } from '../repository/implement/playerRepository';
@@ -22,10 +24,12 @@ import { ReleaseNoteRepository } from '../repository/implement/releaseNoteReposi
 import { UiLayoutRepository } from '../repository/implement/uiLayoutRepository';
 import { WebPushSendRepository } from '../repository/implement/webPushSendRepository';
 import { AnnouncementUsecase } from '../usecase/implement/announcementUsecase';
+import { AuthUsecase } from '../usecase/implement/authUsecase';
 import { BackfillUsecase } from '../usecase/implement/backfillUsecase';
 import { BatchLockUsecase } from '../usecase/implement/batchLockUsecase';
 import { CalendarUsecase } from '../usecase/implement/calendarUsecase';
 import { DebugUsecase } from '../usecase/implement/debugUsecase';
+import { FavoriteUsecase } from '../usecase/implement/favoriteUsecase';
 import { FeatureFlagUsecase } from '../usecase/implement/featureFlagUsecase';
 import { PlaceUsecase } from '../usecase/implement/placeUsecase';
 import { PlayerUsecase } from '../usecase/implement/playerUsecase';
@@ -164,4 +168,22 @@ export const registerApplication = (): void => {
     container.register(DI_TOKENS.RaceUsecase, { useClass: RaceUsecase });
 
     registerPushDebugBatchLockAndBackfillDomains();
+    registerAuthAndFavoriteDomains();
+};
+
+/**
+ * Auth domain（パスキー認証。招待発行・登録・ログイン・セッション）と
+ * Favorite domain（お気に入りレース、user単位、段階2）のDI登録。
+ * registerApplication自体の行数制限（30行）を超えないための分離
+ * （registerPushDebugBatchLockAndBackfillDomainsと同じ方針）。
+ */
+const registerAuthAndFavoriteDomains = (): void => {
+    container.register(DI_TOKENS.AuthRepository, { useClass: AuthRepository });
+    container.register(DI_TOKENS.AuthUsecase, { useClass: AuthUsecase });
+    container.register(DI_TOKENS.FavoriteRepository, {
+        useClass: FavoriteRepository,
+    });
+    container.register(DI_TOKENS.FavoriteUsecase, {
+        useClass: FavoriteUsecase,
+    });
 };

@@ -1,37 +1,57 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../auth/application/session_provider.dart';
+import '../../../core/di/service_locator.dart';
 import '../../../core/di/shared_preferences_provider.dart';
 import '../../../data/repositories/local_favorites_repository.dart';
+import '../../../data/repositories/remote_favorites_repository.dart';
 import '../../../domain/repositories/i_favorites_repository.dart';
 
 /// お気に入り永続化のデバウンス時間（PERF-112）。
 ///
-/// 連打（連続タップ）で毎回 SharedPreferences へ書き込むと書き込み順序が
-/// 不定になりうるため、この時間内の連続 toggle をまとめ、最終状態のみを書き込む。
+/// 連打（連続タップ）で毎回書き込むと書き込み順序が不定になりうるため、
+/// この時間内の連続 toggle をまとめ、最終状態のみを書き込む。
 const favoriteSaveDebounceDuration = Duration(milliseconds: 300);
 
-/// [IFavoritesRepository] の実装（端末ローカル永続化）を提供する。
-final favoritesRepositoryProvider = Provider<IFavoritesRepository>(
-  (ref) => LocalFavoritesRepository(ref.read(sharedPreferencesProvider)),
-);
+/// [IFavoritesRepository] の実装を提供する。
+///
+/// ログイン済み（[sessionProvider]がnullでない）ならサーバー保存
+/// （[RemoteFavoritesRepository]）、未ログインなら端末ローカル
+/// （[LocalFavoritesRepository]）を返す。全画面ログイン必須化（未ログイン時に
+/// `/login`へ強制する変更）は別PR（挙動が変わる側）で行うため、このPRの時点では
+/// 招待経由でログインしていない既存ユーザーは引き続き[LocalFavoritesRepository]
+/// （現状どおりの挙動）を使い続ける。
+final favoritesRepositoryProvider = Provider<IFavoritesRepository>((ref) {
+  final session = ref.watch(sessionProvider);
+  if (session == null) {
+    return LocalFavoritesRepository(ref.read(sharedPreferencesProvider));
+  }
+  return RemoteFavoritesRepository(dio: getIt<Dio>());
+});
 
 /// お気に入り登録済みレースID集合。
 ///
 /// タイムライン／カレンダー／詳細シートの★ボタンから共通で参照・更新する。
-final favoriteIdsProvider = NotifierProvider<FavoriteIdsNotifier, Set<String>>(
-  FavoriteIdsNotifier.new,
-);
+final favoriteIdsProvider =
+    AsyncNotifierProvider<FavoriteIdsNotifier, Set<String>>(
+      FavoriteIdsNotifier.new,
+    );
 
-class FavoriteIdsNotifier extends Notifier<Set<String>> {
+class FavoriteIdsNotifier extends AsyncNotifier<Set<String>> {
   Timer? _saveDebounceTimer;
 
   // dispose時（ref.onDispose）はRefも state ゲッターも使えない（riverpodが
   // 「Cannot use Ref or modify other providers inside life-cycles」で禁止する）
-  // ため、build内で一度だけ解決したrepositoryと、toggle時点のstateを
+  // ため、build内で解決したrepositoryと、toggle時点のstateを
   // プレーンフィールドに保持しておき、dispose時はそれらのみを参照する。
-  late final IFavoritesRepository _repository;
+  //
+  // favoritesRepositoryProviderはログイン状態が変わるとbuild()を再実行させる
+  // ため（`late final`ではなく可変フィールドにしている）、`late final`だと
+  // 2回目のbuild()呼び出しでLateInitializationErrorになる点に注意。
+  IFavoritesRepository? _repository;
   Set<String>? _pendingRaceIds;
 
   /// デバウンス中の [toggle] 呼び出しが共有する、実際の永続化結果を表す
@@ -39,14 +59,34 @@ class FavoriteIdsNotifier extends Notifier<Set<String>> {
   /// 同じ Future を共有し、実際に1回だけ行われる保存の成否を受け取る。
   Completer<bool>? _pendingSaveCompleter;
 
+  /// 初回読み込み（[build]）完了前に[toggle]/[clearAll]が呼ばれたかどうか。
+  ///
+  /// [build]の非同期読み込みが完了する前にユーザーが★をタップすると、
+  /// 後から解決する読み込み結果がtoggle済みのstateを上書きしてしまう
+  /// レースコンディションがある（読み込みは常に「build開始時点の
+  /// スナップショット」を返すため）。このフラグが立っていれば読み込み結果を
+  /// 捨て、既存のstateを優先する。
+  bool _hasManualUpdateSinceBuild = false;
+
+  // 戻り値の型はbase（AsyncNotifier）と同じ`FutureOr<Set<String>>`のままにする。
+  // `Future<Set<String>>`まで狭めると、テストの `_FixedFavoriteIdsNotifier`
+  // （同期`Set<String>`を返して固定値を注入するパターン）がoverrideとして
+  // 無効になる（Dartのoverride共変性は直近の親クラスの宣言に対して
+  // 判定されるため）。
   @override
-  Set<String> build() {
-    _repository = ref.read(favoritesRepositoryProvider);
+  FutureOr<Set<String>> build() {
+    final repository = ref.watch(favoritesRepositoryProvider);
+    _repository = repository;
+    _hasManualUpdateSinceBuild = false;
     ref.onDispose(_flushPendingSave);
-    return _repository.loadFavoriteRaceIds();
+    return repository.loadFavoriteRaceIds().then((loaded) {
+      if (_hasManualUpdateSinceBuild) return state.value ?? loaded;
+      return loaded;
+    });
   }
 
-  bool isFavorite(String raceId) => state.contains(raceId);
+  bool isFavorite(String raceId) =>
+      (state.value ?? const <String>{}).contains(raceId);
 
   /// お気に入りの登録／解除を切り替える。UI へは即座に反映し、永続化は
   /// デバウンスする（PERF-112）。
@@ -55,11 +95,12 @@ class FavoriteIdsNotifier extends Notifier<Set<String>> {
   /// timeline_filter_feedback.dart（QERR-11）と同じパターンで、失敗した
   /// 場合のみ後追いでUIへ知らせられる。
   Future<bool> toggle(String raceId) {
-    final updated = Set<String>.from(state);
+    _hasManualUpdateSinceBuild = true;
+    final updated = Set<String>.from(state.value ?? const <String>{});
     if (!updated.remove(raceId)) {
       updated.add(raceId);
     }
-    state = updated;
+    state = AsyncData(updated);
     _pendingRaceIds = updated;
 
     final completer = _pendingSaveCompleter ??= Completer<bool>();
@@ -74,8 +115,9 @@ class FavoriteIdsNotifier extends Notifier<Set<String>> {
   /// 誤操作防止のため、呼び出し元（設定画面）で確認ダイアログを挟むこと。
   /// 永続化は [toggle] と同じデバウンス経路に乗せる。
   void clearAll() {
-    state = const <String>{};
-    _pendingRaceIds = state;
+    _hasManualUpdateSinceBuild = true;
+    state = const AsyncData(<String>{});
+    _pendingRaceIds = const <String>{};
 
     _saveDebounceTimer?.cancel();
     _saveDebounceTimer = Timer(favoriteSaveDebounceDuration, _flushPendingSave);
@@ -93,7 +135,10 @@ class FavoriteIdsNotifier extends Notifier<Set<String>> {
     _pendingSaveCompleter = null;
     if (pending == null) return;
     _pendingRaceIds = null;
-    final succeeded = await _repository.saveFavoriteRaceIds(pending);
+    final repository = _repository;
+    final succeeded = repository == null
+        ? false
+        : await repository.saveFavoriteRaceIds(pending);
     completer?.complete(succeeded);
   }
 }

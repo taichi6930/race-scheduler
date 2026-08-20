@@ -33,6 +33,7 @@ import { DI_TOKENS, SERVICE_AUTH_HEADER } from '@race-schedule/core';
 import { type DrizzleD1Database, drizzle } from 'drizzle-orm/d1';
 import { container } from 'tsyringe';
 
+import { AuthController } from '../../src/controller/authController';
 import { CalendarController } from '../../src/controller/calendarController';
 import { DebugController } from '../../src/controller/debugController';
 import { PlaceController } from '../../src/controller/placeController';
@@ -44,6 +45,7 @@ import {
     buildMockHonoEnv as buildMockEnv,
     MOCK_SERVICE_AUTH_TOKEN,
 } from '../common/mockHonoEnv';
+import { insertTestSession } from '../common/sessionAuth';
 import { setupGlobalMocks } from '../common/setupGlobalMocks';
 
 let mockEnv: ReturnType<typeof buildMockEnv>;
@@ -122,6 +124,30 @@ interface CalendarFlagControllerLike {
     flagAdd: (request: Request) => Promise<Response>;
     flagRemove: (request: Request) => Promise<Response>;
 }
+
+/**
+ * router 内の PATCH /auth/credential/:id ハンドラが呼ぶ AuthController の
+ * メソッドと同型の最小インターフェース。renameCredential のみを差し替えて
+ * catch 分岐を検証する。
+ */
+interface RenameCredentialControllerLike {
+    renameCredential: (
+        request: Request,
+        credentialId: string,
+    ) => Promise<Response>;
+}
+
+/**
+ * AuthController を差し替える（renameCredential が例外を投げるダブル）。
+ * @param controller - 登録するコントローラダブル
+ */
+const registerBrokenAuthController = (
+    controller: RenameCredentialControllerLike,
+): void => {
+    container.register<RenameCredentialControllerLike>(AuthController, {
+        useValue: controller,
+    });
+};
 
 /**
  * CalendarController を差し替える（flagList/flagAdd/flagRemove が例外を投げるダブル）。
@@ -605,6 +631,38 @@ describe('API Router (追加カバレッジ)', () => {
             expect(
                 secondResponse.headers.get('Access-Control-Allow-Origin'),
             ).toBe(secondOrigin);
+        });
+    });
+
+    describe('PATCH /auth/credential/:id (controller 例外)', () => {
+        it('renameCredential_controllerがthrow_500でhandleApiErrorが返ること', async () => {
+            // Arrange
+            await warmUpDI();
+            const brokenController: RenameCredentialControllerLike = {
+                renameCredential: (): Promise<Response> => {
+                    throw new Error('renameCredential boom');
+                },
+            };
+            registerBrokenAuthController(brokenController);
+            const db = drizzle(mockEnv.DB, { schema });
+            const sessionHeaders = await insertTestSession(db);
+            const request = new Request(
+                'http://localhost/auth/credential/test-user-1-credential',
+                {
+                    method: 'PATCH',
+                    headers: {
+                        ...sessionHeaders,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ deviceLabel: '新ラベル' }),
+                },
+            );
+
+            // Act
+            const response = await router.fetch(request, mockEnv);
+
+            // Assert
+            expect(response.status).toBe(500);
         });
     });
 });

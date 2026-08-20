@@ -13,6 +13,8 @@
  * | 6  | saveUiLayout 呼び出し         | gateway.saveUiLayout へraceType/configを渡して委譲し結果を返す | Line    |
  * | 7  | previewUiLayout 呼び出し      | gateway.previewUiLayout へconfig/raceIdを渡して委譲し結果を返す | Line   |
  * | 8  | fetchReleaseNotes 呼び出し    | gateway.fetchReleaseNotes へ委譲し結果を返す                 | Line     |
+ * | 9  | issueInvite 呼び出し          | gateway.issueInvite へmemoを渡して委譲し結果を返す           | Line     |
+ * | 10 | fetchParticipants 呼び出し    | gateway.fetchParticipants へ委譲し結果を返す                 | Line     |
  */
 import 'reflect-metadata';
 
@@ -61,6 +63,8 @@ const createRepository = (flags: FeatureFlagStatus[] = SAMPLE_FLAGS) => {
         previewUiLayout: mock(() => Promise.resolve(undefined)),
         fetchUpcomingKeirinRaces: mock(() => Promise.resolve([])),
         fetchReleaseNotes: mock(() => Promise.resolve([])),
+        issueInvite: mock(() => Promise.resolve({ token: 'invite-token' })),
+        fetchParticipants: mock(() => Promise.resolve([])),
     };
 
     return {
@@ -168,6 +172,24 @@ describe('MainApiRepository', () => {
         const result = await repository.fetchReleaseNotes();
 
         expect(mainApiGateway.fetchReleaseNotes).toHaveBeenCalled();
+        expect(result).toEqual([]);
+    });
+
+    it('#9: issueInviteはgatewayへmemoを渡して委譲し結果を返す', async () => {
+        const { mainApiGateway, repository } = createRepository();
+
+        const result = await repository.issueInvite('テストメモ');
+
+        expect(mainApiGateway.issueInvite).toHaveBeenCalledWith('テストメモ');
+        expect(result).toEqual({ token: 'invite-token' });
+    });
+
+    it('#10: fetchParticipantsはgatewayへ委譲し結果を返す', async () => {
+        const { mainApiGateway, repository } = createRepository();
+
+        const result = await repository.fetchParticipants();
+
+        expect(mainApiGateway.fetchParticipants).toHaveBeenCalled();
         expect(result).toEqual([]);
     });
 });

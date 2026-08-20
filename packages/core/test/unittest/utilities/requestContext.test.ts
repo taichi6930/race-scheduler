@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'bun:test';
 
 import {
+    getCurrentUserId,
     getRequestId,
     isInternalServiceCall,
     resolveRequestId,
+    runWithCurrentUserId,
     runWithInternalServiceCall,
     runWithRequestId,
 } from '@race-schedule/core';
@@ -39,6 +41,14 @@ import {
  * | T-10 | runWithInternalServiceCall(true, ...) のスコープ内 | true     |
  * | T-11 | runWithInternalServiceCall のスコープ外            | false    |
  * | T-12 | runWithInternalServiceCall(false, ...) のスコープ内 | false    |
+ *
+ * ## デシジョンテーブル: runWithCurrentUserId / getCurrentUserId
+ *
+ * | #    | 状況                                          | 期待結果             |
+ * |------|-------------------------------------------------|-----------------------|
+ * | T-13 | runWithCurrentUserId のスコープ内               | 紐付けたuserIdを返す |
+ * | T-14 | runWithCurrentUserId のスコープ外               | undefined            |
+ * | T-15 | runWithCurrentUserId 内で await を挟む          | 非同期処理を跨いでも同じuserIdを返す |
  */
 describe('requestContext', () => {
     const UUID_PATTERN =
@@ -165,6 +175,43 @@ describe('requestContext', () => {
 
             // Assert
             expect(result).toBe(false);
+        });
+    });
+
+    describe('runWithCurrentUserId / getCurrentUserId', () => {
+        it('getCurrentUserId_runWithCurrentUserIdのスコープ内_紐付けたuserIdを返すこと[T-13]', () => {
+            // Arrange
+            const userId = 'test-user-id';
+
+            // Act
+            const result = runWithCurrentUserId(userId, () =>
+                getCurrentUserId(),
+            );
+
+            // Assert
+            expect(result).toBe(userId);
+        });
+
+        it('getCurrentUserId_スコープ外_undefinedを返すこと[T-14]', () => {
+            // Arrange & Act
+            const result = getCurrentUserId();
+
+            // Assert
+            expect(result).toBeUndefined();
+        });
+
+        it('getCurrentUserId_非同期処理を跨いでも_同じuserIdを返すこと[T-15]', async () => {
+            // Arrange
+            const userId = 'async-user-id';
+
+            // Act
+            const result = await runWithCurrentUserId(userId, async () => {
+                await Promise.resolve();
+                return getCurrentUserId();
+            });
+
+            // Assert
+            expect(result).toBe(userId);
         });
     });
 });

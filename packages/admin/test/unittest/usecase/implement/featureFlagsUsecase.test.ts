@@ -52,6 +52,8 @@ const createUsecase = (flags: FeatureFlagStatus[] = SAMPLE_FLAGS) => {
         previewUiLayout: mock(() => Promise.resolve(undefined)),
         fetchUpcomingKeirinRaces: mock(() => Promise.resolve([])),
         fetchReleaseNotes: mock(() => Promise.resolve([])),
+        issueInvite: mock(() => Promise.resolve({ token: 'invite-token' })),
+        fetchParticipants: mock(() => Promise.resolve([])),
     };
 
     return {

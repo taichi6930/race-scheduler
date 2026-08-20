@@ -642,7 +642,7 @@ void main() {
       await tester.pump();
       ref!.read(favoriteIdsProvider.notifier).toggle('race-001');
       await tester.pump();
-      expect(ref!.read(favoriteIdsProvider), contains('race-001'));
+      expect(ref!.read(favoriteIdsProvider).value, contains('race-001'));
 
       await tester.dragUntilVisible(
         find.text('お気に入りをすべて削除'),
@@ -670,7 +670,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(ref!.read(favoriteIdsProvider), isEmpty);
+      expect(ref!.read(favoriteIdsProvider).value, isEmpty);
       expect(find.text('お気に入りをすべて削除しました'), findsOneWidget);
     },
   );
@@ -704,7 +704,7 @@ void main() {
     await tester.tap(find.text('キャンセル'));
     await tester.pumpAndSettle();
 
-    expect(ref!.read(favoriteIdsProvider), contains('race-001'));
+    expect(ref!.read(favoriteIdsProvider).value, contains('race-001'));
   });
 
   testWidgets('[T-26] 通知を受け取るOFF_重賞を自動で通知トグルをタップ_変化しない', (tester) async {

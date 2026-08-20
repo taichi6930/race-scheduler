@@ -23,6 +23,10 @@
  *     `{ ok: false, gone: false, message }` を返す（webPushGateway.test.ts S1 と同じ前提）。
  *     これにより Controller → Usecase → Repository → Gateway の配線を
  *     ネットワークアクセスなしで決定的に検証できる。
+ *
+ * `POST /push/test` は `APP_AUTH_ROUTES` で `session-only`（router.ts）のため、
+ * `insertTestSession`（`test/common/sessionAuth.ts`）でInMemory D1へ有効な
+ * user/credential/sessionを直接投入し、Authorizationヘッダーを付与して呼ぶ。
  */
 import {
     afterAll,
@@ -43,6 +47,7 @@ import * as schema from '../../../src/db/schema';
 import type { IPushSubscriptionRepository } from '../../../src/repository/interface/IPushSubscriptionRepository';
 import { createInMemoryD1Database } from '../../common/inMemoryD1';
 import { requestApi } from '../../common/requestApi';
+import { insertTestSession } from '../../common/sessionAuth';
 import { setupGlobalMocks } from '../../common/setupGlobalMocks';
 
 interface PushTestSendResponseBody {
@@ -54,6 +59,8 @@ describe('コンポーネントテスト: Push sendTest Router → Controller �
     let restoreEnv: () => void;
     let db: DrizzleD1Database<typeof schema>;
     let d1: D1Database;
+    /** POST /push/test は session-only のため、テスト用セッションのAuthorizationヘッダー */
+    let sessionHeaders: Record<string, string>;
 
     beforeAll(() => {
         restoreEnv = useInMemoryDB();
@@ -63,10 +70,11 @@ describe('コンポーネントテスト: Push sendTest Router → Controller �
         restoreEnv();
     });
 
-    beforeEach(() => {
+    beforeEach(async () => {
         d1 = createInMemoryD1Database();
         db = drizzle(d1, { schema });
         setupGlobalMocks(d1);
+        sessionHeaders = await insertTestSession(db);
     });
 
     afterEach(() => {
@@ -77,7 +85,7 @@ describe('コンポーネントテスト: Push sendTest Router → Controller �
         // Act
         const response = await requestApi(d1, '/push/test', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...sessionHeaders },
             body: JSON.stringify({ subscriptionId: 'sub-not-exist' }),
         });
         const body = (await response.json()) as PushTestSendResponseBody;
@@ -100,7 +108,7 @@ describe('コンポーネントテスト: Push sendTest Router → Controller �
         // Act
         const response = await requestApi(d1, '/push/test', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...sessionHeaders },
             body: JSON.stringify({ subscriptionId: 'sub-1' }),
         });
         const body = (await response.json()) as PushTestSendResponseBody;
@@ -144,7 +152,7 @@ describe('コンポーネントテスト: Push sendTest Router → Controller �
         // Act
         const response = await requestApi(d1, '/push/test', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...sessionHeaders },
             body: JSON.stringify({ subscriptionId: 'sub-1' }),
         });
 

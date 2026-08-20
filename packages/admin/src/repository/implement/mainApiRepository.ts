@@ -13,6 +13,8 @@ import type {
     BackfillRaceResult,
 } from '../../dto/backfillResult';
 import type { FeatureFlagStatus } from '../../dto/featureFlagStatus';
+import type { InviteIssueResult } from '../../dto/invite';
+import type { ParticipantSummary } from '../../dto/participant';
 import type { RaceSummary } from '../../dto/raceSummary';
 import type { IMainApiGateway } from '../../gateway/interface/IMainApiGateway';
 import type { IMainApiRepository } from '../interface/IMainApiRepository';
@@ -82,5 +84,13 @@ export class MainApiRepository implements IMainApiRepository {
 
     public async fetchReleaseNotes(): Promise<ReleaseNote[]> {
         return this.mainApiGateway.fetchReleaseNotes();
+    }
+
+    public async issueInvite(memo: string | null): Promise<InviteIssueResult> {
+        return this.mainApiGateway.issueInvite(memo);
+    }
+
+    public async fetchParticipants(): Promise<ParticipantSummary[]> {
+        return this.mainApiGateway.fetchParticipants();
     }
 }

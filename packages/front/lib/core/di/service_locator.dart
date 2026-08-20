@@ -21,6 +21,7 @@ import '../../domain/repositories/i_race_repository.dart';
 import '../../domain/repositories/i_release_note_repository.dart';
 import '../../domain/repositories/i_trip_group_repository.dart';
 import '../../domain/usecases/get_races_by_date_range.dart';
+import '../network/auth_interceptor.dart';
 import '../network/dio_retry_interceptor.dart';
 import 'mock/fake_announcement_remote_data_source.dart';
 import 'mock/fake_calendar_remote_data_source.dart';
@@ -42,6 +43,12 @@ void setupDependencies({required String apiBaseUrl}) {
       receiveTimeout: const Duration(seconds: 15),
     ),
   );
+  // 全リクエストへセッショントークンを付与し、401を検知するInterceptor。
+  // トークンの読み書き・401コールバックの配線はRiverpod側
+  // （SessionNotifier、lib/auth/application/session_provider.dart）が担う。
+  final authInterceptor = AuthInterceptor();
+  dio.interceptors.add(authInterceptor);
+  getIt.registerSingleton<AuthInterceptor>(authInterceptor);
   // 一時的なエラー（ネットワークエラー・5xx）に限定した自動リトライ（PERF-009）。
   // GET以外（副作用のあるPOST/PUT/DELETE）はリトライ対象外
   // （詳細は DioRetryInterceptor のドキュメントコメントを参照）。

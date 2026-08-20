@@ -69,6 +69,8 @@ const createUsecase = () => {
         ),
         fetchUpcomingKeirinRaces: mock(() => Promise.resolve(UNSORTED_RACES)),
         fetchReleaseNotes: mock(() => Promise.resolve([])),
+        issueInvite: mock(() => Promise.resolve({ token: 'invite-token' })),
+        fetchParticipants: mock(() => Promise.resolve([])),
     };
 
     return {

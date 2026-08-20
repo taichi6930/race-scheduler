@@ -21,7 +21,8 @@ void toggleFavoriteWithFeedback(
   WidgetRef ref,
   String raceId,
 ) {
-  final wasFavorite = ref.read(favoriteIdsProvider).contains(raceId);
+  final wasFavorite =
+      ref.read(favoriteIdsProvider).value?.contains(raceId) ?? false;
   HapticFeedback.selectionClick();
   final saveResult = ref.read(favoriteIdsProvider.notifier).toggle(raceId);
   unawaited(

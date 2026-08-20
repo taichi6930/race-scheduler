@@ -21,6 +21,10 @@
  * | T-12 | POST /race-detail-layout/api | 不正なボディ | 400                                       |
  * | T-13 | POST /race-detail-layout/api/preview | 不正なボディ | 400                             |
  * | T-14 | GET /race-detail-layout/api/races | 正常系 | 200 + {races}                          |
+ * | T-17 | GET /invite       | 正常系           | 200・HTML（<!doctype html>を含む）             |
+ * | T-18 | POST /invite/api  | 正常なボディ     | 201 + {token, inviteUrl}                       |
+ * | T-19 | GET /participants | 正常系           | 200・HTML（<!doctype html>を含む）             |
+ * | T-20 | GET /participants/api | 正常系       | 200 + {participants}                           |
  */
 
 import 'reflect-metadata';
@@ -69,6 +73,8 @@ describe('Admin Router', () => {
             previewUiLayout: () => Promise.resolve(undefined),
             fetchUpcomingKeirinRaces: () => Promise.resolve([]),
             fetchReleaseNotes: () => Promise.resolve([]),
+            issueInvite: () => Promise.resolve({ token: 'invite-token' }),
+            fetchParticipants: () => Promise.resolve([]),
         };
         container.register<IMainApiGateway>(DI_TOKENS.MainApiGateway, {
             useValue: mainApiGateway,
@@ -262,5 +268,53 @@ describe('Admin Router', () => {
         expect(response.status).toBe(200);
         const body = (await response.json()) as { races: unknown[] };
         expect(body.races).toEqual([]);
+    });
+
+    it('T-17: GET /inviteは200とHTMLを返す', async () => {
+        const response = await router.fetch(
+            new Request('http://localhost:8790/invite'),
+        );
+
+        expect(response.status).toBe(200);
+        const text = await response.text();
+        expect(text).toContain('<!doctype html>');
+    });
+
+    it('T-18: POST /invite/apiは正常なボディで201と{token, inviteUrl}を返す', async () => {
+        const response = await router.fetch(
+            new Request('http://localhost:8790/invite/api', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ memo: 'テスト用' }),
+            }),
+        );
+
+        expect(response.status).toBe(201);
+        const body = (await response.json()) as {
+            token: string;
+            inviteUrl: string;
+        };
+        expect(body.token).toBe('invite-token');
+        expect(body.inviteUrl).toBe('/invite/invite-token');
+    });
+
+    it('T-19: GET /participantsは200とHTMLを返す', async () => {
+        const response = await router.fetch(
+            new Request('http://localhost:8790/participants'),
+        );
+
+        expect(response.status).toBe(200);
+        const text = await response.text();
+        expect(text).toContain('<!doctype html>');
+    });
+
+    it('T-20: GET /participants/apiは200と{participants}を返す', async () => {
+        const response = await router.fetch(
+            new Request('http://localhost:8790/participants/api'),
+        );
+
+        expect(response.status).toBe(200);
+        const body = (await response.json()) as { participants: unknown[] };
+        expect(body.participants).toEqual([]);
     });
 });

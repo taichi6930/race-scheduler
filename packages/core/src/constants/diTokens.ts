@@ -35,6 +35,8 @@ export const DI_TOKENS = {
     FeatureFlagRepository: 'FeatureFlagRepository',
     UiLayoutRepository: 'UiLayoutRepository',
     ReleaseNoteRepository: 'ReleaseNoteRepository',
+    AuthRepository: 'AuthRepository',
+    FavoriteRepository: 'FavoriteRepository',
     // Usecase
     AnnouncementUsecase: 'AnnouncementUsecase',
     FeatureFlagUsecase: 'FeatureFlagUsecase',
@@ -48,6 +50,8 @@ export const DI_TOKENS = {
     DebugUsecase: 'DebugUsecase',
     BatchLockUsecase: 'BatchLockUsecase',
     BackfillUsecase: 'BackfillUsecase',
+    AuthUsecase: 'AuthUsecase',
+    FavoriteUsecase: 'FavoriteUsecase',
 } as const;
 
 /** DI トークンの型（DI_TOKENS の値のユニオン） */

@@ -33,7 +33,7 @@ const int favoritesSearchRangeDays = 30;
 /// いるユーザーがいるため早期returnは廃止した）。
 final favoriteRacesRawProvider = FutureProvider<List<RaceEntity>>((ref) async {
   scheduleTtlInvalidate(ref, defaultCacheTtl);
-  final favoriteIds = ref.watch(favoriteIdsProvider);
+  final favoriteIds = ref.watch(favoriteIdsProvider).value ?? const <String>{};
 
   final useCase = getIt<GetRacesByDateRangeUseCase>();
   final today = dateOnly(jstNow());
@@ -66,7 +66,7 @@ final _upcomingFavoritesCacheProvider = Provider<UpcomingFavoritesCache>(
 /// 過去に発走したお気に入りは既定で非表示（screens.md §3、MVPでは固定）。
 final favoriteRacesProvider = Provider<AsyncValue<List<RaceEntity>>>((ref) {
   final rawAsync = ref.watch(favoriteRacesRawProvider);
-  final favoriteIds = ref.watch(favoriteIdsProvider);
+  final favoriteIds = ref.watch(favoriteIdsProvider).value ?? const <String>{};
   final now = ref.watch(nowProvider).value ?? jstNow();
   final cache = ref.watch(_upcomingFavoritesCacheProvider);
   return rawAsync.whenData((races) => cache.resolve(races, favoriteIds, now));

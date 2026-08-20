@@ -822,6 +822,15 @@ describe('サービス間認証: ルート分類の回帰防止（SECAUTH-08）'
         'DELETE /push/request',
         'POST /push/test',
         'POST /push/dispatch',
+        'GET /favorite',
+        'POST /favorite',
+        'DELETE /favorite',
+        'POST /auth/invite/verify',
+        'POST /auth/register/options',
+        'POST /auth/register/verify',
+        'POST /auth/login/options',
+        'POST /auth/login/verify',
+        'POST /auth/logout',
     ];
 
     const EXPECTED_PROTECTED_ROUTE_KEYS = [
@@ -842,6 +851,14 @@ describe('サービス間認証: ルート分類の回帰防止（SECAUTH-08）'
         'POST /internal/backfill/place',
         'POST /internal/backfill/race',
         'POST /release-notes',
+        'POST /auth/invite',
+        'GET /auth/participants',
+        // /auth/credential/:id はSERVICE_AUTH_EXEMPT_ROUTES側の表記が
+        // ワイルドカード（/auth/credential/*）のため、isExemptの完全一致判定とは
+        // マッチしない（rate-limitミドルウェアの分類上は「保護対象」寄りの扱いになる）。
+        // 実際の認可はrequireAppAuth/APP_AUTH_ROUTES側がワイルドカード対応込みで
+        // session-onlyとして正しく処理しており、本テストはrate-limit分類のみを検証する。
+        'PATCH /auth/credential/:id',
     ];
 
     it('ルート一覧が想定どおりに分類されていること（免除リスト+保護対象=登録済み全ルート）', () => {

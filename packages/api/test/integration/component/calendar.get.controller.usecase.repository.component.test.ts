@@ -36,7 +36,11 @@ import {
     it,
 } from 'bun:test';
 import type { D1Database } from '@cloudflare/workers-types';
-import { toJstISOString, validateLocationCode } from '@race-schedule/core';
+import {
+    SERVICE_AUTH_HEADER,
+    toJstISOString,
+    validateLocationCode,
+} from '@race-schedule/core';
 import { type DrizzleD1Database, drizzle } from 'drizzle-orm/d1';
 import 'reflect-metadata';
 import { container } from 'tsyringe';
@@ -45,8 +49,12 @@ import { useInMemoryDB } from '../../../../../tests/shared/env';
 import { RaceFactory } from '../../../../../tests/shared/factories';
 import * as schema from '../../../src/db/schema';
 import { createInMemoryD1Database } from '../../common/inMemoryD1';
+import { MOCK_SERVICE_AUTH_TOKEN } from '../../common/mockHonoEnv';
 import { requestApi } from '../../common/requestApi';
 import { setupGlobalMocks } from '../../common/setupGlobalMocks';
+
+/** GET /calendar は service-or-session のため、サービス間認証ヘッダーを既定で付与する */
+const AUTH_HEADERS = { [SERVICE_AUTH_HEADER]: MOCK_SERVICE_AUTH_TOKEN };
 
 interface CalendarGetResponseBody {
     count: number;
@@ -117,7 +125,13 @@ describe('コンポーネントテスト: Calendar GET Router → Controller →
             finishDate: '2026-04-27',
             raceTypeList: 'jra',
         });
-        const response = await requestApi(d1, `/calendar?${params.toString()}`);
+        const response = await requestApi(
+            d1,
+            `/calendar?${params.toString()}`,
+            {
+                headers: AUTH_HEADERS,
+            },
+        );
         const body = (await response.json()) as CalendarGetResponseBody;
 
         expect(response.status).toBe(200);
@@ -149,7 +163,13 @@ describe('コンポーネントテスト: Calendar GET Router → Controller →
             finishDate: '2026-04-27',
             raceTypeList: 'jra',
         });
-        const response = await requestApi(d1, `/calendar?${params.toString()}`);
+        const response = await requestApi(
+            d1,
+            `/calendar?${params.toString()}`,
+            {
+                headers: AUTH_HEADERS,
+            },
+        );
         const body = (await response.json()) as CalendarGetResponseBody;
 
         expect(body.count).toBe(2);
@@ -177,7 +197,13 @@ describe('コンポーネントテスト: Calendar GET Router → Controller →
             finishDate: '2026-04-27',
             raceTypeList: 'jra',
         });
-        const response = await requestApi(d1, `/calendar?${params.toString()}`);
+        const response = await requestApi(
+            d1,
+            `/calendar?${params.toString()}`,
+            {
+                headers: AUTH_HEADERS,
+            },
+        );
         const body = (await response.json()) as CalendarGetResponseBody;
 
         expect(response.status).toBe(200);
@@ -190,7 +216,13 @@ describe('コンポーネントテスト: Calendar GET Router → Controller →
             finishDate: '2026-04-27',
             raceTypeList: 'jra',
         });
-        const response = await requestApi(d1, `/calendar?${params.toString()}`);
+        const response = await requestApi(
+            d1,
+            `/calendar?${params.toString()}`,
+            {
+                headers: AUTH_HEADERS,
+            },
+        );
         const body = (await response.json()) as CalendarGetResponseBody;
 
         expect(response.status).toBe(200);
@@ -204,7 +236,13 @@ describe('コンポーネントテスト: Calendar GET Router → Controller →
             finishDate: '2026-04-27',
             raceTypeList: 'invalid-type',
         });
-        const response = await requestApi(d1, `/calendar?${params.toString()}`);
+        const response = await requestApi(
+            d1,
+            `/calendar?${params.toString()}`,
+            {
+                headers: AUTH_HEADERS,
+            },
+        );
 
         expect(response.status).toBe(400);
     });

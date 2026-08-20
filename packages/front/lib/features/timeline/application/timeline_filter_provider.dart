@@ -267,7 +267,8 @@ final visibleTimelineRacesProvider = Provider.autoDispose
       final enabledDisciplines = ref.watch(
         settingsProvider.select((s) => s.enabledDisciplines),
       );
-      final favorites = ref.watch(favoriteIdsProvider);
+      final favorites =
+          ref.watch(favoriteIdsProvider).value ?? const <String>{};
       return racesAsync.whenData(
         (races) =>
             applyTimelineFilter(races, filter, enabledDisciplines, favorites),

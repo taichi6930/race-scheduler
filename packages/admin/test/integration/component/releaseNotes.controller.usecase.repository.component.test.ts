@@ -82,6 +82,8 @@ describe('コンポーネントテスト: ReleaseNotes Router → Controller →
             previewUiLayout: mock(() => Promise.resolve(undefined)),
             fetchUpcomingKeirinRaces: mock(() => Promise.resolve([])),
             fetchReleaseNotes: mock(() => Promise.resolve(SAMPLE_NOTES)),
+            issueInvite: mock(() => Promise.resolve({ token: 'invite-token' })),
+            fetchParticipants: mock(() => Promise.resolve([])),
         };
 
         container.register<IMainApiGateway>(DI_TOKENS.MainApiGateway, {

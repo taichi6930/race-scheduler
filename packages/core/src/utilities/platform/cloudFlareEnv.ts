@@ -53,4 +53,7 @@ export interface CloudFlareEnv {
     // D1（feature_flag テーブル）に行が無いキーの既定値として使われる。機能ごとに
     // 独立したキーを持つことで、SDUI機能を1つずつ個別に展開できるようにする。
     FEATURE_ANNOUNCEMENT_BANNER_ENABLED?: string; // 起動時お知らせバナー（announcementUsecase）の既定値
+    // パスキー(WebAuthn)認証用（api パッケージのみ使用）
+    WEBAUTHN_RP_ID?: string; // Relying Party ID（frontのホスト名、例: race-schedule-front.pages.dev）
+    WEBAUTHN_RP_NAME?: string; // 認証器のUIに表示されるサービス名
 }

@@ -20,7 +20,11 @@ import {
     it,
 } from 'bun:test';
 import type { D1Database } from '@cloudflare/workers-types';
-import { toJstISOString, validateLocationCode } from '@race-schedule/core';
+import {
+    SERVICE_AUTH_HEADER,
+    toJstISOString,
+    validateLocationCode,
+} from '@race-schedule/core';
 import { eq } from 'drizzle-orm';
 import { type DrizzleD1Database, drizzle } from 'drizzle-orm/d1';
 import 'reflect-metadata';
@@ -30,8 +34,15 @@ import { useInMemoryDB } from '../../../../../tests/shared/env';
 import { RaceFactory } from '../../../../../tests/shared/factories';
 import * as schema from '../../../src/db/schema';
 import { createInMemoryD1Database } from '../../common/inMemoryD1';
+import { MOCK_SERVICE_AUTH_TOKEN } from '../../common/mockHonoEnv';
 import { requestApi } from '../../common/requestApi';
 import { setupGlobalMocks } from '../../common/setupGlobalMocks';
+
+/**
+ * GET /race・/race/calendar-event・/race/players はいずれも service-or-session
+ * のため、サービス間認証ヘッダーを既定で付与する。
+ */
+const AUTH_HEADERS = { [SERVICE_AUTH_HEADER]: MOCK_SERVICE_AUTH_TOKEN };
 
 /**
  * インメモリD1（Drizzle経由）へ 1 件のレースを投入する
@@ -116,7 +127,9 @@ describe('コンポーネントテスト: Race GET Router → Controller → Use
             raceTypeList: 'jra',
         });
 
-        const response = await requestApi(d1, `/race?${params.toString()}`);
+        const response = await requestApi(d1, `/race?${params.toString()}`, {
+            headers: AUTH_HEADERS,
+        });
         const text = await response.text();
         const responseBody = text ? JSON.parse(text) : {};
 
@@ -162,7 +175,9 @@ describe('コンポーネントテスト: Race GET Router → Controller → Use
             finishDate: '2026-04-27',
             raceTypeList: 'jra',
         });
-        const response = await requestApi(d1, `/race?${params.toString()}`);
+        const response = await requestApi(d1, `/race?${params.toString()}`, {
+            headers: AUTH_HEADERS,
+        });
         const responseBody = (await response.json()) as {
             count: number;
             races: { raceNumber: number; datetime: string }[];
@@ -207,7 +222,9 @@ describe('コンポーネントテスト: Race GET Router → Controller → Use
             finishDate: '2026-04-27',
             raceTypeList: 'jra',
         });
-        const response = await requestApi(d1, `/race?${params.toString()}`);
+        const response = await requestApi(d1, `/race?${params.toString()}`, {
+            headers: AUTH_HEADERS,
+        });
         const responseBody = (await response.json()) as {
             count: number;
             races: unknown[];
@@ -252,7 +269,9 @@ describe('コンポーネントテスト: Race GET Router → Controller → Use
             raceTypeList: 'jra',
             locationList: '05',
         });
-        const response = await requestApi(d1, `/race?${params.toString()}`);
+        const response = await requestApi(d1, `/race?${params.toString()}`, {
+            headers: AUTH_HEADERS,
+        });
         const responseBody = (await response.json()) as {
             count: number;
             races: { raceType: string; locationCode: string }[];
@@ -285,7 +304,9 @@ describe('コンポーネントテスト: Race GET Router → Controller → Use
             finishDate: '2026-05-02',
             raceTypeList: 'jra',
         });
-        const response = await requestApi(d1, `/race?${params.toString()}`);
+        const response = await requestApi(d1, `/race?${params.toString()}`, {
+            headers: AUTH_HEADERS,
+        });
         const responseBody = (await response.json()) as {
             count: number;
             races: unknown[];
@@ -318,7 +339,9 @@ describe('コンポーネントテスト: Race GET Router → Controller → Use
             finishDate: '2026-04-27',
             raceTypeList: 'keirin',
         });
-        const response = await requestApi(d1, `/race?${params.toString()}`);
+        const response = await requestApi(d1, `/race?${params.toString()}`, {
+            headers: AUTH_HEADERS,
+        });
         const responseBody = (await response.json()) as {
             races: { isCalendarSpecified: boolean }[];
         };
@@ -354,6 +377,7 @@ describe('コンポーネントテスト: Race GET Router → Controller → Use
         const beforeResponse = await requestApi(
             d1,
             `/race?${params.toString()}`,
+            { headers: AUTH_HEADERS },
         );
         const beforeBody = (await beforeResponse.json()) as {
             count: number;
@@ -367,6 +391,7 @@ describe('コンポーネントテスト: Race GET Router → Controller → Use
         const beforeCalendarResponse = await requestApi(
             d1,
             `/race/calendar-event?${calendarEventParams.toString()}`,
+            { headers: AUTH_HEADERS },
         );
 
         // Assert 1: 一覧・単発取得の両方から除外される
@@ -383,6 +408,7 @@ describe('コンポーネントテスト: Race GET Router → Controller → Use
         const afterResponse = await requestApi(
             d1,
             `/race?${params.toString()}`,
+            { headers: AUTH_HEADERS },
         );
         const afterBody = (await afterResponse.json()) as {
             count: number;
@@ -407,7 +433,9 @@ describe('コンポーネントテスト: Race GET Router → Controller → Use
             finishDate: '2026-05-01',
             raceTypeList: 'jra',
         });
-        const response = await requestApi(d1, `/race?${params.toString()}`);
+        const response = await requestApi(d1, `/race?${params.toString()}`, {
+            headers: AUTH_HEADERS,
+        });
         const responseBody = (await response.json()) as {
             count: number;
             races: unknown[];
@@ -438,7 +466,9 @@ describe('コンポーネントテスト: Race GET Router → Controller → Use
             finishDate: '2026-04-26',
             raceTypeList: 'jra',
         });
-        const response = await requestApi(d1, `/race?${params.toString()}`);
+        const response = await requestApi(d1, `/race?${params.toString()}`, {
+            headers: AUTH_HEADERS,
+        });
         const responseBody = (await response.json()) as {
             races: { datetime: string }[];
         };
@@ -480,7 +510,9 @@ describe('コンポーネントテスト: Race GET Router → Controller → Use
             finishDate: '2026-06-14', // 50 日間
             raceTypeList: 'jra',
         });
-        const response = await requestApi(d1, `/race?${params.toString()}`);
+        const response = await requestApi(d1, `/race?${params.toString()}`, {
+            headers: AUTH_HEADERS,
+        });
         const endTime = performance.now();
         const elapsedMs = endTime - startTime;
 
@@ -534,13 +566,17 @@ describe('コンポーネントテスト: Race GET Router → Controller → Use
             raceTypeList: 'jra',
         });
 
-        const response1 = await requestApi(d1, `/race?${params.toString()}`);
+        const response1 = await requestApi(d1, `/race?${params.toString()}`, {
+            headers: AUTH_HEADERS,
+        });
         const responseBody1 = (await response1.json()) as {
             count: number;
             races: unknown[];
         };
 
-        const response2 = await requestApi(d1, `/race?${params.toString()}`);
+        const response2 = await requestApi(d1, `/race?${params.toString()}`, {
+            headers: AUTH_HEADERS,
+        });
         const responseBody2 = (await response2.json()) as {
             count: number;
             races: unknown[];
@@ -583,6 +619,7 @@ describe('コンポーネントテスト: Race GET Router → Controller → Use
         const response = await requestApi(
             d1,
             `/race/calendar-event?${params.toString()}`,
+            { headers: AUTH_HEADERS },
         );
         const responseBody = (await response.json()) as {
             summary: string;
@@ -615,6 +652,7 @@ describe('コンポーネントテスト: Race GET Router → Controller → Use
         const response = await requestApi(
             d1,
             `/race/calendar-event?${params.toString()}`,
+            { headers: AUTH_HEADERS },
         );
 
         // Assert
@@ -656,7 +694,9 @@ describe('コンポーネントテスト: Race GET Router → Controller → Use
             finishDate: '2026-08-03',
             raceTypeList: 'keirin',
         });
-        const response = await requestApi(d1, `/race?${params.toString()}`);
+        const response = await requestApi(d1, `/race?${params.toString()}`, {
+            headers: AUTH_HEADERS,
+        });
         const responseBody = (await response.json()) as {
             races: { isWatched: boolean }[];
         };
@@ -712,6 +752,7 @@ describe('コンポーネントテスト: Race GET Router → Controller → Use
         const response = await requestApi(
             d1,
             `/race/players?${params.toString()}`,
+            { headers: AUTH_HEADERS },
         );
         const responseBody = (await response.json()) as {
             raceId: string;
