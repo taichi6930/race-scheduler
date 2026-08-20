@@ -550,6 +550,15 @@ export const SERVICE_AUTH_EXEMPT_ROUTES: readonly ServiceAuthExemptRoute[] = [
  * （どちらか一方があれば通す）という中間の方針を持たせる。
  * ここに列挙されていないルートは `service-only` を既定とする（deny-by-default、
  * 新しいルートを追加したときに認可を書き忘れても保護される側に倒れる）。
+ *
+ * **段階分割メモ（minor/majorブランチ分割）**: このPR（minor/patch）では、
+ * 既存ルート（今回のPR以前から存在するもの）の認可挙動を一切変えない
+ * （全て`public`のまま、＝これまでどおり誰でも無認証で呼べる）。
+ * 実際に「frontを招待制クローズドにする」（既存の閲覧・書き込みルートを
+ * `service-or-session`/`session-only`へ切り替える）のは、このPRの上に積む
+ * 別PR（major、`claude/passkey-auth-enforce-login`ブランチ）で行う。
+ * 今回のPRで新設したルート（`/auth/*`・`/favorite`）は既存の呼び出し元が
+ * 存在しないため、最初からセッション必須で安全に導入できる。
  */
 export const APP_AUTH_ROUTES: readonly AppAuthRoute[] = [
     { method: 'OPTIONS', path: '*', policy: 'public' },
@@ -568,28 +577,25 @@ export const APP_AUTH_ROUTES: readonly AppAuthRoute[] = [
     { method: 'POST', path: '/auth/login/verify', policy: 'public' },
     { method: 'POST', path: '/auth/logout', policy: 'public' },
 
-    // frontの閲覧 + calendar/scraping Workerからのサービス間呼び出しの両方から呼ばれる
-    { method: 'GET', path: '/ui/announcement', policy: 'service-or-session' },
-    { method: 'GET', path: '/ui/race-detail', policy: 'service-or-session' },
-    { method: 'GET', path: '/release-notes', policy: 'service-or-session' },
-    { method: 'GET', path: '/calendar', policy: 'service-or-session' },
-    { method: 'GET', path: '/place', policy: 'service-or-session' },
-    { method: 'GET', path: '/race', policy: 'service-or-session' },
-    {
-        method: 'GET',
-        path: '/race/calendar-event',
-        policy: 'service-or-session',
-    },
-    { method: 'GET', path: '/race/players', policy: 'service-or-session' },
+    // 既存ルート: このPR(minor)では挙動を変えない（現状どおりpublicのまま）。
+    // service-or-session/session-onlyへの切替は別PR(major)で行う。
+    { method: 'GET', path: '/ui/announcement', policy: 'public' },
+    { method: 'GET', path: '/ui/race-detail', policy: 'public' },
+    { method: 'GET', path: '/release-notes', policy: 'public' },
+    { method: 'GET', path: '/calendar', policy: 'public' },
+    { method: 'GET', path: '/place', policy: 'public' },
+    { method: 'GET', path: '/race', policy: 'public' },
+    { method: 'GET', path: '/race/calendar-event', policy: 'public' },
+    { method: 'GET', path: '/race/players', policy: 'public' },
+    { method: 'GET', path: '/player', policy: 'public' },
+    { method: 'POST', path: '/player', policy: 'public' },
+    { method: 'POST', path: '/push/subscription', policy: 'public' },
+    { method: 'DELETE', path: '/push/subscription', policy: 'public' },
+    { method: 'POST', path: '/push/request', policy: 'public' },
+    { method: 'DELETE', path: '/push/request', policy: 'public' },
+    { method: 'POST', path: '/push/test', policy: 'public' },
 
-    // frontの書き込み・自分専用データ。他Workerは呼ばない
-    { method: 'GET', path: '/player', policy: 'session-only' },
-    { method: 'POST', path: '/player', policy: 'session-only' },
-    { method: 'POST', path: '/push/subscription', policy: 'session-only' },
-    { method: 'DELETE', path: '/push/subscription', policy: 'session-only' },
-    { method: 'POST', path: '/push/request', policy: 'session-only' },
-    { method: 'DELETE', path: '/push/request', policy: 'session-only' },
-    { method: 'POST', path: '/push/test', policy: 'session-only' },
+    // 新規ルート: 既存の呼び出し元が存在しないため最初からセッション必須にできる
     { method: 'GET', path: '/favorite', policy: 'session-only' },
     { method: 'POST', path: '/favorite', policy: 'session-only' },
     { method: 'DELETE', path: '/favorite', policy: 'session-only' },

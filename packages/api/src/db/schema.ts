@@ -118,13 +118,11 @@ export const playerAutorace = sqliteTable('player_autorace', {
 /**
  * ユーザーが登録した注目選手（calendar_flagと同じ位置づけで、
  * player/race_playerとは独立させる。スクレイピング経路からは書き込まない。
- * 0023_player_watch.sqlite.sql / 0040_player_watch_user_scope.sqlite.sql参照）。
- * user単位のデータ（段階2、パスキー認証導入）。
+ * 0023_player_watch.sqlite.sql参照）。
  */
 export const playerWatch = sqliteTable(
     'player_watch',
     {
-        userId: text('user_id').notNull(),
         raceType: text('race_type').notNull(),
         playerNo: text('player_no').notNull(),
         priority: integer('priority').notNull().default(10),
@@ -132,11 +130,7 @@ export const playerWatch = sqliteTable(
         createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
         updatedAt: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
     },
-    (table) => [
-        primaryKey({
-            columns: [table.userId, table.raceType, table.playerNo],
-        }),
-    ],
+    (table) => [primaryKey({ columns: [table.raceType, table.playerNo] })],
 );
 
 /**

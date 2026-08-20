@@ -15,15 +15,12 @@ import 'package:front/features/timeline/application/timeline_provider.dart';
 import 'package:front/navigation/app_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../support/session_test_overrides.dart';
-
 Future<Widget> _buildApp() async {
   SharedPreferences.setMockInitialValues({});
   final prefs = await SharedPreferences.getInstance();
   return ProviderScope(
     overrides: [
       sharedPreferencesProvider.overrideWithValue(prefs),
-      loggedInSessionOverride(),
       timelineProvider.overrideWith((ref, date) async => const <RaceEntity>[]),
     ],
     child: const MyApp(),

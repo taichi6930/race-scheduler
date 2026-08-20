@@ -21,8 +21,6 @@ import 'package:front/features/timeline/application/timeline_provider.dart';
 import 'package:front/navigation/app_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../support/session_test_overrides.dart';
-
 /// テストで任意のお気に入りID集合を固定するNotifier（QINF-05のバッジ検証用）。
 class _FixedFavoriteIdsNotifier extends FavoriteIdsNotifier {
   _FixedFavoriteIdsNotifier(this._initial);
@@ -39,7 +37,6 @@ Future<Widget> _buildApp({Set<String>? favoriteIds}) async {
   return ProviderScope(
     overrides: [
       sharedPreferencesProvider.overrideWithValue(prefs),
-      loggedInSessionOverride(),
       // TimelineScreen・FavoritesScreen が実データ取得を行うため、
       // getIt/ネットワークを介さず確定値で応答させる
       // （AppShellの検証にレースデータそのものは不要）。

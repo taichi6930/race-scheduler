@@ -20,9 +20,10 @@ const favoriteSaveDebounceDuration = Duration(milliseconds: 300);
 ///
 /// ログイン済み（[sessionProvider]がnullでない）ならサーバー保存
 /// （[RemoteFavoritesRepository]）、未ログインなら端末ローカル
-/// （[LocalFavoritesRepository]）を返す。全画面ログイン必須の設計のため、
-/// 実質的には常に[RemoteFavoritesRepository]を使うことになる
-/// （未ログインのままお気に入り画面へ到達することは無い）。
+/// （[LocalFavoritesRepository]）を返す。全画面ログイン必須化（未ログイン時に
+/// `/login`へ強制する変更）は別PR（挙動が変わる側）で行うため、このPRの時点では
+/// 招待経由でログインしていない既存ユーザーは引き続き[LocalFavoritesRepository]
+/// （現状どおりの挙動）を使い続ける。
 final favoritesRepositoryProvider = Provider<IFavoritesRepository>((ref) {
   final session = ref.watch(sessionProvider);
   if (session == null) {

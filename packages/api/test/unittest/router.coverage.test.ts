@@ -422,7 +422,6 @@ describe('API Router (追加カバレッジ)', () => {
             registerBrokenPlaceController(brokenController);
             const request = new Request(
                 'http://localhost/place?startDate=2026-01-01&finishDate=2026-12-31&raceTypeList=jra',
-                { headers: authHeaders() },
             );
 
             // Act
@@ -435,8 +434,7 @@ describe('API Router (追加カバレッジ)', () => {
                 message: string;
             }>();
             expect(json.status).toBe(500);
-            // サービス間認証済み（authHeaders()）のためエラー詳細を含む
-            expect(json.message).toBe('Error: controller boom');
+            expect(json.message).toBe('Internal Server Error');
         });
 
         it('placePost_controllerがthrow_500でhandleApiErrorが返ること', async () => {

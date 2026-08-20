@@ -11,8 +11,7 @@ import 'core/di/shared_preferences_provider.dart';
 import 'data/repositories/local_favorites_repository.dart';
 import 'features/favorites/application/favorite_ids_provider.dart';
 
-/// モックモードでは全画面ログイン必須（招待制クローズドサービス化）を
-/// バイパスし、常にログイン済みとして扱う。バックエンドに一切接続しない
+/// モックモードでは常にログイン済みとして扱う。バックエンドに一切接続しない
 /// プレビュー用途のため、招待/ログイン画面を経由させる意味が無い
 /// （ponytail: 招待/ログイン画面自体の見た目を確認したい場合は、この
 /// overrideを一時的に外すこと。上限=モックモードでは常にログイン済み固定、

@@ -1,7 +1,6 @@
 import {
     createEmptyUpsertResult,
     DI_TOKENS,
-    getCurrentUserId,
     LogAllMethods,
     type PlayerEntity,
     type SearchPlayerFilterParamsInput,
@@ -40,20 +39,6 @@ import { PlayerMapper } from './playerMapper';
  * 揃える」流儀に合わせる。
  */
 const PLAYER_INSERT_PARAMS_PER_ROW = 3;
-
-/**
- * `player_watch`（段階2でuser単位化）を読み書きする際の呼び出し元ユーザーIDを取得する。
- * `POST/GET /player` はsession-onlyポリシーで保護されているため常に設定されている
- * はずだが、ミドルウェアの取りこぼしに備えフェイルクローズで例外を投げる
- * （SECURITY-15: userIdが無いまま他人のデータへ書き込む・読み込む事故を防ぐ）。
- */
-const requireCurrentUserId = (): string => {
-    const userId = getCurrentUserId();
-    if (!userId) {
-        throw new Error('player_watch操作にはセッション認証が必要です');
-    }
-    return userId;
-};
 
 /**
  * upsert のチャンクサイズ
@@ -123,23 +108,17 @@ export class PlayerRepository implements IPlayerRepository {
         entities: PlayerEntity[],
     ): Promise<void> {
         if (entities.length === 0) return;
-        const userId = requireCurrentUserId();
         await this.drizzleGateway.db
             .insert(playerWatch)
             .values(
                 entities.map((entity) => ({
-                    userId,
                     raceType: entity.raceType,
                     playerNo: entity.playerNo,
                     priority: entity.priority,
                 })),
             )
             .onConflictDoUpdate({
-                target: [
-                    playerWatch.userId,
-                    playerWatch.raceType,
-                    playerWatch.playerNo,
-                ],
+                target: [playerWatch.raceType, playerWatch.playerNo],
                 set: {
                     priority: sql`excluded.priority`,
                     updatedAt: sql`CURRENT_TIMESTAMP`,
@@ -164,7 +143,6 @@ export class PlayerRepository implements IPlayerRepository {
      */
     private buildFetchQuery(searchPlayerFilter: SearchPlayerFilterParamsInput) {
         const { raceTypeList, playerName } = searchPlayerFilter;
-        const userId = requireCurrentUserId();
         return this.drizzleGateway.db
             .select({
                 raceType: player.raceType,
@@ -180,7 +158,6 @@ export class PlayerRepository implements IPlayerRepository {
                 and(
                     eq(playerWatch.raceType, player.raceType),
                     eq(playerWatch.playerNo, player.playerNo),
-                    eq(playerWatch.userId, userId),
                 ),
             )
             .leftJoin(playerKeirin, eq(playerKeirin.playerNo, player.playerNo))

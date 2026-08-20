@@ -21,8 +21,6 @@ import 'package:front/notifications/application/notification_scheduler_provider.
 import 'package:front/notifications/i_notification_scheduler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../support/session_test_overrides.dart';
-
 final _fixedNow = DateTime(2026, 8, 9, 10);
 
 RaceEntity _race({required String id, required Duration offsetFromNow}) =>
@@ -85,7 +83,6 @@ void main() {
       ProviderScope(
         overrides: [
           sharedPreferencesProvider.overrideWithValue(prefs),
-          loggedInSessionOverride(),
           nowProvider.overrideWith((ref) => Stream.value(_fixedNow)),
           favoriteIdsProvider.overrideWith(
             () => _FixedFavoriteIdsNotifier({race.raceId}),
@@ -113,7 +110,6 @@ void main() {
       ProviderScope(
         overrides: [
           sharedPreferencesProvider.overrideWithValue(prefs),
-          loggedInSessionOverride(),
           nowProvider.overrideWith((ref) => Stream.value(_fixedNow)),
           favoriteIdsProvider.overrideWith(
             () => _FixedFavoriteIdsNotifier({race.raceId}),
@@ -154,7 +150,6 @@ void main() {
       ProviderScope(
         overrides: [
           sharedPreferencesProvider.overrideWithValue(prefs),
-          loggedInSessionOverride(),
           nowProvider.overrideWith((ref) => Stream.value(_fixedNow)),
           favoriteIdsProvider.overrideWith(
             () => _FixedFavoriteIdsNotifier({race.raceId}),

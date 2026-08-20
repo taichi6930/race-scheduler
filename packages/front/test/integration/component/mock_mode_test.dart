@@ -16,8 +16,6 @@ import 'package:front/notifications/application/notification_scheduler_provider.
 import 'package:front/notifications/i_notification_scheduler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../support/session_test_overrides.dart';
-
 /// テストでは実プラットフォームチャンネルを持たないため、
 /// 通知スケジューラは常にフェイクへ差し替える。
 class _FakeNotificationScheduler implements INotificationScheduler {
@@ -87,7 +85,6 @@ void main() {
       ProviderScope(
         overrides: [
           sharedPreferencesProvider.overrideWithValue(prefs),
-          loggedInSessionOverride(),
           notificationSchedulerProvider.overrideWithValue(
             _FakeNotificationScheduler(),
           ),
