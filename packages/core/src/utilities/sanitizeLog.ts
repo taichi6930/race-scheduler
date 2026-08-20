@@ -188,7 +188,7 @@ const maskSensitiveFields = (value: unknown, depth = 0): unknown => {
 /**
  * エラーオブジェクトを安全にシリアライズする（機密フィールドをマスク）
  * @param error - シリアライズ対象のエラー（Error インスタンスまたは任意の値）
- * @returns 機密フィールドをマスクした Record
+ * @returns 機密フィールドをマスクしたサニタイズ済みエラー情報
  */
 export const sanitizeError = (error: unknown): SanitizedError => {
     if (error instanceof Error) {
