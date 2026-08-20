@@ -42,4 +42,5 @@ export const buildMockHonoEnv = (db: D1Database) => ({
     CORS_ALLOWED_ORIGINS: '*',
     SERVICE_AUTH_TOKEN: MOCK_SERVICE_AUTH_TOKEN,
     PUSH_DISPATCH_TOKEN: MOCK_PUSH_DISPATCH_TOKEN,
+    WEBAUTHN_RP_ID: 'front.example.com',
 });

@@ -61,6 +61,12 @@ export const setupGlobalMocks = (db?: D1Database): void => {
         // EnvStore.env経由で読まれるフィールドはここにも含める必要がある
         // （c.env経由で読むSERVICE_AUTH_TOKEN等はリクエスト毎に正しく反映されるため対象外）。
         PUSH_DISPATCH_TOKEN: MOCK_PUSH_DISPATCH_TOKEN,
+        // WEBAUTHN_RP_ID も同じ理由（resolveWebauthnRpConfigがEnvStore.env経由で
+        // 読む）でここに含める。未設定のままだと、他のコンポーネントテストが先に
+        // 実行されて_state.diInitializedが真になった後では、authコンポーネント
+        // テストのensureDIInitializedが素通りしEnvStore.envにWEBAUTHN_RP_IDが
+        // 反映されず、常に「未設定」扱い（400）になってしまう。
+        WEBAUTHN_RP_ID: 'front.example.com',
     });
 
     // テスト環境ではInMemoryDBを使用

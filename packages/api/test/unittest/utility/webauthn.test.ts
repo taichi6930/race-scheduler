@@ -10,6 +10,12 @@
  * | T-05 | buildAuthenticationOptions | 正常系                                    | rpID・allowCredentials未指定が反映される      |
  * | T-06 | verifyRegistration         | 構造的に壊れたcredentialResponse           | 例外を投げずnullを返す                         |
  * | T-07 | verifyAuthentication       | 構造的に壊れたcredentialResponse           | 例外を投げずnullを返す                         |
+ * | T-08 | verifyRegistration         | verified: true（fmt:'none'の正当なレスポンス） | credentialId/publicKey/signCount/aaguidを返す |
+ * | T-09 | verifyAuthentication       | verified: true（実ECDSA署名を持つ正当なレスポンス） | 新しいsignCountを返す                  |
+ *
+ * T-08・T-09は`mock.module`を使わず、`../../common/webauthnTestFixtures`
+ * （`@simplewebauthn/server/helpers`で構造的に正しいレスポンスを組み立てる共通
+ * フィクスチャ、詳細は同ファイル先頭コメント参照）で本物の検証ロジックを通す。
  */
 
 import { describe, expect, it } from 'bun:test';
@@ -19,15 +25,20 @@ import type {
     AuthenticationResponseJSON,
     RegistrationResponseJSON,
 } from '@simplewebauthn/server';
-
+import { isoBase64URL } from '@simplewebauthn/server/helpers';
 import {
     buildAuthenticationOptions,
     buildRegistrationOptions,
     resolveWebauthnRpConfig,
+    type StoredCredential,
     verifyAuthentication,
     verifyRegistration,
     type WebauthnRpConfig,
 } from '../../../src/utility/webauthn';
+import {
+    buildValidAuthenticationResponse,
+    buildValidNoneAttestationResponse,
+} from '../../common/webauthnTestFixtures';
 
 const createMockEnv = (overrides?: Partial<CloudFlareEnv>): CloudFlareEnv => ({
     DB: {} as unknown as D1Database,
@@ -158,5 +169,55 @@ describe('verifyAuthentication', () => {
         );
 
         expect(result).toBeNull();
+    });
+});
+
+describe('verifyRegistration（成功分岐）', () => {
+    it('[T-08] 正当なfmt:none登録レスポンスの場合DB保存用の値を返すこと', async () => {
+        const credentialId = new Uint8Array([1, 2, 3, 4]);
+        const response = await buildValidNoneAttestationResponse(
+            TEST_CONFIG.rpId,
+            TEST_CONFIG.origin,
+            'expected-challenge',
+            credentialId,
+        );
+
+        const result = await verifyRegistration(
+            TEST_CONFIG,
+            response,
+            'expected-challenge',
+        );
+
+        expect(result?.credentialId).toBe(
+            isoBase64URL.fromBuffer(credentialId),
+        );
+        expect(result?.signCount).toBe(0);
+        expect(result?.aaguid).toBe('00000000-0000-0000-0000-000000000000');
+    });
+});
+
+describe('verifyAuthentication（成功分岐）', () => {
+    it('[T-09] 実ECDSA署名を持つ正当なレスポンスの場合新しいsignCountを返すこと', async () => {
+        const credentialId = new Uint8Array([9, 8, 7, 6]);
+        const { response, publicKey } = await buildValidAuthenticationResponse(
+            TEST_CONFIG.rpId,
+            TEST_CONFIG.origin,
+            'expected-challenge',
+            credentialId,
+        );
+        const storedCredential: StoredCredential = {
+            id: isoBase64URL.fromBuffer(credentialId),
+            publicKey,
+            signCount: 0,
+        };
+
+        const result = await verifyAuthentication(
+            TEST_CONFIG,
+            response,
+            'expected-challenge',
+            storedCredential,
+        );
+
+        expect(result).toBe(1);
     });
 });

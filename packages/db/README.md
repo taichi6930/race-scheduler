@@ -48,6 +48,11 @@ erDiagram
     player ||--o| player_watch : "1対1(任意、注目選手登録)"
     player ||--o{ player_history : "1対多(属性変更ログ)"
     push_subscription ||--o{ push_notification_request : "1購読に複数の発火予約"
+    user ||--o{ credential : "1人が複数端末のパスキーを持てる"
+    user ||--o{ session : "1人が複数端末から同時ログイン"
+    user ||--o{ favorite : "お気に入りレース(1対多)"
+    user ||--o| invite : "招待の使用(任意、1対1)"
+    credential ||--o{ session : "1credentialで複数セッション"
 
     place {
         string place_id PK
@@ -175,6 +180,49 @@ erDiagram
         int draft
         int prerelease
         string source_repo
+    }
+    user {
+        string id PK
+        string nickname
+        datetime created_at
+    }
+    credential {
+        string id PK
+        string user_id FK
+        blob public_key
+        int sign_count
+        string aaguid
+        string user_agent
+        string device_label
+        datetime last_used_at
+        datetime created_at
+    }
+    invite {
+        string token PK
+        string memo
+        datetime expires_at
+        string used_by_user_id FK
+        datetime created_at
+    }
+    session {
+        string token PK
+        string user_id FK
+        string credential_id FK
+        datetime expires_at
+        datetime created_at
+    }
+    favorite {
+        string user_id PK_FK
+        string race_id PK
+        datetime created_at
+    }
+    webauthn_challenge {
+        string id PK
+        string challenge
+        string purpose
+        string invite_token
+        datetime expires_at
+        datetime created_at
     }
 ```
 

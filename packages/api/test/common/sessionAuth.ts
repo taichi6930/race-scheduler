@@ -5,8 +5,9 @@ import * as schema from '../../src/db/schema';
 /**
  * `session-only`/`service-or-session`ルートのテストで使うAuthorizationヘッダー名。
  * `appAuthMiddleware.ts`内の同名定数（非export）と値を合わせている。
+ * このファイル内（`insertTestSession`）でのみ使うためexportしない。
  */
-export const SESSION_AUTH_HEADER = 'Authorization';
+const SESSION_AUTH_HEADER = 'Authorization';
 
 /** テストで使うセッショントークンの既定値。 */
 export const TEST_SESSION_TOKEN = 'mock-session-token';
