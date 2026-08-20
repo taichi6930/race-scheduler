@@ -86,7 +86,7 @@ interface Issue {
     file: string;
 }
 
-/** @spec タグの突合で見つかった問題（実在しないID・廃止仕様への参照）。 */
+/** タグ突合で見つかった問題（実在しないID・廃止仕様への参照）。 */
 interface SpecIssues {
     orphanTags: Issue[];
     deprecatedRefs: Issue[];
