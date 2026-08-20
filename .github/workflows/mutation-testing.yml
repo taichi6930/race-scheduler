@@ -38,7 +38,8 @@ permissions:
     contents: read
 
 concurrency:
-    group: mutation-testing-core
+    # CICD-30/31: 別ワークフロー同士が誤って同じグループに入らないよう、ワークフロー名を含める。
+    group: ${{ github.workflow }}-${{ github.ref }}
     cancel-in-progress: false
 
 jobs:
