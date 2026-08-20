@@ -242,23 +242,23 @@ const wrapPropertyIfMethod = (
  *
  * ジェネリック制約は `never[]`（引数の反変性によりあらゆる具象クラスの
  * コンストラクタを受け付ける）と `unknown` を用い、`any` を排除している。
- * @param constructor
+ * @param targetClass - デコレート対象のクラス
  */
 // oxlint-disable-next-line anti-slop/no-unknown-returns -- 任意のクラスを受け付けるジェネリック制約（上記コメント参照）。unknownが唯一正直な型
 export function LogAllMethods<T extends new (...args: never[]) => unknown>(
-    constructor: T,
+    targetClass: T,
 ): T {
     const context = {
-        constructorName: constructor.name,
+        constructorName: targetClass.name,
         shouldSuppressLogs: process.env.NODE_ENV === 'ci_local',
     };
 
-    const prototype = constructor.prototype;
+    const prototype = targetClass.prototype;
     const propertyNames = Object.getOwnPropertyNames(prototype);
 
     for (const propertyName of propertyNames) {
         wrapPropertyIfMethod(prototype, propertyName, context);
     }
 
-    return constructor;
+    return targetClass;
 }

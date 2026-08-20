@@ -35,8 +35,8 @@ export const validateRaceType = (value: string): RaceType => {
     const normalized = value.toLowerCase();
     try {
         return RaceTypeSchema.parse(normalized);
-    } catch {
-        throw new Error(`Invalid race_type: ${value}`);
+    } catch (error) {
+        throw new Error(`Invalid race_type: ${value}`, { cause: error });
     }
 };
 

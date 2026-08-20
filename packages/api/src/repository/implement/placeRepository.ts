@@ -79,6 +79,18 @@ const buildPlaceWhereConditions = (params: SearchPlaceFilterParamsInput) => [
 ];
 
 /**
+ * レース情報取得可否（boolean | undefined）を place テーブルの数値表現へ変換する。
+ * 未指定（undefined）は「非該当」を意味する NULL として保存する。
+ * @param isRaceListAvailable - 変換対象の値
+ */
+const toIsRaceListAvailableColumn = (
+    isRaceListAvailable: boolean | undefined,
+): number | null => {
+    if (isRaceListAvailable === undefined) return null;
+    return isRaceListAvailable ? 1 : 0;
+};
+
+/**
  * PlaceEntity を place テーブルへの INSERT 行に変換する。
  * @param entity - 変換対象のエンティティ
  */
@@ -90,12 +102,9 @@ const toPlaceInsertRow = (entity: PlaceEntity) => ({
             ? toJstISOString(entity.datetime)
             : entity.datetime,
     locationCode: entity.locationCode,
-    isRaceListAvailable:
-        entity.isRaceListAvailable === undefined
-            ? null
-            : entity.isRaceListAvailable
-              ? 1
-              : 0,
+    isRaceListAvailable: toIsRaceListAvailableColumn(
+        entity.isRaceListAvailable,
+    ),
 });
 
 /** mapPlaceRowToEntity の戻り値。マッピング成功時は entity のみ、失敗時は warning のみ埋まる。 */
