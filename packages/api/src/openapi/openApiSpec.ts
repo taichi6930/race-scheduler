@@ -2,7 +2,7 @@
  * `GET /docs`（Scalar UI）・`GET /openapi.json` が返すOpenAPI 3.0仕様。
  *
  * front等から実際に呼び出せる公開エンドポイント（`SERVICE_AUTH_EXEMPT_ROUTES` の
- * `front-public`/`pending-user-auth` 相当）のみを対象にしている。サービス間認証が
+ * `front-public`/`user-auth-required` 相当）のみを対象にしている。サービス間認証が
  * 必要な内部エンドポイント（`/calendar/flag`・`/internal/batch-lock/*`・
  * `/debug/database` 等）は対象外（front以外の消費者を想定していないため）。
  *

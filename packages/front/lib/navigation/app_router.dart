@@ -42,10 +42,9 @@ final GoRouter appRouter = GoRouter(
   // （ブックマーク・裸のオリジン共有・push-sw.js の許可外URLフォールバック先が `/`
   // のいずれも404画面へ着地していた）。タイムラインへ誘導する。
   //
-  // ログイン画面・招待受け取り画面（`/login`・`/invite/:token`）自体はこのPRで
-  // 追加するが、全画面ログイン必須化（未ログイン時に`/login`へ強制リダイレクト）は
-  // 別PR（major、挙動が変わる側）で行う。このPRの時点では、ログイン済みの状態で
-  // `/login`へアクセスした場合にタイムラインへ戻す程度に留める。
+  // 全画面ログイン必須（招待制クローズドサービス化）: セッションが無い状態で
+  // `/login`・`/invite/:token` 以外へアクセスしたらログイン画面へ、逆に
+  // ログイン済みで`/login`へアクセスしたらタイムラインへ誘導する。
   // [authRouterState] は `MyApp`（`app.dart`）が `sessionProvider` の変化の
   // たびに反映するブリッジで、[refreshListenable] 経由でこの `redirect` を
   // 再評価させる（`appRouter`はトップレベル定数のためRiverpodの`ref`を
@@ -55,7 +54,10 @@ final GoRouter appRouter = GoRouter(
   redirect: (context, state) {
     if (state.uri.path == '/') return _AppDestination.timeline.path;
 
-    if (authRouterState.isLoggedIn && state.uri.path == '/login') {
+    final path = state.uri.path;
+    final isAuthRoute = path == '/login' || path.startsWith('/invite/');
+    if (!authRouterState.isLoggedIn && !isAuthRoute) return '/login';
+    if (authRouterState.isLoggedIn && path == '/login') {
       return _AppDestination.timeline.path;
     }
     return null;

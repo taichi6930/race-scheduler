@@ -45,12 +45,13 @@ erDiagram
     player ||--o{ race_player : "選手の出走履歴(player_no一致)"
     player ||--o| player_keirin : "1対1(任意、競輪選手のみ)"
     player ||--o| player_autorace : "1対1(任意、オートレース選手のみ)"
-    player ||--o| player_watch : "1対1(任意、注目選手登録)"
+    player ||--o{ player_watch : "1対多(複数ユーザーが同じ選手を注目登録可能)"
     player ||--o{ player_history : "1対多(属性変更ログ)"
     push_subscription ||--o{ push_notification_request : "1購読に複数の発火予約"
     user ||--o{ credential : "1人が複数端末のパスキーを持てる"
     user ||--o{ session : "1人が複数端末から同時ログイン"
     user ||--o{ favorite : "お気に入りレース(1対多)"
+    user ||--o{ player_watch : "1人が複数選手を注目登録(段階2、user単位化)"
     user ||--o| invite : "招待の使用(任意、1対1)"
     credential ||--o{ session : "1credentialで複数セッション"
 
@@ -119,6 +120,7 @@ erDiagram
         string branch
     }
     player_watch {
+        string user_id PK_FK
         string race_type PK
         string player_no PK
         int priority
@@ -228,7 +230,7 @@ erDiagram
 
 `race_player` はレースの出走表スナップショットです（`race_player_id` は `race_id` + 車番の合成ID。枠番は複数車で共有され一意にならないため車番で合成する。`race`/`race_stage`/`race_condition` と同様スクレイピングが所有し、再取得のたびに上書き・削除される。`0021_race_player.sqlite.sql`）。
 
-`player_keirin`/`player_autorace`/`player_watch`/`player_history` は選手データの拡張です。`player_keirin` は競輪固有の選手属性（期別・府県、`0022_player_keirin.sqlite.sql`）。`player_autorace` はオートレース固有の選手属性（拠点/LG。出走表HTMLに期別に相当する情報が無いためterm列は持たない、`0031_player_autorace.sqlite.sql`）。`player_watch` はユーザーが登録した注目選手（`calendar_flag` と同じ位置づけでスクレイピング経路からは書き込まない、`0023_player_watch.sqlite.sql`）。`player_history` は選手属性の変更を検知したときだけ追記するログ（追記専用、`0024_player_history.sqlite.sql`）。
+`player_keirin`/`player_autorace`/`player_watch`/`player_history` は選手データの拡張です。`player_keirin` は競輪固有の選手属性（期別・府県、`0022_player_keirin.sqlite.sql`）。`player_autorace` はオートレース固有の選手属性（拠点/LG。出走表HTMLに期別に相当する情報が無いためterm列は持たない、`0031_player_autorace.sqlite.sql`）。`player_watch` はユーザーが登録した注目選手（`calendar_flag` と同じ位置づけでスクレイピング経路からは書き込まない、`0023_player_watch.sqlite.sql`）。パスキー認証導入に伴い、招待された各ユーザーが個別に注目選手を持てるよう `user_id` を含む複合PKへ変更した（段階2、`0043_player_watch_user_scope.sqlite.sql`）。`player_history` は選手属性の変更を検知したときだけ追記するログ（追記専用、`0024_player_history.sqlite.sql`）。
 
 `batch_run_lock` はbatch実行（cron/手動の複数起動経路）の排他制御用ロックテーブルです。`id=1` の1行のみを許可し、`workflow_instance_id` が未設定のときだけ空き扱いとします（`0027_batch_run_lock.sqlite.sql`）。
 

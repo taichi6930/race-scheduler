@@ -19,7 +19,7 @@ import type {
  * - `has-own-auth`: `/push/dispatch` は別途ディスパッチトークンで保護済みで、
  *   不特定多数からの到達を前提としないため対象外。
  *
- * それ以外（`front-public`/`static-docs`/`pending-user-auth`/`admin-own-auth`）は、
+ * それ以外（`front-public`/`static-docs`/`user-auth-required`/`admin-own-auth`）は、
  * サービス間認証で保護されない＝不特定多数から到達可能なエンドポイントのため、
  * レート制限の主対象とする。`admin-own-auth`（`/admin/flags/api`）は`has-own-auth`と
  * 同様に別のトークンで保護されているが、`/push/dispatch`と異なりブラウザから

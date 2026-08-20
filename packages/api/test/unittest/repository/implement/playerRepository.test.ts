@@ -42,6 +42,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import {
     RaceType,
+    runWithCurrentUserId,
     type SearchPlayerFilterParamsInput,
 } from '@race-schedule/core';
 import { type DrizzleD1Database, drizzle } from 'drizzle-orm/d1';
@@ -63,6 +64,12 @@ const buildFailingDb = (reason: unknown): DrizzleD1Database<typeof schema> => {
     };
     return failing as unknown as DrizzleD1Database<typeof schema>;
 };
+
+/** player_watch はuser単位化されているため、fetch/upsert呼び出しはリクエストスコープの
+ * userIdを必要とする（PlayerRepositoryのrequireCurrentUserId参照）。テストでは固定の
+ * 'test-user-id'で常にラップする。 */
+const withUser = <T>(fn: () => Promise<T>): Promise<T> =>
+    runWithCurrentUserId('test-user-id', fn);
 
 describe('PlayerRepository', () => {
     let repository: PlayerRepository;
@@ -93,12 +100,13 @@ describe('PlayerRepository', () => {
                 priority: 5,
             });
             await db.insert(schema.playerWatch).values({
+                userId: 'test-user-id',
                 raceType: 'keirin',
                 playerNo: '123',
                 priority: 7,
             });
 
-            const result = await repository.fetch(params);
+            const result = await withUser(() => repository.fetch(params));
 
             expect(result).toHaveLength(1);
             expect(result[0].raceType).toBe('keirin');
@@ -119,7 +127,7 @@ describe('PlayerRepository', () => {
                 priority: 5,
             });
 
-            const result = await repository.fetch(params);
+            const result = await withUser(() => repository.fetch(params));
 
             expect(result).toHaveLength(1);
             expect(result[0].priority).toBe(0);
@@ -139,7 +147,9 @@ describe('PlayerRepository', () => {
                 priority: 5,
             });
 
-            await expect(repository.fetch(params)).rejects.toThrow();
+            await expect(
+                withUser(() => repository.fetch(params)),
+            ).rejects.toThrow();
         });
 
         // F3: 空の結果 → 空配列を返す
@@ -148,7 +158,7 @@ describe('PlayerRepository', () => {
                 raceTypeList: [RaceType.JRA],
             };
 
-            const result = await repository.fetch(params);
+            const result = await withUser(() => repository.fetch(params));
 
             expect(result).toHaveLength(0);
             expect(Array.isArray(result)).toBe(true);
@@ -175,7 +185,7 @@ describe('PlayerRepository', () => {
                 playerName: '田中',
             };
 
-            const result = await repository.fetch(params);
+            const result = await withUser(() => repository.fetch(params));
 
             expect(result).toHaveLength(1);
             expect(result[0].playerName).toBe('田中一郎');
@@ -201,7 +211,7 @@ describe('PlayerRepository', () => {
                 raceTypeList: [RaceType.KEIRIN],
             };
 
-            const result = await repository.fetch(params);
+            const result = await withUser(() => repository.fetch(params));
 
             expect(result).toHaveLength(2);
         });
@@ -223,7 +233,7 @@ describe('PlayerRepository', () => {
                 branch: '京都',
             });
 
-            const result = await repository.fetch(params);
+            const result = await withUser(() => repository.fetch(params));
 
             expect(result).toHaveLength(1);
             expect(result[0].term).toBe(100);
@@ -242,7 +252,7 @@ describe('PlayerRepository', () => {
                 priority: 0,
             });
 
-            const result = await repository.fetch(params);
+            const result = await withUser(() => repository.fetch(params));
 
             expect(result).toHaveLength(1);
             expect(result[0].term).toBeUndefined();
@@ -265,7 +275,7 @@ describe('PlayerRepository', () => {
                 branch: '浜松',
             });
 
-            const result = await repository.fetch(params);
+            const result = await withUser(() => repository.fetch(params));
 
             expect(result).toHaveLength(1);
             expect(result[0].branch).toBe('浜松');
@@ -285,7 +295,7 @@ describe('PlayerRepository', () => {
                 },
             ];
 
-            const result = await repository.upsert(entities);
+            const result = await withUser(() => repository.upsert(entities));
 
             expect(result.successCount).toBe(1);
             expect(result.failureCount).toBe(0);
@@ -314,7 +324,7 @@ describe('PlayerRepository', () => {
                 },
             ];
 
-            const result = await repository.upsert(entities);
+            const result = await withUser(() => repository.upsert(entities));
 
             expect(result.successCount).toBe(2);
             const playerRows = await db.select().from(schema.player);
@@ -325,7 +335,7 @@ describe('PlayerRepository', () => {
 
         // U3: 空リスト → DBへ何も書き込まない
         it('U3: 空エンティティリストではDBへ何も書き込まず空のUpsertResultを返す', async () => {
-            const result = await repository.upsert([]);
+            const result = await withUser(() => repository.upsert([]));
 
             expect(result).toEqual({
                 successCount: 0,
@@ -349,7 +359,7 @@ describe('PlayerRepository', () => {
                 priority: index,
             }));
 
-            const result = await repository.upsert(entities);
+            const result = await withUser(() => repository.upsert(entities));
 
             expect(result.successCount).toBe(34);
             const playerRows = await db.select().from(schema.player);
@@ -377,7 +387,7 @@ describe('PlayerRepository', () => {
                 },
             ];
 
-            const result = await repository.upsert(entities);
+            const result = await withUser(() => repository.upsert(entities));
 
             expect(result.successCount).toBe(0);
             expect(result.failureCount).toBe(1);
@@ -403,7 +413,7 @@ describe('PlayerRepository', () => {
                 },
             ];
 
-            const result = await repository.upsert(entities);
+            const result = await withUser(() => repository.upsert(entities));
 
             expect(result.failureCount).toBe(1);
             expect(result.failures[0].reason).toContain('Unknown error');
