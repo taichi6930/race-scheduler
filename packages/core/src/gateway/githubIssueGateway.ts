@@ -189,7 +189,7 @@ export class GithubIssueGateway implements IGithubIssueGateway {
      * GitHub API 呼び出しに使うリクエストヘッダーを組み立てる。
      * @param token - GitHub API トークン
      */
-    private buildHeaders(token: string): Record<string, string> {
+    private buildHeaders(token: string) {
         return {
             Authorization: `Bearer ${token}`,
             Accept: 'application/vnd.github+json',

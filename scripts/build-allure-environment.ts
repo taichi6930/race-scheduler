@@ -26,14 +26,15 @@ const escapePropertyValue = (value: string): string =>
  * GitHub Actions 環境変数から environment.properties の内容を組み立てる。
  * 環境変数が無い（ローカル実行）場合は `os` モジュールからの実測値にフォールバックする。
  */
-const buildProperties = (env: NodeJS.ProcessEnv): Record<string, string> => ({
-    'Bun.Version': Bun.version,
-    'Node.Target': NODE_TARGET,
-    OS: env.RUNNER_OS ?? `${platform()} ${release()}`,
-    Branch: env.GITHUB_REF_NAME ?? '(local)',
-    Commit: env.GITHUB_SHA?.slice(0, 12) ?? '(local)',
-    Layers: 'ut, component, sit, uat',
-});
+const buildProperties = (env: NodeJS.ProcessEnv) =>
+    ({
+        'Bun.Version': Bun.version,
+        'Node.Target': NODE_TARGET,
+        OS: env.RUNNER_OS ?? `${platform()} ${release()}`,
+        Branch: env.GITHUB_REF_NAME ?? '(local)',
+        Commit: env.GITHUB_SHA?.slice(0, 12) ?? '(local)',
+        Layers: 'ut, component, sit, uat',
+    }) satisfies Record<string, string>;
 
 function main(): void {
     const properties = buildProperties(process.env);

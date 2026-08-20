@@ -26,6 +26,13 @@ interface PackageJson {
     devDependencies?: { '@types/node'?: string };
 }
 
+/** Nodeメジャーバージョンの重複3箇所から抽出した値（抽出できなければ null）。 */
+interface NodeVersions {
+    nvmrc: number | null;
+    enginesNode: number | null;
+    typesNode: number | null;
+}
+
 /**
  * バージョン文字列の先頭からメジャーバージョン番号を抽出する。
  * `24` `>=24.0.0 <25.0.0` `^24.13.3` のいずれの形式にも対応する
@@ -48,11 +55,7 @@ export function extractMajorVersion(raw: string): number | null {
 export function extractVersions(
     nvmrcContent: string,
     packageJson: PackageJson,
-): {
-    nvmrc: number | null;
-    enginesNode: number | null;
-    typesNode: number | null;
-} {
+): NodeVersions {
     return {
         nvmrc: extractMajorVersion(nvmrcContent),
         enginesNode: packageJson.engines?.node
@@ -69,11 +72,7 @@ export function extractVersions(
  * @param versions - {@link extractVersions} の戻り値
  * @returns 不一致メッセージの一覧（一致していれば空配列）
  */
-export function findVersionMismatches(versions: {
-    nvmrc: number | null;
-    enginesNode: number | null;
-    typesNode: number | null;
-}): string[] {
+export function findVersionMismatches(versions: NodeVersions): string[] {
     const entries: [string, number | null][] = [
         ['.nvmrc', versions.nvmrc],
         ['package.json engines.node', versions.enginesNode],

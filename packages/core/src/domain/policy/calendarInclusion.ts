@@ -163,17 +163,14 @@ const isMechanicalGradeSpecified = (raceEntity: RaceEntity): boolean =>
  * RaceType ごとのカレンダー対象条件を定義
  * 各RaceTypeが、どのグレード・ステージのレースをカレンダーに登録すべきかを管理
  */
-const calendarRaceFilterRules: Record<
-    RaceType,
-    (raceEntity: RaceEntity) => boolean
-> = {
+const calendarRaceFilterRules = {
     [RaceType.JRA]: isHorseGradeSpecified,
     [RaceType.NAR]: isHorseGradeSpecified,
     [RaceType.OVERSEAS]: isHorseGradeSpecified,
     [RaceType.KEIRIN]: isMechanicalGradeSpecified,
     [RaceType.AUTORACE]: isMechanicalGradeSpecified,
     [RaceType.BOATRACE]: isMechanicalGradeSpecified,
-};
+} satisfies Record<RaceType, (raceEntity: RaceEntity) => boolean>;
 
 /**
  * レースがカレンダーに含まれるべきかを判定

@@ -108,10 +108,16 @@ const checkDocFile = (docFile: string): StaleReference[] => {
     return results;
 };
 
+/** 検出結果を「対応が必要」「既知の履歴ログ（対応不要）」に分けた2バケット。 */
+interface PartitionedReferences {
+    stale: StaleReference[];
+    historical: StaleReference[];
+}
+
 /** 検出結果を「対応が必要」「既知の履歴ログ（対応不要）」の2バケットに分ける。 */
 export const partitionReferences = (
     references: readonly StaleReference[],
-): { stale: StaleReference[]; historical: StaleReference[] } => ({
+): PartitionedReferences => ({
     stale: references.filter((ref) => !isKnownHistoricalLog(ref.docFile)),
     historical: references.filter((ref) => isKnownHistoricalLog(ref.docFile)),
 });

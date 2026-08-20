@@ -44,7 +44,7 @@ type CoverageState = 'covered' | 'gap' | 'pending';
  * Phase が進むたびにここを true にするだけで requires のブロッキング対象が広がる
  * （.claude/docs/spec-traceability/README.md §5 段階導入）。
  */
-const LAYER_ENFORCEABLE: Record<Layer, boolean> = {
+const LAYER_ENFORCEABLE = {
     UT: true,
     Component: true,
     // Phase 2 解禁済み（2026-07-23）: tests/shared/env/setupMiniflareEnv.ts が
@@ -53,7 +53,7 @@ const LAYER_ENFORCEABLE: Record<Layer, boolean> = {
     sIT: true,
     E2E: false, // Phase 3: tests/e2e/ 整備後に true
     UAT: false, // Phase 3: tests/uat/{synthetic,contract}/ 整備後に true（smokeのみ実装済み）
-};
+} satisfies Record<Layer, boolean>;
 
 const LAYER_PATH_PATTERNS: ReadonlyArray<readonly [Layer, RegExp]> = [
     ['UT', /^packages\/[^/]+\/test\/unittest\//],
@@ -86,6 +86,12 @@ interface Issue {
     file: string;
 }
 
+/** @spec タグの突合で見つかった問題（実在しないID・廃止仕様への参照）。 */
+interface SpecIssues {
+    orphanTags: Issue[];
+    deprecatedRefs: Issue[];
+}
+
 interface SpecCoverageResult {
     id: string;
     title: string;
@@ -100,10 +106,7 @@ interface SpecCoverageResult {
 
 interface SpecCoverageReport {
     specs: SpecCoverageResult[];
-    issues: {
-        orphanTags: Issue[];
-        deprecatedRefs: Issue[];
-    };
+    issues: SpecIssues;
     summary: {
         totalActiveSpecs: number;
         fullyCovered: number;
@@ -124,7 +127,10 @@ const NOTES = [
 
 // ---- front-matter パース ----
 
-type RawFrontMatter = Record<string, string | string[]>;
+/** front-matter の生データ（キー → スカラー文字列 or 文字列配列）。 */
+interface RawFrontMatter {
+    [key: string]: string | string[];
+}
 
 /**
  * front-matter（`--- ... ---` で囲まれた領域）を最小限のスキーマ
@@ -332,7 +338,7 @@ const computeSpecCoverage = (
 const computeIssues = (
     allSpecs: readonly SpecEntry[],
     taggedFiles: readonly TaggedFile[],
-): { orphanTags: Issue[]; deprecatedRefs: Issue[] } => {
+): SpecIssues => {
     const specById = new Map(allSpecs.map((s) => [s.id, s]));
     const orphanTags: Issue[] = [];
     const deprecatedRefs: Issue[] = [];

@@ -26,6 +26,11 @@ const TOKENS_PATH = join(
     '../packages/front/lib/design/tokens.dart',
 );
 
+/** 配色キー → 16進カラー値（大文字、`#`付き）のマップ。 */
+interface ColorMap {
+    [key: string]: string;
+}
+
 /**
  * `export const FRONT_COLORS(_DARK)? = { key: '#RRGGBB', ... };` からキー→色を抽出する。
  * @param content - adminPageChrome.ts の内容
@@ -35,13 +40,13 @@ const TOKENS_PATH = join(
 export function extractAdminColors(
     content: string,
     constName: 'FRONT_COLORS' | 'FRONT_COLORS_DARK',
-): Record<string, string> {
+): ColorMap {
     const blockRegex = new RegExp(
         `export const ${constName} = \\{([\\s\\S]*?)\\n\\};`,
     );
     const blockMatch = content.match(blockRegex);
     if (!blockMatch) return {};
-    const colors: Record<string, string> = {};
+    const colors: ColorMap = {};
     const entryRegex = /^\s*(\w+):\s*'(#[0-9A-Fa-f]{6})',?/gm;
     for (const entryMatch of blockMatch[1].matchAll(entryRegex)) {
         colors[entryMatch[1]] = entryMatch[2].toUpperCase();
@@ -59,13 +64,13 @@ export function extractAdminColors(
 export function extractTokensDartColors(
     content: string,
     themeName: 'light' | 'dark',
-): Record<string, string> {
+): ColorMap {
     const blockRegex = new RegExp(
         `static const ${themeName} = AppColors\\(([\\s\\S]*?)\\n\\s{2}\\);`,
     );
     const blockMatch = content.match(blockRegex);
     if (!blockMatch) return {};
-    const colors: Record<string, string> = {};
+    const colors: ColorMap = {};
     const entryRegex = /^\s*(\w+):\s*Color\(0xFF([0-9A-Fa-f]{6})\),?/gm;
     for (const entryMatch of blockMatch[1].matchAll(entryRegex)) {
         colors[entryMatch[1]] = `#${entryMatch[2].toUpperCase()}`;
@@ -82,8 +87,8 @@ export function extractTokensDartColors(
  * @returns 不一致の説明メッセージ一覧（一致していれば空配列）
  */
 export function findColorDrift(
-    adminColors: Record<string, string>,
-    tokensColors: Record<string, string>,
+    adminColors: ColorMap,
+    tokensColors: ColorMap,
     themeLabel: string,
 ): string[] {
     const messages: string[] = [];

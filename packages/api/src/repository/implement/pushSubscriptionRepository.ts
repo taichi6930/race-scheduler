@@ -14,6 +14,18 @@ import type {
 } from '../interface/IPushSubscriptionRepository';
 
 /**
+ * 購読upsert時に`onConflictDoUpdate`の`set`へ渡す更新値。
+ * secretHashは未指定時に既存値を上書きしないよう任意にしている。
+ */
+interface PushSubscriptionUpdateValues {
+    endpoint: string;
+    p256dh: string;
+    auth: string;
+    updatedAt: SQL;
+    secretHash?: string;
+}
+
+/**
  * Web Push 購読リポジトリの DB 実装。
  */
 @LogAllMethods
@@ -28,13 +40,7 @@ export class PushSubscriptionRepository implements IPushSubscriptionRepository {
         // SEC-053: PUSH_AUTH_ENCRYPTION_KEY設定時はauthを暗号化して保存する
         // （未設定時はencryptPushAuthが平文をそのまま返す）。
         const encryptedAuth = await encryptPushAuth(record.auth);
-        const updateValues: {
-            endpoint: string;
-            p256dh: string;
-            auth: string;
-            updatedAt: SQL;
-            secretHash?: string;
-        } = {
+        const updateValues: PushSubscriptionUpdateValues = {
             endpoint: record.endpoint,
             p256dh: record.p256dh,
             auth: encryptedAuth,

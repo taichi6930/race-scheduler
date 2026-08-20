@@ -52,8 +52,13 @@ const WIDGETBOOK_PATH = join(FRONT_LIB, 'widgetbook.dart');
 /** ルールCの検査対象レイヤー（widgetbookに登録が必要な層）。 */
 const WIDGETBOOK_CHECKED_LAYERS = ['atoms', 'molecules', 'organisms'];
 
+/** レイヤー名 → そのレイヤーが design 配下で import してよいレイヤー一覧。 */
+interface AllowedImportsMap {
+    [layer: string]: readonly string[];
+}
+
 /** レイヤー名 → そのレイヤーが design 配下で import してよいレイヤー。 */
-const ALLOWED_IMPORTS: Record<string, readonly string[]> = {
+const ALLOWED_IMPORTS: AllowedImportsMap = {
     atoms: [],
     molecules: ['atoms'],
     organisms: ['atoms', 'molecules'],

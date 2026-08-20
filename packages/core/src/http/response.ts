@@ -11,11 +11,11 @@ import { withCorsHeaders } from '../http/cors';
  * リファラ経由の情報漏洩を防ぐ。front側（`packages/front/web/index.html`）のCSP設定は
  * SEC-055で別途検討中（実機検証を伴う高リスク変更のため見送り中）。
  */
-const SECURITY_HEADERS: Readonly<Record<string, string>> = {
+const SECURITY_HEADERS = {
     'Content-Security-Policy': "default-src 'none'",
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'no-referrer',
-};
+} as const satisfies Record<string, string>;
 
 export const json = (
     body: unknown,
@@ -35,7 +35,12 @@ export const json = (
  * 一意に導出する安定値とし、`badRequest`/`internalError`呼び出し側の20箇所超を
  * 個別修正せずに済むよう、既存の `status` 引数から自動的に付与する。
  */
-export const ERROR_CODE_BY_STATUS: Readonly<Record<number, string>> = {
+/** HTTPステータスコード → 機械可読なエラーコードの対応表。 */
+interface ErrorCodeByStatus {
+    readonly [status: number]: string;
+}
+
+export const ERROR_CODE_BY_STATUS: ErrorCodeByStatus = {
     400: 'BAD_REQUEST',
     401: 'UNAUTHORIZED',
     403: 'FORBIDDEN',

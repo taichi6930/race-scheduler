@@ -18,6 +18,17 @@ const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 /** ISO 8601 形式（日時部分含む）判定用 */
 const ISO_DATETIME_PATTERN = /^\d{4}-\d{2}-\d{2}T/;
 
+/** クエリパラメータ1件を型推測して変換した結果の値。 */
+type NormalizedQueryValue = boolean | Date | number | string;
+
+/**
+ * クエリパラメータ名 → 型推測後の値の対応表（Zod スキーマで検証する前の中間表現）。
+ * 同一キーが複数回出現した場合・カンマ区切りだった場合は配列になる。
+ */
+interface NormalizedQueryParams {
+    [key: string]: NormalizedQueryValue | NormalizedQueryValue[];
+}
+
 /**
  * URLSearchParams を正規化してZodスキーマでパースする
  * 日付文字列 -> Date、boolean文字列 -> boolean、などの変換を行う
@@ -52,12 +63,10 @@ export const parseQueryParams = <T>(
  * 分割を行わない挙動を維持する）。
  * @param searchParams
  */
-/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- 呼び出し元のparseQueryParamsが
-   直後にZodスキーマでパース・検証するため、この中間表現の時点ではRecord<string, unknown>で正しい */
 const normalizeSearchParams = (
     searchParams: URLSearchParams,
-): Record<string, unknown> => {
-    const result: Record<string, unknown> = {};
+): NormalizedQueryParams => {
+    const result: NormalizedQueryParams = {};
     // 単一出現のままカンマを含む値を持つキーの生値を保持する（キー単位で高々1件）。
     // 複数回出現するキーになった時点で pending から外れ、以後は分割対象にしない。
     const pendingRawValues = new Map<string, string>();
@@ -87,7 +96,6 @@ const normalizeSearchParams = (
 
     return result;
 };
-/* oxlint-enable anti-slop/no-unsafe-dictionary-type */
 
 /**
  * 文字列がカンマ区切り値かどうかを判定する型ガード。
@@ -111,8 +119,7 @@ const isNumericString = (value: string): boolean =>
  * 値を推測して型変換する
  * @param value
  */
-// oxlint-disable-next-line anti-slop/no-unknown-returns -- boolean/Date/number/stringのいずれかを推測で返すヒューリスティック。呼び出し元のparseQueryParamsが直後にZodスキーマでパース・検証するため、この時点ではunknownで正しい
-const normalizeValue = (value: string): unknown => {
+const normalizeValue = (value: string): NormalizedQueryValue => {
     // boolean
     if (value === 'true') return true;
     if (value === 'false') return false;

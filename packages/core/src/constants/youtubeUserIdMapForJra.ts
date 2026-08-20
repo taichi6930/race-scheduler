@@ -1,8 +1,10 @@
+import type { YoutubeUserIdMap } from './youtubeUserIdMap';
+
 /**
  * JRA（中央競馬）のYoutubeのユーザーID
  */
 
-export const YoutubeUserIdMapForJra: Record<string, string> = {
+export const YoutubeUserIdMapForJra: YoutubeUserIdMap = {
     札幌: 'jraofficial',
     函館: 'jraofficial',
     福島: 'jraofficial',
