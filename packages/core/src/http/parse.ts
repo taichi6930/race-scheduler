@@ -122,7 +122,7 @@ export const parseCommonSearchParams = (
     } catch (error) {
         const message =
             error instanceof Error ? error.message : 'Validation error';
-        throw new ValidationError(message, 400);
+        throw new ValidationError(message, 400, { cause: error });
     }
 };
 
