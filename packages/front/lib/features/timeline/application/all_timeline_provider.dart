@@ -136,7 +136,7 @@ final allTimelineRacesProvider = Provider<AllTimelineData>((ref) {
   final enabledDisciplines = ref.watch(
     settingsProvider.select((s) => s.enabledDisciplines),
   );
-  final favorites = ref.watch(favoriteIdsProvider);
+  final favorites = ref.watch(favoriteIdsProvider).value ?? const <String>{};
 
   final sortedRaces = ref.watch(_allTimelineSortedRacesProvider);
   final filtered = applyTimelineFilter(

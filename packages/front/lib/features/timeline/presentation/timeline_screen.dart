@@ -177,7 +177,7 @@ class TimelineScreen extends ConsumerWidget {
     final enabledDisciplines = ref.watch(
       settingsProvider.select((s) => s.enabledDisciplines),
     );
-    final favorites = ref.watch(favoriteIdsProvider);
+    final favorites = ref.watch(favoriteIdsProvider).value ?? const <String>{};
     final now = ref.watch(nowProvider).value ?? jstNow();
     final venues = viewMode == TimelineViewMode.day
         ? ref.watch(visibleTimelineVenuesProvider(date))

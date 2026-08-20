@@ -40,7 +40,7 @@ void main() {
       final prefs = await SharedPreferences.getInstance();
       final repository = LocalFavoritesRepository(prefs);
 
-      expect(repository.loadFavoriteRaceIds(), isEmpty);
+      expect(await repository.loadFavoriteRaceIds(), isEmpty);
     });
 
     test('[T-02] 保存した集合がそのまま読み出せる', () async {
@@ -50,7 +50,7 @@ void main() {
       await repository.saveFavoriteRaceIds({'race-001', 'race-002'});
 
       expect(
-        repository.loadFavoriteRaceIds(),
+        await repository.loadFavoriteRaceIds(),
         equals({'race-001', 'race-002'}),
       );
     });
@@ -62,7 +62,7 @@ void main() {
       await repository.saveFavoriteRaceIds({'race-001'});
       await repository.saveFavoriteRaceIds({});
 
-      expect(repository.loadFavoriteRaceIds(), isEmpty);
+      expect(await repository.loadFavoriteRaceIds(), isEmpty);
     });
 
     test('[T-04] 書き込み成功時_trueを返す', () async {

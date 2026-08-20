@@ -3,6 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../auth/application/auth_router_state.dart';
+import '../auth/presentation/invite_register_screen.dart';
+import '../auth/presentation/login_screen.dart';
 import '../design/breakpoints.dart';
 import '../features/announcement/presentation/announcement_banner_listener.dart';
 import '../features/favorites/application/favorite_ids_provider.dart';
@@ -38,9 +41,35 @@ final GoRouter appRouter = GoRouter(
   // QWEB-04: ルート `/` に対応する GoRoute が無いと NotFoundScreen に落ちてしまう
   // （ブックマーク・裸のオリジン共有・push-sw.js の許可外URLフォールバック先が `/`
   // のいずれも404画面へ着地していた）。タイムラインへ誘導する。
-  redirect: (context, state) =>
-      state.uri.path == '/' ? _AppDestination.timeline.path : null,
+  //
+  // 全画面ログイン必須（招待制クローズドサービス化）: セッションが無い状態で
+  // `/login`・`/invite/:token` 以外へアクセスしたらログイン画面へ、逆に
+  // ログイン済みで`/login`へアクセスしたらタイムラインへ誘導する。
+  // [authRouterState] は `MyApp`（`app.dart`）が `sessionProvider` の変化の
+  // たびに反映するブリッジで、[refreshListenable] 経由でこの `redirect` を
+  // 再評価させる（`appRouter`はトップレベル定数のためRiverpodの`ref`を
+  // 持てない。`AuthInterceptor`がDio側で同じ理由からプレーンフィールドで
+  // 橋渡しするのと同じ設計、詳細は `auth_router_state.dart` 参照）。
+  refreshListenable: authRouterState,
+  redirect: (context, state) {
+    if (state.uri.path == '/') return _AppDestination.timeline.path;
+
+    final path = state.uri.path;
+    final isAuthRoute = path == '/login' || path.startsWith('/invite/');
+    if (!authRouterState.isLoggedIn && !isAuthRoute) return '/login';
+    if (authRouterState.isLoggedIn && path == '/login') {
+      return _AppDestination.timeline.path;
+    }
+    return null;
+  },
   routes: [
+    GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+    GoRoute(
+      path: '/invite/:token',
+      builder: (context, state) => InviteRegisterScreen(
+        inviteToken: state.pathParameters['token']!,
+      ),
+    ),
     GoRoute(
       path: '/trip-groups',
       builder: (context, state) => const TripGroupsScreen(),
@@ -286,7 +315,7 @@ class AppShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final favoriteCount = ref.watch(
-      favoriteIdsProvider.select((ids) => ids.length),
+      favoriteIdsProvider.select((async) => async.value?.length ?? 0),
     );
     // 新バージョンのお知らせ（FR-04）・Server-Driven UI PoCのお知らせバナーは、
     // 常設タブのシェル全体に1度だけ組み込む（詳細はそれぞれの

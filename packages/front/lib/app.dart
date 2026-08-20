@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'auth/application/auth_router_state.dart';
+import 'auth/application/session_provider.dart';
 import 'design/theme.dart';
 import 'domain/entities/race_entity.dart';
 import 'features/favorites/application/favorite_races_provider.dart';
@@ -22,6 +24,21 @@ class MyApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // 全画面ログイン必須: appRouterのredirectはRiverpodのrefを持てないため、
+    // authRouterStateという橋渡しを参照する（navigation/app_router.dart）。
+    // ここで毎buildごとにsessionProviderの現在値を反映することで、
+    // - 初回起動時: MaterialApp.routerが最初のredirectを評価する前に
+    //   authRouterStateへ確実に反映される（でなければログイン済みでも
+    //   一瞬/loginへ弾かれてしまう）
+    // - ログイン/ログアウト後: sessionProviderの変化でMyAppが再buildされ、
+    //   その都度authRouterStateも追従する
+    // の両方を1箇所でまかなう。`SessionNotifier`自体は`authRouterState`を
+    // 意識しない設計にしており（テスト用/モック用にbuild()をまるごと
+    // 上書きするNotifierでも一貫して反映されるようにするため）、
+    // 反映ポイントをここに集約している。
+    final session = ref.watch(sessionProvider);
+    authRouterState.update(session != null);
+
     // PERF-131: 戻り値を使わない副作用専用の起動のため、watchではなくreadで
     // 一度きり起動する（watchだとAsyncValue遷移（loading→data）のたびに
     // MyApp全体が再ビルドされてしまう）。

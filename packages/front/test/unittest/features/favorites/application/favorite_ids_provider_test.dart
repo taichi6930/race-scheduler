@@ -34,7 +34,7 @@ class _CountingFavoritesRepository implements IFavoritesRepository {
   final List<Set<String>> savedSnapshots = [];
 
   @override
-  Set<String> loadFavoriteRaceIds() => _stored;
+  Future<Set<String>> loadFavoriteRaceIds() async => _stored;
 
   @override
   Future<bool> saveFavoriteRaceIds(Set<String> raceIds) async {
@@ -63,27 +63,34 @@ void main() {
     test('[T-01] 初期状態_空集合', () async {
       final container = await buildContainer();
 
-      expect(container.read(favoriteIdsProvider), isEmpty);
+      final ids = await container.read(favoriteIdsProvider.future);
+
+      expect(ids, isEmpty);
     });
 
     test('[T-02] 未登録レースをtoggle_追加されisFavoriteがtrue', () async {
       final container = await buildContainer();
+      await container.read(favoriteIdsProvider.future);
       final notifier = container.read(favoriteIdsProvider.notifier);
 
       notifier.toggle('race-001');
 
-      expect(container.read(favoriteIdsProvider), contains('race-001'));
+      expect(container.read(favoriteIdsProvider).value, contains('race-001'));
       expect(notifier.isFavorite('race-001'), isTrue);
     });
 
     test('[T-03] 登録済みレースをtoggle_削除されisFavoriteがfalse', () async {
       final container = await buildContainer();
+      await container.read(favoriteIdsProvider.future);
       final notifier = container.read(favoriteIdsProvider.notifier);
       notifier.toggle('race-001');
 
       notifier.toggle('race-001');
 
-      expect(container.read(favoriteIdsProvider), isNot(contains('race-001')));
+      expect(
+        container.read(favoriteIdsProvider).value,
+        isNot(contains('race-001')),
+      );
       expect(notifier.isFavorite('race-001'), isFalse);
     });
 
@@ -92,7 +99,11 @@ void main() {
       final firstContainer = ProviderContainer(
         overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
       );
-      firstContainer.read(favoriteIdsProvider.notifier).toggle('race-042');
+      await firstContainer.read(favoriteIdsProvider.future);
+      // toggle()が返すFutureはデバウンス後の実際の永続化完了を表す
+      // （PERF-112）。これをawaitすることで、書き込み完了後に確実に
+      // dispose・別コンテナでの再読込へ進める。
+      await firstContainer.read(favoriteIdsProvider.notifier).toggle('race-042');
       firstContainer.dispose();
 
       final secondContainer = ProviderContainer(
@@ -100,7 +111,8 @@ void main() {
       );
       addTearDown(secondContainer.dispose);
 
-      expect(secondContainer.read(favoriteIdsProvider), contains('race-042'));
+      final ids = await secondContainer.read(favoriteIdsProvider.future);
+      expect(ids, contains('race-042'));
     });
 
     test('[T-05] デバウンス時間内の複数toggle_保存は1回のみ最終状態で行われる', () {
@@ -113,6 +125,7 @@ void main() {
         );
         addTearDown(container.dispose);
         final notifier = container.read(favoriteIdsProvider.notifier);
+        async.flushMicrotasks();
 
         notifier.toggle('race-001');
         notifier.toggle('race-002');
@@ -136,11 +149,13 @@ void main() {
           ],
         );
         final notifier = container.read(favoriteIdsProvider.notifier);
+        async.flushMicrotasks();
 
         notifier.toggle('race-003');
         expect(repository.saveCallCount, 0);
 
         container.dispose();
+        async.flushMicrotasks();
 
         expect(repository.saveCallCount, 1);
         expect(repository.savedSnapshots.single, {'race-003'});
@@ -162,6 +177,7 @@ void main() {
         );
         addTearDown(container.dispose);
         final notifier = container.read(favoriteIdsProvider.notifier);
+        async.flushMicrotasks();
         notifier.toggle('race-001');
         notifier.toggle('race-002');
         async.elapse(favoriteSaveDebounceDuration);
@@ -169,7 +185,7 @@ void main() {
 
         notifier.clearAll();
 
-        expect(container.read(favoriteIdsProvider), isEmpty);
+        expect(container.read(favoriteIdsProvider).value, isEmpty);
         async.elapse(favoriteSaveDebounceDuration);
         expect(repository.saveCallCount, 2);
         expect(repository.savedSnapshots.last, isEmpty);

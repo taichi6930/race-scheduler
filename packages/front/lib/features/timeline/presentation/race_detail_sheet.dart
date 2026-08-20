@@ -101,7 +101,9 @@ class RaceDetailContent extends ConsumerWidget {
     // 対象raceIdの真偽値のみ購読する（PERF-116）。favoriteIdsProvider全体を
     // watchすると、別レースのお気に入り操作でもシート全体が再構築されてしまう。
     final isFavorite = ref.watch(
-      favoriteIdsProvider.select((ids) => ids.contains(race.raceId)),
+      favoriteIdsProvider.select(
+        (async) => async.value?.contains(race.raceId) ?? false,
+      ),
     );
     final time = parseJstDateTime(race.datetime);
     final condition = _buildCondition(race);

@@ -13,9 +13,11 @@ class LocalFavoritesRepository implements IFavoritesRepository {
   final SharedPreferences _prefs;
 
   @override
-  Set<String> loadFavoriteRaceIds() {
-    return (_prefs.getStringList(kFavoriteRaceIdsPrefsKey) ?? const <String>[])
-        .toSet();
+  Future<Set<String>> loadFavoriteRaceIds() {
+    return Future.value(
+      (_prefs.getStringList(kFavoriteRaceIdsPrefsKey) ?? const <String>[])
+          .toSet(),
+    );
   }
 
   @override

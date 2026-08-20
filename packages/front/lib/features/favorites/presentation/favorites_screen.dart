@@ -223,7 +223,9 @@ class _FavoriteRaceRow extends ConsumerWidget {
     // 注目選手由来(isWatched)で表示されている場合がある。星の見た目は
     // 実際にローカル登録されているかどうかで正しく出し分ける。
     final isFavorite = ref.watch(
-      favoriteIdsProvider.select((ids) => ids.contains(race.raceId)),
+      favoriteIdsProvider.select(
+        (async) => async.value?.contains(race.raceId) ?? false,
+      ),
     );
     return RaceRow(
       race: race,

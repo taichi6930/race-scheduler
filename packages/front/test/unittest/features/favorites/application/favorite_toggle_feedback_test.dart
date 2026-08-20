@@ -49,7 +49,7 @@ void main() {
     await tester.tap(find.text('トグル'));
     await tester.pump();
 
-    expect(ref.read(favoriteIdsProvider), contains('race-001'));
+    expect(ref.read(favoriteIdsProvider).value, contains('race-001'));
     expect(find.text('お気に入りに登録しました'), findsOneWidget);
   });
 
@@ -62,7 +62,7 @@ void main() {
     await tester.tap(find.text('トグル'));
     await tester.pump();
 
-    expect(ref.read(favoriteIdsProvider), isNot(contains('race-001')));
+    expect(ref.read(favoriteIdsProvider).value, isNot(contains('race-001')));
     expect(find.text('お気に入りに登録しました'), findsNothing);
   });
 
@@ -76,6 +76,6 @@ void main() {
     await tester.tap(find.text('取り消す'));
     await tester.pump();
 
-    expect(ref.read(favoriteIdsProvider), isNot(contains('race-001')));
+    expect(ref.read(favoriteIdsProvider).value, isNot(contains('race-001')));
   });
 }
