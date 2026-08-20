@@ -10,17 +10,17 @@ import { getNarDescription } from './nar.builder';
  * JRA/NAR/KEIRIN は専用ロジック、AUTORACE/BOATRACE/OVERSEAS は
  * 発走時刻と更新時刻のみのシンプルな共通実装（getSimpleDescription）を用いる。
  */
-const DESCRIPTION_BUILDER_BY_RACE_TYPE: Record<
-    RaceType,
-    (raceEntity: RaceEntity, updateDate: Date) => string
-> = {
+const DESCRIPTION_BUILDER_BY_RACE_TYPE = {
     [RaceType.JRA]: getJraDescription,
     [RaceType.NAR]: getNarDescription,
     [RaceType.KEIRIN]: getKeirinDescription,
     [RaceType.AUTORACE]: getSimpleDescription,
     [RaceType.BOATRACE]: getSimpleDescription,
     [RaceType.OVERSEAS]: getSimpleDescription,
-};
+} satisfies Record<
+    RaceType,
+    (raceEntity: RaceEntity, updateDate: Date) => string
+>;
 
 /**
  * RaceTypeに応じてカレンダー説明文を生成

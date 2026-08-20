@@ -10,17 +10,14 @@ import type { RaceLink } from './raceLink';
  * JRA/NAR/KEIRIN は専用ロジック、AUTORACE/BOATRACE/OVERSEAS は
  * 対応データが無いため空配列を返す。
  */
-const RACE_LINKS_BUILDER_BY_RACE_TYPE: Record<
-    RaceType,
-    (raceEntity: RaceEntity) => RaceLink[]
-> = {
+const RACE_LINKS_BUILDER_BY_RACE_TYPE = {
     [RaceType.JRA]: buildJraRaceLinks,
     [RaceType.NAR]: buildNarRaceLinks,
     [RaceType.KEIRIN]: buildKeirinRaceLinks,
     [RaceType.AUTORACE]: () => [],
     [RaceType.BOATRACE]: () => [],
     [RaceType.OVERSEAS]: () => [],
-};
+} satisfies Record<RaceType, (raceEntity: RaceEntity) => RaceLink[]>;
 
 /**
  * レースに関連する外部リンク（netkeiba出馬表・レース動画・YouTube公式配信等）を取得する。

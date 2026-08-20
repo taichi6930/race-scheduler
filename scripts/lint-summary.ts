@@ -22,6 +22,12 @@ interface CommandResult {
     output: string;
 }
 
+/** lint 出力から抽出したエラー・警告の件数。 */
+interface LintCounts {
+    errors: number;
+    warnings: number;
+}
+
 /**
  * コマンドを実行し、標準出力・標準エラーを結合したテキストと終了コードを返す。
  * @param cmd - 実行するコマンド（配列形式）
@@ -44,9 +50,7 @@ const runCapture = (cmd: string[]): CommandResult => {
  * @param output - biome の結合出力
  * @returns エラー件数・警告件数
  */
-const parseBiomeCounts = (
-    output: string,
-): { errors: number; warnings: number } => {
+const parseBiomeCounts = (output: string): LintCounts => {
     const errorMatch = output.match(/Found (\d+) error/);
     const warningMatch = output.match(/Found (\d+) warning/);
     return {
@@ -61,9 +65,7 @@ const parseBiomeCounts = (
  * @param output - eslint の結合出力
  * @returns エラー件数・警告件数
  */
-const parseEslintCounts = (
-    output: string,
-): { errors: number; warnings: number } => {
+const parseEslintCounts = (output: string): LintCounts => {
     const match = output.match(
         /\d+\s+problems?\s*\((\d+)\s+errors?,\s*(\d+)\s+warnings?\)/,
     );

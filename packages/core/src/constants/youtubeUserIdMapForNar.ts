@@ -1,8 +1,10 @@
+import type { YoutubeUserIdMap } from './youtubeUserIdMap';
+
 /**
  * 地方競馬のYoutubeのユーザーID
  */
 
-export const YoutubeUserIdMapForNar: Record<string, string> = {
+export const YoutubeUserIdMapForNar: YoutubeUserIdMap = {
     門別: 'live2820',
     帯広ば: 'ばんえい十勝公式',
     水沢: 'IwateKeibaITV',

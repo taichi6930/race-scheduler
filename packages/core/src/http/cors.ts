@@ -17,7 +17,10 @@ import { appLogger } from '../utilities/appLogger';
  * - ワイルドカード許可（*）は推奨されません
  */
 
-type HeaderRecord = Record<string, string>;
+/** HTTPヘッダー名 → 値の対応表。 */
+interface HeaderRecord {
+    [name: string]: string;
+}
 
 /**
  * デフォルトで許可するオリジン（開発環境用）。

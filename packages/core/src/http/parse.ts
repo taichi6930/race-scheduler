@@ -126,12 +126,15 @@ export const parseCommonSearchParams = (
     }
 };
 
-export const parseRaceSearchParams = (
-    searchParams: URLSearchParams,
-): {
+/** レース検索クエリ（placeIdList / placeHeldDaysMap）の解析結果。 */
+interface RaceSearchParams {
     placeIdList: string[];
     placeHeldDaysMap?: Record<string, PlaceHeldDays>;
-} => {
+}
+
+export const parseRaceSearchParams = (
+    searchParams: URLSearchParams,
+): RaceSearchParams => {
     const placeIdListRaw = searchParams.get('placeIdList');
     if (!placeIdListRaw) {
         throw new ValidationError('placeIdListは必須です', 400);

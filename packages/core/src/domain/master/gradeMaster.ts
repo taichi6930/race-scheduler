@@ -29,6 +29,16 @@ export interface GradeMasterEntry {
 }
 
 /**
+ * グレードマスタの型（`raceType` → `grade名` → エントリ）。
+ * グレード名は実行時に決まる文字列（スクレイピング結果等）で引かれるため、
+ * キーを固定できない索引型として持つ。
+ */
+interface GradeMasterTable
+    extends Readonly<
+        Record<RaceType, Readonly<Record<string, GradeMasterEntry>>>
+    > {}
+
+/**
  * グレードのマスタ（`raceType` → `grade名` → エントリ）。
  *
  * `(raceType, grade)` を主キーとする構造で、全消費側（グレードのバリデーション・
@@ -40,9 +50,7 @@ export interface GradeMasterEntry {
  * 単一の正典とし、手動で同期した静的テーブルを持つ。バックエンドのグレードマスタが
  * 変更された場合は、そちらも追従させること。
  */
-export const GradeMaster: Readonly<
-    Record<RaceType, Readonly<Record<string, GradeMasterEntry>>>
-> = {
+export const GradeMaster: GradeMasterTable = {
     [RaceType.JRA]: {
         GⅠ: { isSpecified: true, tier: 'top' },
         GⅡ: { isSpecified: true, tier: 'high' },

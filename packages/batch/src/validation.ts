@@ -139,11 +139,11 @@ export const dateRangeErrorMessage = (
     reason: DateRangeValidationReason,
     maxDays: number,
 ): string => {
-    const messageByReason: Record<DateRangeValidationReason, string> = {
+    const messageByReason = {
         'invalid-date':
             'startDate and finishDate must be valid YYYY-MM-DD dates',
         'negative-range': 'finishDate must be the same or after startDate',
         'range-too-large': `Range too large: finishDate - startDate must be ${maxDays} days or less`,
-    };
+    } satisfies Record<DateRangeValidationReason, string>;
     return messageByReason[reason];
 };

@@ -87,6 +87,11 @@ const resolvePolicy = (
  */
 const checkServiceAuth = async (c: Context): Promise<boolean> => {
     const presentedToken = c.req.raw.headers.get(SERVICE_AUTH_HEADER);
+    // SAFETY: このミドルウェアは汎用の`Context`（Env型引数なし）で受けるためc.envの型情報が
+    // 失われるが、実行時はCloudflare Workersのfetchハンドラから CloudFlareEnv 形状の
+    // bindings が渡ってくる。ここで読むのは任意のstring環境変数2つだけで、c.env自体が
+    // 無い場合も`?? {}`で空オブジェクトへ倒れ、両トークンがundefinedなら
+    // verifyServiceAuthTokenがfalseを返す（フェイルクローズ）ため、形が違っても危険側に倒れない
     const env = (c.env ?? {}) as CloudFlareEnv;
     return verifyServiceAuthToken(
         presentedToken,
@@ -160,6 +165,10 @@ export const requireAppAuth = (
             return;
         }
 
+        // SAFETY: checkServiceAuthと同じく汎用の`Context`でc.envの型情報が失われるだけで、
+        // 実体はCloudflare Workersのbindings。形状の検証は委譲先が実際に行っており、
+        // ensureDIInitialized → EnvStore.setEnv → validateEnv が API_REQUIRED_KEYS の
+        // 欠落を初回リクエスト時にチェックし、欠けていれば例外を投げて処理を止める
         ensureDIInitialized(c.env as CloudFlareEnv);
 
         if (acceptsServiceAuth(policy)) {

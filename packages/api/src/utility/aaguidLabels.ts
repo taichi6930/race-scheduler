@@ -1,3 +1,8 @@
+/** AAGUID（認証器の機種ID）→表示名の対応表。未知のAAGUIDも引けるよう文字列キーで参照する。 */
+interface AaguidLabelMap {
+    readonly [aaguid: string]: string;
+}
+
 /**
  * よく使われるパスキー機構のAAGUID→表示名の対応表（一部のみ）。
  * @remarks
@@ -10,7 +15,7 @@
  * 対応表に無い認証器が増えてきたら、上記対応表からの追記を検討する
  * （上限=この一覧のみ、アップグレード経路=行追加）。
  */
-const KNOWN_AAGUID_LABELS: Readonly<Record<string, string>> = {
+const KNOWN_AAGUID_LABELS: AaguidLabelMap = {
     '08987058-cadc-4b81-b6e1-30de50dcbe96': 'Windows Hello',
     '9ddd1817-af5a-4672-a2b9-3e3dd95000a9': 'Windows Hello',
     'dd4ec289-e01d-41c9-bb89-70fa845d4bf2': 'iCloudキーチェーン',
