@@ -42,6 +42,13 @@ class _FakeAuthRepository implements IAuthRepository {
   Future<bool> verifyInvite(String inviteToken) async => inviteValid;
 
   @override
+  Future<String> requestJoin(String nickname) => throw UnimplementedError();
+
+  @override
+  Future<JoinRequestStatus> fetchJoinRequestStatus(String requestId) =>
+      throw UnimplementedError();
+
+  @override
   Future<AuthChallenge?> fetchRegisterOptions(String inviteToken) async =>
       registerOptions;
 

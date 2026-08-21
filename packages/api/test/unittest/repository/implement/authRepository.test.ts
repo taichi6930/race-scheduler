@@ -23,6 +23,14 @@
  * | T-18 | validateAndRefreshSession      | 存在しないtoken                               | null                                    |
  * | T-19 | deleteSession                  | 正常系                                       | 以後validateAndRefreshSessionがnull      |
  * | T-20 | listParticipants               | 1人が複数credentialを持つ                     | credential数分の行を返す                |
+ * | T-21 | findJoinRequestById            | 存在するリクエスト                            | レコードを返す                          |
+ * | T-22 | findJoinRequestById            | 存在しないid                                  | null                                    |
+ * | T-23 | listPendingJoinRequests        | pending/approved混在                          | pending分のみ返す                       |
+ * | T-24 | approveJoinRequest             | pending状態                                   | true・inviteToken/statusが更新される     |
+ * | T-25 | approveJoinRequest             | 既にapproved（対象外）                        | false・状態は変わらない                 |
+ * | T-26 | approveJoinRequest             | 存在しないid                                  | false                                   |
+ * | T-27 | rejectJoinRequest              | pending状態                                   | true・statusがrejectedになる            |
+ * | T-28 | rejectJoinRequest              | 既にrejected（対象外）                        | false                                   |
  */
 
 import { beforeEach, describe, expect, it } from 'bun:test';
@@ -371,6 +379,99 @@ describe('AuthRepository', () => {
                 '端末B',
             ]);
             expect(result[0]?.inviteMemo).toBe('メモ');
+        });
+    });
+
+    describe('joinRequest', () => {
+        it('[T-21] 存在するリクエストを取得できること', async () => {
+            await repository.createJoinRequest('req-1', 'たなか');
+
+            const result = await repository.findJoinRequestById('req-1');
+
+            expect(result).toEqual({
+                id: 'req-1',
+                nickname: 'たなか',
+                status: 'pending',
+                inviteToken: null,
+            });
+        });
+
+        it('[T-22] 存在しないidはnullを返すこと', async () => {
+            const result =
+                await repository.findJoinRequestById('no-such-request');
+
+            expect(result).toBeNull();
+        });
+
+        it('[T-23] listPendingJoinRequestsはpending分のみ返すこと', async () => {
+            await repository.createJoinRequest('req-1', 'たなか');
+            await repository.createJoinRequest('req-2', 'さとう');
+            await repository.approveJoinRequest('req-2', 'invite-token');
+
+            const result = await repository.listPendingJoinRequests();
+
+            expect(result).toHaveLength(1);
+            expect(result[0]?.id).toBe('req-1');
+        });
+
+        it('[T-24] pending状態はapproveJoinRequestが成功しinviteToken/statusが更新されること', async () => {
+            await repository.createJoinRequest('req-1', 'たなか');
+
+            const approved = await repository.approveJoinRequest(
+                'req-1',
+                'invite-token',
+            );
+
+            expect(approved).toBe(true);
+            const result = await repository.findJoinRequestById('req-1');
+            expect(result).toEqual({
+                id: 'req-1',
+                nickname: 'たなか',
+                status: 'approved',
+                inviteToken: 'invite-token',
+            });
+        });
+
+        it('[T-25] 既にapproved状態はapproveJoinRequestが失敗すること', async () => {
+            await repository.createJoinRequest('req-1', 'たなか');
+            await repository.approveJoinRequest('req-1', 'invite-token');
+
+            const approved = await repository.approveJoinRequest(
+                'req-1',
+                'another-token',
+            );
+
+            expect(approved).toBe(false);
+            const result = await repository.findJoinRequestById('req-1');
+            expect(result?.inviteToken).toBe('invite-token');
+        });
+
+        it('[T-26] 存在しないidはapproveJoinRequestが失敗すること', async () => {
+            const approved = await repository.approveJoinRequest(
+                'no-such-request',
+                'invite-token',
+            );
+
+            expect(approved).toBe(false);
+        });
+
+        it('[T-27] pending状態はrejectJoinRequestが成功しstatusがrejectedになること', async () => {
+            await repository.createJoinRequest('req-1', 'たなか');
+
+            const rejected = await repository.rejectJoinRequest('req-1');
+
+            expect(rejected).toBe(true);
+            const result = await repository.findJoinRequestById('req-1');
+            expect(result?.status).toBe('rejected');
+        });
+
+        it('[T-28] 既にrejected状態はrejectJoinRequestが失敗すること', async () => {
+            await repository.createJoinRequest('req-1', 'たなか');
+            await repository.rejectJoinRequest('req-1');
+
+            const rejected = await repository.rejectJoinRequest('req-1');
+
+            expect(rejected).toBe(false);
         });
     });
 });

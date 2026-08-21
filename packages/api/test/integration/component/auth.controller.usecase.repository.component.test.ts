@@ -17,6 +17,10 @@
  * | AUTH-5  | 登録済みのパスキー             | POST /auth/login/options→/auth/login/verify   | 200・sessionToken/nicknameを返す |
  * | AUTH-6  | 登録済みの参加者               | GET /auth/participants（サービス間認証）      | 200・参加者一覧に含まれる      |
  * | AUTH-7  | 有効なセッション               | POST /auth/logout                             | 200・ok:true                   |
+ * | AUTH-8  | 招待コード無し                 | POST /auth/join-request→承認→登録            | 承認後の招待トークンで登録まで完走する |
+ * | AUTH-9  | AUTH-8のリクエスト             | POST /auth/join-requests/:id/reject           | 200・statusがrejectedになる    |
+ * | AUTH-10 | 存在しないrequestId            | approve/reject（サービス間認証）              | 404                            |
+ * | AUTH-11 | 未処理の参加リクエストが存在   | GET /auth/join-requests（サービス間認証）     | 200・一覧に含まれる            |
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
@@ -270,5 +274,144 @@ describe('コンポーネントテスト: Auth Router → Controller → Usecase
             .from(schema.credential)
             .where(eq(schema.credential.userId, TEST_SESSION_USER_ID));
         expect(rows[0]?.deviceLabel).toBe('新しいラベル');
+    });
+
+    it('AUTH-8: 招待コード無しの参加リクエストが承認後に登録まで完走すること', async () => {
+        const joinRes = await requestApi(d1, '/auth/join-request', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ nickname: 'たなか' }),
+        });
+        expect(joinRes.status).toBe(201);
+        const { requestId } = (await joinRes.json()) as {
+            requestId: string;
+        };
+
+        const pendingStatusRes = await requestApi(
+            d1,
+            `/auth/join-request/${requestId}`,
+        );
+        expect(pendingStatusRes.status).toBe(200);
+        expect(
+            ((await pendingStatusRes.json()) as { status: string }).status,
+        ).toBe('pending');
+
+        const approveRes = await requestApi(
+            d1,
+            `/auth/join-requests/${requestId}/approve`,
+            {
+                method: 'POST',
+                headers: { [SERVICE_AUTH_HEADER]: MOCK_SERVICE_AUTH_TOKEN },
+            },
+        );
+        expect(approveRes.status).toBe(200);
+
+        const approvedStatusRes = await requestApi(
+            d1,
+            `/auth/join-request/${requestId}`,
+        );
+        const { status, inviteToken } = (await approvedStatusRes.json()) as {
+            status: string;
+            inviteToken: string;
+        };
+        expect(status).toBe('approved');
+        expect(inviteToken).toBeTruthy();
+
+        // 承認で発行された招待トークンが、既存の招待登録フローへそのまま使えることを確認する
+        const optionsRes = await requestApi(d1, '/auth/register/options', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ inviteToken }),
+        });
+        expect(optionsRes.status).toBe(200);
+        const { challengeId, options } = (await optionsRes.json()) as {
+            challengeId: string;
+            options: { challenge: string };
+        };
+        const credentialResponse = await buildValidNoneAttestationResponse(
+            RP_ID,
+            ORIGIN,
+            options.challenge,
+            new Uint8Array([7, 7, 7, 7]),
+        );
+        const verifyRes = await requestApi(d1, '/auth/register/verify', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+                challengeId,
+                nickname: 'たなか',
+                credentialResponse,
+            }),
+        });
+        expect(verifyRes.status).toBe(201);
+    });
+
+    it('AUTH-9: 参加リクエストを却下するとstatusがrejectedになること', async () => {
+        const joinRes = await requestApi(d1, '/auth/join-request', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ nickname: 'さとう' }),
+        });
+        const { requestId } = (await joinRes.json()) as {
+            requestId: string;
+        };
+
+        const rejectRes = await requestApi(
+            d1,
+            `/auth/join-requests/${requestId}/reject`,
+            {
+                method: 'POST',
+                headers: { [SERVICE_AUTH_HEADER]: MOCK_SERVICE_AUTH_TOKEN },
+            },
+        );
+        expect(rejectRes.status).toBe(200);
+
+        const statusRes = await requestApi(
+            d1,
+            `/auth/join-request/${requestId}`,
+        );
+        expect(((await statusRes.json()) as { status: string }).status).toBe(
+            'rejected',
+        );
+    });
+
+    it('AUTH-10: 存在しないrequestIdのapprove/rejectは404になること', async () => {
+        const approveRes = await requestApi(
+            d1,
+            '/auth/join-requests/no-such-request/approve',
+            {
+                method: 'POST',
+                headers: { [SERVICE_AUTH_HEADER]: MOCK_SERVICE_AUTH_TOKEN },
+            },
+        );
+        const rejectRes = await requestApi(
+            d1,
+            '/auth/join-requests/no-such-request/reject',
+            {
+                method: 'POST',
+                headers: { [SERVICE_AUTH_HEADER]: MOCK_SERVICE_AUTH_TOKEN },
+            },
+        );
+
+        expect(approveRes.status).toBe(404);
+        expect(rejectRes.status).toBe(404);
+    });
+
+    it('AUTH-11: 未処理の参加リクエスト一覧が取得できること（サービス間認証）', async () => {
+        await requestApi(d1, '/auth/join-request', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ nickname: '未処理さん' }),
+        });
+
+        const res = await requestApi(d1, '/auth/join-requests', {
+            headers: { [SERVICE_AUTH_HEADER]: MOCK_SERVICE_AUTH_TOKEN },
+        });
+
+        expect(res.status).toBe(200);
+        const { requests } = (await res.json()) as {
+            requests: { nickname: string }[];
+        };
+        expect(requests.some((r) => r.nickname === '未処理さん')).toBe(true);
     });
 });

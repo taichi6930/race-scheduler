@@ -75,6 +75,9 @@ describe('Admin Router', () => {
             fetchReleaseNotes: () => Promise.resolve([]),
             issueInvite: () => Promise.resolve({ token: 'invite-token' }),
             fetchParticipants: () => Promise.resolve([]),
+            fetchJoinRequests: () => Promise.resolve([]),
+            approveJoinRequest: () => Promise.resolve(),
+            rejectJoinRequest: () => Promise.resolve(),
         };
         container.register<IMainApiGateway>(DI_TOKENS.MainApiGateway, {
             useValue: mainApiGateway,

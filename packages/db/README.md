@@ -54,6 +54,7 @@ erDiagram
     user ||--o{ player_watch : "1人が複数選手を注目登録(段階2、user単位化)"
     user ||--o| invite : "招待の使用(任意、1対1)"
     credential ||--o{ session : "1credentialで複数セッション"
+    invite ||--o| join_request : "承認時に発行した招待の紐付け(任意、1対1)"
 
     place {
         string place_id PK
@@ -225,6 +226,14 @@ erDiagram
         string invite_token
         datetime expires_at
         datetime created_at
+    }
+    join_request {
+        string id PK
+        string nickname
+        string status
+        string invite_token FK
+        datetime created_at
+        datetime updated_at
     }
 ```
 

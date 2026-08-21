@@ -5,6 +5,7 @@
 // | T-01 | 「パスキーでログイン」をタップ・成功                | sessionProviderにセッションが保存される     |
 // | T-02 | ボタンをタップ・認証がキャンセルされる（authenticate()がnull） | 「ログインがキャンセルされました」が表示される |
 // | T-03 | ボタンをタップ・verifyLoginが失敗（401相当・null）  | 「ログインに失敗しました」が表示される      |
+// | T-04 | 画面表示                                             | 「招待コードをお持ちでない方はこちら」リンクが表示される |
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -36,7 +37,13 @@ class _FakeAuthRepository implements IAuthRepository {
   }) async => loginSession;
 
   @override
-  Future<bool> verifyInvite(String inviteToken) =>
+  Future<bool> verifyInvite(String inviteToken) => throw UnimplementedError();
+
+  @override
+  Future<String> requestJoin(String nickname) => throw UnimplementedError();
+
+  @override
+  Future<JoinRequestStatus> fetchJoinRequestStatus(String requestId) =>
       throw UnimplementedError();
 
   @override
@@ -99,10 +106,7 @@ void main() {
     await tester.pumpWidget(
       await _buildApp(
         repository: _FakeAuthRepository(
-          loginSession: const AuthSession(
-            token: 'token-1',
-            nickname: 'テスト太郎',
-          ),
+          loginSession: const AuthSession(token: 'token-1', nickname: 'テスト太郎'),
         ),
         webauthnClient: _FakeWebauthnClient(
           authenticateResult: const {'id': 'cred-1'},
@@ -153,5 +157,17 @@ void main() {
 
     expect(find.text('ログインに失敗しました'), findsOneWidget);
     expect(ref.read(sessionProvider), isNull);
+  });
+
+  testWidgets('[T-04] 画面表示_招待コードをお持ちでない方はこちらリンクが表示される', (tester) async {
+    await tester.pumpWidget(
+      await _buildApp(
+        repository: _FakeAuthRepository(),
+        webauthnClient: _FakeWebauthnClient(),
+        captureRef: (_) {},
+      ),
+    );
+
+    expect(find.text('招待コードをお持ちでない方はこちら'), findsOneWidget);
   });
 }

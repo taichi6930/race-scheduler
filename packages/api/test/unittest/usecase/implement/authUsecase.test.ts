@@ -21,6 +21,13 @@
  * | T-16 | logout                      | 正常系                                     | repository.deleteSessionへ委譲  |
  * | T-17 | listParticipants             | 正常系                                     | repository.listParticipantsへ委譲 |
  * | T-18 | renameCredential             | 正常系                                     | repository.renameCredentialへ委譲 |
+ * | T-19 | requestJoin                  | 正常系                                     | requestIdを生成しrepository.createJoinRequestへ委譲 |
+ * | T-20 | getJoinRequestStatus          | 存在するリクエスト                          | status/inviteTokenを返す        |
+ * | T-21 | getJoinRequestStatus          | 存在しないリクエスト                        | null                          |
+ * | T-22 | listJoinRequests              | 正常系                                     | repository.listPendingJoinRequestsへ委譲 |
+ * | T-23 | approveJoinRequest            | pending状態                                | issueInviteを呼びrepository.approveJoinRequestへ委譲 |
+ * | T-24 | approveJoinRequest            | 存在しない/pending以外                      | false・issueInviteは呼ばれない  |
+ * | T-25 | rejectJoinRequest             | 正常系                                     | repository.rejectJoinRequestへ委譲 |
  */
 
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
@@ -51,6 +58,11 @@ const buildRepository = (
         validateAndRefreshSession: mock(() => Promise.resolve(null)),
         deleteSession: mock(() => Promise.resolve()),
         listParticipants: mock(() => Promise.resolve([])),
+        createJoinRequest: mock(() => Promise.resolve()),
+        findJoinRequestById: mock(() => Promise.resolve(null)),
+        listPendingJoinRequests: mock(() => Promise.resolve([])),
+        approveJoinRequest: mock(() => Promise.resolve(true)),
+        rejectJoinRequest: mock(() => Promise.resolve(true)),
         ...overrides,
     }) as IAuthRepository;
 
@@ -312,6 +324,110 @@ describe('AuthUsecase', () => {
                 'user-1',
                 '新ラベル',
             );
+        });
+    });
+
+    describe('requestJoin', () => {
+        it('[T-19] requestIdを生成しrepository.createJoinRequestへ委譲すること', async () => {
+            const repository = buildRepository();
+            const usecase = new AuthUsecase(repository);
+
+            const result = await usecase.requestJoin('たなか');
+
+            expect(result.requestId).toBeTruthy();
+            expect(repository.createJoinRequest).toHaveBeenCalledWith(
+                result.requestId,
+                'たなか',
+            );
+        });
+    });
+
+    describe('getJoinRequestStatus', () => {
+        it('[T-20] 存在するリクエストのstatus/inviteTokenを返すこと', async () => {
+            const repository = buildRepository({
+                findJoinRequestById: mock(() =>
+                    Promise.resolve({
+                        id: 'req-1',
+                        nickname: 'たなか',
+                        status: 'approved' as const,
+                        inviteToken: 'invite-token',
+                    }),
+                ),
+            });
+            const usecase = new AuthUsecase(repository);
+
+            expect(await usecase.getJoinRequestStatus('req-1')).toEqual({
+                status: 'approved',
+                inviteToken: 'invite-token',
+            });
+        });
+
+        it('[T-21] 存在しないリクエストはnullを返すこと', async () => {
+            const repository = buildRepository();
+            const usecase = new AuthUsecase(repository);
+
+            expect(
+                await usecase.getJoinRequestStatus('no-such-request'),
+            ).toBeNull();
+        });
+    });
+
+    describe('listJoinRequests', () => {
+        it('[T-22] repository.listPendingJoinRequestsへ委譲すること', async () => {
+            const repository = buildRepository();
+            const usecase = new AuthUsecase(repository);
+
+            await usecase.listJoinRequests();
+
+            expect(repository.listPendingJoinRequests).toHaveBeenCalled();
+        });
+    });
+
+    describe('approveJoinRequest', () => {
+        it('[T-23] pending状態はissueInviteを呼びrepository.approveJoinRequestへ委譲すること', async () => {
+            const repository = buildRepository({
+                findJoinRequestById: mock(() =>
+                    Promise.resolve({
+                        id: 'req-1',
+                        nickname: 'たなか',
+                        status: 'pending' as const,
+                        inviteToken: null,
+                    }),
+                ),
+            });
+            const usecase = new AuthUsecase(repository);
+
+            const approved = await usecase.approveJoinRequest('req-1');
+
+            expect(approved).toBe(true);
+            expect(repository.createInvite).toHaveBeenCalled();
+            expect(repository.approveJoinRequest).toHaveBeenCalledWith(
+                'req-1',
+                expect.any(String),
+            );
+        });
+
+        it('[T-24] 存在しない/pending以外はfalseを返しissueInviteを呼ばないこと', async () => {
+            const repository = buildRepository();
+            const usecase = new AuthUsecase(repository);
+
+            const approved =
+                await usecase.approveJoinRequest('no-such-request');
+
+            expect(approved).toBe(false);
+            expect(repository.createInvite).not.toHaveBeenCalled();
+            expect(repository.approveJoinRequest).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('rejectJoinRequest', () => {
+        it('[T-25] repository.rejectJoinRequestへ委譲すること', async () => {
+            const repository = buildRepository();
+            const usecase = new AuthUsecase(repository);
+
+            await usecase.rejectJoinRequest('req-1');
+
+            expect(repository.rejectJoinRequest).toHaveBeenCalledWith('req-1');
         });
     });
 });

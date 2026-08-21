@@ -36,6 +36,14 @@ export interface SessionRecord {
     readonly credentialId: string;
 }
 
+/** 招待コードを持たないユーザーが送る参加リクエスト。 */
+export interface JoinRequestRecord {
+    readonly id: string;
+    readonly nickname: string;
+    readonly status: 'pending' | 'approved' | 'rejected';
+    readonly inviteToken: string | null;
+}
+
 /** admin の参加者一覧に表示する1行分。 */
 export interface ParticipantRow {
     readonly userId: string;
@@ -96,4 +104,12 @@ export interface IAuthRepository {
     deleteSession: (token: string) => Promise<void>;
 
     listParticipants: () => Promise<ParticipantRow[]>;
+
+    createJoinRequest: (id: string, nickname: string) => Promise<void>;
+    findJoinRequestById: (id: string) => Promise<JoinRequestRecord | null>;
+    listPendingJoinRequests: () => Promise<JoinRequestRecord[]>;
+    /** pending状態のリクエストのみ承認し、招待トークンを紐付ける。対象が無い/pendingでなければfalse。 */
+    approveJoinRequest: (id: string, inviteToken: string) => Promise<boolean>;
+    /** pending状態のリクエストのみ却下する。対象が無い/pendingでなければfalse。 */
+    rejectJoinRequest: (id: string) => Promise<boolean>;
 }

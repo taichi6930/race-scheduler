@@ -12,6 +12,7 @@ import type {
 } from '../../dto/backfillResult';
 import type { FeatureFlagStatus } from '../../dto/featureFlagStatus';
 import type { InviteIssueResult } from '../../dto/invite';
+import type { JoinRequestSummary } from '../../dto/joinRequest';
 import type { ParticipantSummary } from '../../dto/participant';
 import type { RaceSummary } from '../../dto/raceSummary';
 
@@ -93,4 +94,19 @@ export interface IMainApiGateway {
 
     /** 招待から登録済みの全参加者（クレデンシャル単位）の一覧を取得する。 */
     fetchParticipants: () => Promise<ParticipantSummary[]>;
+
+    /** 承認待ち（pending状態）の参加リクエスト一覧を取得する。 */
+    fetchJoinRequests: () => Promise<JoinRequestSummary[]>;
+
+    /**
+     * 参加リクエストを承認する（招待トークンが発行される）。
+     * @param id - 承認対象のリクエストID
+     */
+    approveJoinRequest: (id: string) => Promise<void>;
+
+    /**
+     * 参加リクエストを却下する。
+     * @param id - 却下対象のリクエストID
+     */
+    rejectJoinRequest: (id: string) => Promise<void>;
 }

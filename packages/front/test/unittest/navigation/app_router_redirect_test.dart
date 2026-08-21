@@ -5,6 +5,7 @@
 // | T-01 | `/` へ遷移                    | `/timeline` へリダイレクトされる        |
 // | T-02 | `/settings` へ遷移（対照）    | リダイレクトされずそのまま表示される    |
 // | T-03 | `/invite/:token` 表示中にログイン成立 | `/timeline` へリダイレクトされる |
+// | T-04 | 未ログインで `/join` へ遷移   | `/login` へリダイレクトされず、そのまま表示され続ける |
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -27,6 +28,13 @@ import '../../support/session_test_overrides.dart';
 class _FakeAuthRepository implements IAuthRepository {
   @override
   Future<bool> verifyInvite(String inviteToken) async => true;
+
+  @override
+  Future<String> requestJoin(String nickname) => throw UnimplementedError();
+
+  @override
+  Future<JoinRequestStatus> fetchJoinRequestStatus(String requestId) =>
+      throw UnimplementedError();
 
   @override
   Future<AuthChallenge?> fetchRegisterOptions(String inviteToken) =>
@@ -106,9 +114,7 @@ void main() {
     expect(find.widgetWithText(AppBar, '設定'), findsOneWidget);
   });
 
-  testWidgets('[T-03] 招待画面表示中にログイン成立_タイムラインへリダイレクトされる', (
-    tester,
-  ) async {
+  testWidgets('[T-03] 招待画面表示中にログイン成立_タイムラインへリダイレクトされる', (tester) async {
     // 先にログアウト状態でアプリを組み立てる（`MyApp.build()`が
     // `authRouterState`を未ログインへ同期させるため、前のテストの
     // ログイン状態が残っていても正しくリセットされる）。
@@ -135,5 +141,17 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(appRouter.routerDelegate.currentConfiguration.uri.path, '/timeline');
+  });
+
+  testWidgets('[T-04] 未ログインで参加リクエスト画面へ遷移_ログイン画面へリダイレクトされずそのまま表示され続ける', (
+    tester,
+  ) async {
+    await tester.pumpWidget(await _buildLoggedOutApp());
+    await tester.pumpAndSettle();
+
+    appRouter.go('/join');
+    await tester.pumpAndSettle();
+
+    expect(appRouter.routerDelegate.currentConfiguration.uri.path, '/join');
   });
 }

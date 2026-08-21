@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../design/tokens.dart';
 import '../../design/typography.dart';
@@ -12,7 +13,8 @@ import '../application/session_provider.dart';
 /// セッションが無い状態で他画面へアクセスすると`appRouter`の`redirect`から
 /// ここへ誘導される（`lib/navigation/app_router.dart`）。ログイン成功後は
 /// [sessionProvider] の更新をトリガーに、同じ`redirect`がタイムラインへ
-/// 自動的に戻すため、この画面から明示的な画面遷移は行わない。
+/// 自動的に戻すため、ログイン処理自体はこの画面から明示的な画面遷移を
+/// 行わない（招待コードなしの参加リクエスト画面`/join`への導線のみ例外）。
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key, WebauthnClient? webauthnClient})
     : _webauthnClient = webauthnClient;
@@ -104,6 +106,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       )
                     : const Icon(Icons.key),
                 label: const Text('パスキーでログイン'),
+              ),
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: () => context.go('/join'),
+                child: const Text('招待コードをお持ちでない方はこちら'),
               ),
             ],
           ),

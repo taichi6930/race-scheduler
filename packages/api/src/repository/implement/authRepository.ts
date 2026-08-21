@@ -5,6 +5,7 @@ import { inject, injectable } from 'tsyringe';
 import {
     credential,
     invite,
+    joinRequest,
     session,
     user,
     webauthnChallenge,
@@ -15,6 +16,7 @@ import type {
     CredentialRecord,
     IAuthRepository,
     InviteRecord,
+    JoinRequestRecord,
     NewCredentialInput,
     ParticipantRow,
     SessionRecord,
@@ -250,5 +252,79 @@ export class AuthRepository implements IAuthRepository {
             .from(user)
             .innerJoin(credential, eq(credential.userId, user.id))
             .leftJoin(invite, eq(invite.usedByUserId, user.id));
+    }
+
+    public async createJoinRequest(
+        id: string,
+        nickname: string,
+    ): Promise<void> {
+        await this.drizzleGateway.db
+            .insert(joinRequest)
+            .values({ id, nickname });
+    }
+
+    public async findJoinRequestById(
+        id: string,
+    ): Promise<JoinRequestRecord | null> {
+        const rows = await this.drizzleGateway.db
+            .select({
+                id: joinRequest.id,
+                nickname: joinRequest.nickname,
+                status: joinRequest.status,
+                inviteToken: joinRequest.inviteToken,
+            })
+            .from(joinRequest)
+            .where(eq(joinRequest.id, id))
+            .limit(1);
+        return rows[0] ?? null;
+    }
+
+    public async listPendingJoinRequests(): Promise<JoinRequestRecord[]> {
+        return this.drizzleGateway.db
+            .select({
+                id: joinRequest.id,
+                nickname: joinRequest.nickname,
+                status: joinRequest.status,
+                inviteToken: joinRequest.inviteToken,
+            })
+            .from(joinRequest)
+            .where(eq(joinRequest.status, 'pending'));
+    }
+
+    /**
+     * renameCredentialと同じ理由（D1の更新件数メタデータに依存しない）で、
+     * 事前にSELECTしてpending状態であることを確認してからUPDATEする。
+     * @param id
+     * @param inviteToken
+     */
+    public async approveJoinRequest(
+        id: string,
+        inviteToken: string,
+    ): Promise<boolean> {
+        const existing = await this.findJoinRequestById(id);
+        if (!existing) return false;
+        if (existing.status !== 'pending') return false;
+
+        await this.drizzleGateway.db
+            .update(joinRequest)
+            .set({
+                status: 'approved',
+                inviteToken,
+                updatedAt: new Date().toISOString(),
+            })
+            .where(eq(joinRequest.id, id));
+        return true;
+    }
+
+    public async rejectJoinRequest(id: string): Promise<boolean> {
+        const existing = await this.findJoinRequestById(id);
+        if (!existing) return false;
+        if (existing.status !== 'pending') return false;
+
+        await this.drizzleGateway.db
+            .update(joinRequest)
+            .set({ status: 'rejected', updatedAt: new Date().toISOString() })
+            .where(eq(joinRequest.id, id));
+        return true;
     }
 }

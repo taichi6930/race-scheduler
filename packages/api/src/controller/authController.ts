@@ -13,6 +13,7 @@ import type { IAuthUsecase } from '../usecase/interface/IAuthUsecase';
 import {
     InviteIssueRequestSchema,
     InviteVerifyRequestSchema,
+    JoinRequestSchema,
     LoginVerifyRequestSchema,
     RegistrationOptionsRequestSchema,
     RegistrationVerifyRequestSchema,
@@ -241,6 +242,93 @@ export class AuthController {
             return handleControllerError(
                 error,
                 'AuthController.renameCredential',
+            );
+        }
+    }
+
+    /**
+     * POST /auth/join-request（招待コードを持たないユーザーがfrontから送る）
+     * @param request
+     */
+    public async requestJoin(request: Request): Promise<Response> {
+        try {
+            const body: unknown = await request.json();
+            const parsed = parseBodyOrBadRequest(JoinRequestSchema, body);
+            if (!parsed.ok) return parsed.response;
+            const result = await this.usecase.requestJoin(
+                parsed.value.nickname,
+            );
+            return json(result, 201);
+        } catch (error) {
+            return handleControllerError(error, 'AuthController.requestJoin');
+        }
+    }
+
+    /**
+     * GET /auth/join-request/:id（リクエストした端末が承認状況をポーリング）
+     * @param requestId - パスパラメータのリクエストID
+     */
+    public async joinRequestStatus(requestId: string): Promise<Response> {
+        try {
+            const result = await this.usecase.getJoinRequestStatus(requestId);
+            if (!result) return badRequest('リクエストが見つかりません', 404);
+            return json(result);
+        } catch (error) {
+            return handleControllerError(
+                error,
+                'AuthController.joinRequestStatus',
+            );
+        }
+    }
+
+    /** GET /auth/join-requests（admin専用、サービス間認証） */
+    public async joinRequests(): Promise<Response> {
+        try {
+            const result = await this.usecase.listJoinRequests();
+            return json({ requests: result });
+        } catch (error) {
+            return handleControllerError(error, 'AuthController.joinRequests');
+        }
+    }
+
+    /**
+     * POST /auth/join-requests/:id/approve（admin専用、サービス間認証）
+     * @param requestId - パスパラメータのリクエストID
+     */
+    public async approveJoinRequest(requestId: string): Promise<Response> {
+        try {
+            const approved = await this.usecase.approveJoinRequest(requestId);
+            if (!approved)
+                return badRequest(
+                    'リクエストが見つからないか、既に処理済みです',
+                    404,
+                );
+            return json({ ok: true });
+        } catch (error) {
+            return handleControllerError(
+                error,
+                'AuthController.approveJoinRequest',
+            );
+        }
+    }
+
+    /**
+     * POST /auth/join-requests/:id/reject（admin専用、サービス間認証）
+     * @param requestId - パスパラメータのリクエストID
+     */
+    public async rejectJoinRequest(requestId: string): Promise<Response> {
+        try {
+            const rejected = await this.usecase.rejectJoinRequest(requestId);
+            if (!rejected)
+                return badRequest(
+                    'リクエストが見つからないか、既に処理済みです',
+                    404,
+                );
+            return json({ ok: true });
+        } catch (error) {
+            return handleControllerError(
+                error,
+                'AuthController.rejectJoinRequest',
             );
         }
     }

@@ -27,6 +27,15 @@
  * | T-22 | renameCredential       | bodyが不正                           | 400                 |
  * | T-23 | renameCredential       | usecaseがfalseを返す（対象なし/他人） | 404                 |
  * | T-24 | renameCredential       | 正常系                               | 200                 |
+ * | T-25 | requestJoin            | 正常系                               | 201                 |
+ * | T-26 | requestJoin            | bodyが不正                           | 400                 |
+ * | T-27 | joinRequestStatus      | 正常系                               | 200                 |
+ * | T-28 | joinRequestStatus      | usecaseがnullを返す（対象なし）       | 404                 |
+ * | T-29 | joinRequests           | 正常系                               | 200                 |
+ * | T-30 | approveJoinRequest     | 正常系                               | 200                 |
+ * | T-31 | approveJoinRequest     | usecaseがfalseを返す（対象なし/処理済み） | 404              |
+ * | T-32 | rejectJoinRequest      | 正常系                               | 200                 |
+ * | T-33 | rejectJoinRequest      | usecaseがfalseを返す（対象なし/処理済み） | 404              |
  */
 
 import { describe, expect, it, mock } from 'bun:test';
@@ -55,6 +64,13 @@ const buildUsecase = (overrides?: Partial<IAuthUsecase>): IAuthUsecase =>
         logout: mock(() => Promise.resolve()),
         listParticipants: mock(() => Promise.resolve([])),
         renameCredential: mock(() => Promise.resolve(true)),
+        requestJoin: mock(() => Promise.resolve({ requestId: 'req-1' })),
+        getJoinRequestStatus: mock(() =>
+            Promise.resolve({ status: 'pending' as const, inviteToken: null }),
+        ),
+        listJoinRequests: mock(() => Promise.resolve([])),
+        approveJoinRequest: mock(() => Promise.resolve(true)),
+        rejectJoinRequest: mock(() => Promise.resolve(true)),
         ...overrides,
     }) as IAuthUsecase;
 
@@ -414,6 +430,108 @@ describe('AuthController', () => {
                 'cred-1',
                 '新ラベル',
             );
+        });
+    });
+
+    describe('requestJoin', () => {
+        it('[T-25] 正常なbodyの場合201を返すこと', async () => {
+            const usecase = buildUsecase();
+            const controller = new AuthController(usecase);
+
+            const res = await controller.requestJoin(
+                jsonRequest('/auth/join-request', { nickname: 'たなか' }),
+            );
+
+            expect(res.status).toBe(201);
+            expect(usecase.requestJoin).toHaveBeenCalledWith('たなか');
+        });
+
+        it('[T-26] bodyが不正な場合400を返すこと', async () => {
+            const usecase = buildUsecase();
+            const controller = new AuthController(usecase);
+
+            const res = await controller.requestJoin(
+                jsonRequest('/auth/join-request', {}),
+            );
+
+            expect(res.status).toBe(400);
+        });
+    });
+
+    describe('joinRequestStatus', () => {
+        it('[T-27] 正常系で200を返すこと', async () => {
+            const usecase = buildUsecase();
+            const controller = new AuthController(usecase);
+
+            const res = await controller.joinRequestStatus('req-1');
+
+            expect(res.status).toBe(200);
+        });
+
+        it('[T-28] usecaseがnullを返した場合404を返すこと', async () => {
+            const usecase = buildUsecase({
+                getJoinRequestStatus: mock(() => Promise.resolve(null)),
+            });
+            const controller = new AuthController(usecase);
+
+            const res = await controller.joinRequestStatus('no-such-request');
+
+            expect(res.status).toBe(404);
+        });
+    });
+
+    describe('joinRequests', () => {
+        it('[T-29] 正常系で200を返すこと', async () => {
+            const usecase = buildUsecase();
+            const controller = new AuthController(usecase);
+
+            const res = await controller.joinRequests();
+
+            expect(res.status).toBe(200);
+        });
+    });
+
+    describe('approveJoinRequest', () => {
+        it('[T-30] 正常系で200を返すこと', async () => {
+            const usecase = buildUsecase();
+            const controller = new AuthController(usecase);
+
+            const res = await controller.approveJoinRequest('req-1');
+
+            expect(res.status).toBe(200);
+        });
+
+        it('[T-31] usecaseがfalseを返した場合404を返すこと', async () => {
+            const usecase = buildUsecase({
+                approveJoinRequest: mock(() => Promise.resolve(false)),
+            });
+            const controller = new AuthController(usecase);
+
+            const res = await controller.approveJoinRequest('req-1');
+
+            expect(res.status).toBe(404);
+        });
+    });
+
+    describe('rejectJoinRequest', () => {
+        it('[T-32] 正常系で200を返すこと', async () => {
+            const usecase = buildUsecase();
+            const controller = new AuthController(usecase);
+
+            const res = await controller.rejectJoinRequest('req-1');
+
+            expect(res.status).toBe(200);
+        });
+
+        it('[T-33] usecaseがfalseを返した場合404を返すこと', async () => {
+            const usecase = buildUsecase({
+                rejectJoinRequest: mock(() => Promise.resolve(false)),
+            });
+            const controller = new AuthController(usecase);
+
+            const res = await controller.rejectJoinRequest('req-1');
+
+            expect(res.status).toBe(404);
         });
     });
 });

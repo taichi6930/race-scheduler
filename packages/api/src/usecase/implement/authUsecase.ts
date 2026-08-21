@@ -22,6 +22,7 @@ import type {
     AuthResult,
     IAuthUsecase,
     InviteVerifyResult,
+    JoinRequestStatusResult,
     LoginOptionsResult,
     LoginVerifyInput,
     RegistrationOptionsResult,
@@ -278,5 +279,40 @@ export class AuthUsecase implements IAuthUsecase {
             expiresAt,
         );
         return token;
+    }
+
+    public async requestJoin(nickname: string): Promise<{ requestId: string }> {
+        const requestId = crypto.randomUUID();
+        await this.authRepository.createJoinRequest(requestId, nickname);
+        return { requestId };
+    }
+
+    public async getJoinRequestStatus(
+        requestId: string,
+    ): Promise<JoinRequestStatusResult | null> {
+        const request =
+            await this.authRepository.findJoinRequestById(requestId);
+        if (!request) return null;
+        return { status: request.status, inviteToken: request.inviteToken };
+    }
+
+    public listJoinRequests() {
+        return this.authRepository.listPendingJoinRequests();
+    }
+
+    public async approveJoinRequest(requestId: string): Promise<boolean> {
+        const request =
+            await this.authRepository.findJoinRequestById(requestId);
+        if (!request) return false;
+        if (request.status !== 'pending') return false;
+
+        const { token } = await this.issueInvite(
+            `参加リクエスト: ${request.nickname}`,
+        );
+        return this.authRepository.approveJoinRequest(requestId, token);
+    }
+
+    public rejectJoinRequest(requestId: string): Promise<boolean> {
+        return this.authRepository.rejectJoinRequest(requestId);
     }
 }

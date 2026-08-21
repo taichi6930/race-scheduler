@@ -401,6 +401,24 @@ export const webauthnChallenge = sqliteTable('webauthn_challenge', {
 });
 
 /**
+ * 招待コードを持たないユーザーがfrontから直接送る参加リクエスト（承認制）。
+ * 承認時にinviteTokenへ発行済みの招待トークンを紐付け、リクエスト側の端末は
+ * それを使って既存の招待登録フローを自動で継続する。パスキー自体はこの時点では
+ * まだ作られていない。0044_join_request.sqlite.sql参照。
+ */
+export const joinRequest = sqliteTable('join_request', {
+    id: text('id').primaryKey(),
+    nickname: text('nickname').notNull(),
+    status: text('status')
+        .notNull()
+        .default('pending')
+        .$type<'pending' | 'approved' | 'rejected'>(),
+    inviteToken: text('invite_token'),
+    createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+/**
  * お気に入りレース（user単位、段階2）。raceへの外部キー制約は付けない
  * （calendar_flagと同じく、参照先レースの削除を気にしない設計）。
  * 0041_favorite.sqlite.sql参照。

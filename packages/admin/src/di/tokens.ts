@@ -9,4 +9,5 @@
 export const ADMIN_DI_TOKENS = {
     InviteUsecase: 'InviteUsecase',
     ParticipantsUsecase: 'ParticipantsUsecase',
+    JoinRequestsUsecase: 'JoinRequestsUsecase',
 } as const;

@@ -27,6 +27,10 @@
  * - POST /invite/api               招待発行
  * - GET  /participants             参加者一覧画面（HTML）
  * - GET  /participants/api         参加者一覧取得
+ * - GET  /join-requests            参加リクエスト一覧画面（HTML）
+ * - GET  /join-requests/api        承認待ち参加リクエスト一覧取得
+ * - POST /join-requests/api/:id/approve  参加リクエストの承認
+ * - POST /join-requests/api/:id/reject   参加リクエストの却下
  * @module router
  */
 
@@ -34,6 +38,7 @@ import './di';
 
 import {
     appLogger,
+    badRequest,
     bodyLimitMiddleware,
     EnvStore,
     rateLimitMiddleware,
@@ -53,6 +58,7 @@ import {
 } from './controller/errorPages';
 import { FeatureFlagsController } from './controller/featureFlagsController';
 import { InviteController } from './controller/inviteController';
+import { JoinRequestsController } from './controller/joinRequestsController';
 import { ParticipantsController } from './controller/participantsController';
 import { RaceDetailLayoutController } from './controller/raceDetailLayoutController';
 import { ReleaseNotesController } from './controller/releaseNotesController';
@@ -123,6 +129,7 @@ function registerSecurityHeadersMiddleware(router: Hono): void {
                 ['/release-notes', ADMIN_PAGE_CSP],
                 ['/invite', ADMIN_PAGE_CSP],
                 ['/participants', ADMIN_PAGE_CSP],
+                ['/join-requests', ADMIN_PAGE_CSP],
             ]),
         }),
     );
@@ -287,6 +294,36 @@ function registerParticipantsRoutes(router: Hono): void {
 }
 
 /**
+ * 参加リクエスト一覧・承認/却下のルートを登録する。
+ * @param router - 登録対象の Hono アプリケーション
+ */
+function registerJoinRequestsRoutes(router: Hono): void {
+    router.get('/join-requests', () => {
+        const controller = container.resolve(JoinRequestsController);
+        return controller.page();
+    });
+    router.get('/join-requests/api', (c: Context) => {
+        EnvStore.setEnv(c.env);
+        const controller = container.resolve(JoinRequestsController);
+        return controller.list();
+    });
+    router.post('/join-requests/api/:id/approve', (c: Context) => {
+        EnvStore.setEnv(c.env);
+        const id = c.req.param('id');
+        if (!id) return badRequest('idが不正です', 400);
+        const controller = container.resolve(JoinRequestsController);
+        return controller.approve(id);
+    });
+    router.post('/join-requests/api/:id/reject', (c: Context) => {
+        EnvStore.setEnv(c.env);
+        const id = c.req.param('id');
+        if (!id) return badRequest('idが不正です', 400);
+        const controller = container.resolve(JoinRequestsController);
+        return controller.reject(id);
+    });
+}
+
+/**
  * Hono ルーターを構築する。
  * ルート登録（副作用）を関数内へ閉じ込め、no-top-level-side-effects を満たす。
  * @returns 構築済みの Hono ルーター
@@ -307,6 +344,7 @@ function buildRouter(): Hono {
     registerReleaseNotesRoutes(router);
     registerInviteRoutes(router);
     registerParticipantsRoutes(router);
+    registerJoinRequestsRoutes(router);
 
     return router;
 }
