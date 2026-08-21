@@ -43,9 +43,14 @@ final GoRouter appRouter = GoRouter(
   // （ブックマーク・裸のオリジン共有・push-sw.js の許可外URLフォールバック先が `/`
   // のいずれも404画面へ着地していた）。タイムラインへ誘導する。
   //
-  // 全画面ログイン必須（招待制クローズドサービス化）: セッションが無い状態で
-  // `/login`・`/invite/:token`・`/join` 以外へアクセスしたらログイン画面へ、
-  // 逆にログイン済みで`/login`へアクセスしたらタイムラインへ誘導する。
+  // レース関連画面（タイムライン・お気に入り・旅程グループ）はログイン必須の
+  // ままとし、レース情報を含まない設定・更新履歴は未ログインでも閲覧できる
+  // よう公開した（ユーザー依頼、2026-08-21: 設定画面内の「管理画面」への
+  // 導線に、パスキーログイン無しで辿り着けるようにするため）。セッションが
+  // 無い状態でも `/login`・`/invite/:token`・`/join`・`/settings`・
+  // `/whats-new` はそのまま表示し、それ以外はログイン画面へ誘導する。
+  // 逆にログイン済みで`/login`等の認証オンボーディング画面に居る場合は
+  // タイムラインへ誘導する。
   // [authRouterState] は `MyApp`（`app.dart`）が `sessionProvider` の変化の
   // たびに反映するブリッジで、[refreshListenable] 経由でこの `redirect` を
   // 再評価させる（`appRouter`はトップレベル定数のためRiverpodの`ref`を
@@ -56,16 +61,18 @@ final GoRouter appRouter = GoRouter(
     if (state.uri.path == '/') return _AppDestination.timeline.path;
 
     final path = state.uri.path;
-    final isAuthRoute =
+    final isAuthOnboardingRoute =
         path == '/login' || path == '/join' || path.startsWith('/invite/');
-    if (!authRouterState.isLoggedIn && !isAuthRoute) return '/login';
-    // ログイン済みで認証系ルート（/login・/invite/:token）に居る場合は
-    // タイムラインへ誘導する。以前は`path == '/login'`のみを見ていたため、
-    // 招待登録画面（/invite/:token）でパスキー登録が成功しセッションが
-    // 確立しても、URLが/invite/のままだとこの条件に一致せず、画面が
-    // 遷移しないまま取り残される不具合があった（isAuthRouteの判定と
+    final isPublicRoute =
+        isAuthOnboardingRoute || path == '/settings' || path == '/whats-new';
+    if (!authRouterState.isLoggedIn && !isPublicRoute) return '/login';
+    // ログイン済みで認証オンボーディング画面（/login・/join・/invite/:token）
+    // に居る場合はタイムラインへ誘導する。以前は`path == '/login'`のみを
+    // 見ていたため、招待登録画面（/invite/:token）でパスキー登録が成功し
+    // セッションが確立しても、URLが/invite/のままだとこの条件に一致せず、
+    // 画面が遷移しないまま取り残される不具合があった（isAuthRouteの判定と
     // ここの判定がズレていたのが原因）。
-    if (authRouterState.isLoggedIn && isAuthRoute) {
+    if (authRouterState.isLoggedIn && isAuthOnboardingRoute) {
       return _AppDestination.timeline.path;
     }
     return null;

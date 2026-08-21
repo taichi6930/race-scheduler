@@ -6,6 +6,8 @@
 // | T-02 | `/settings` へ遷移（対照）    | リダイレクトされずそのまま表示される    |
 // | T-03 | `/invite/:token` 表示中にログイン成立 | `/timeline` へリダイレクトされる |
 // | T-04 | 未ログインで `/join` へ遷移   | `/login` へリダイレクトされず、そのまま表示され続ける |
+// | T-05 | 未ログインで `/settings` へ遷移 | `/login` へリダイレクトされず、そのまま表示され続ける |
+// | T-06 | 未ログインで `/whats-new` へ遷移 | `/login` へリダイレクトされず、そのまま表示され続ける |
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -153,5 +155,32 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(appRouter.routerDelegate.currentConfiguration.uri.path, '/join');
+  });
+
+  testWidgets('[T-05] 未ログインで設定画面へ遷移_ログイン画面へリダイレクトされずそのまま表示され続ける', (
+    tester,
+  ) async {
+    await tester.pumpWidget(await _buildLoggedOutApp());
+    await tester.pumpAndSettle();
+
+    appRouter.go('/settings');
+    await tester.pumpAndSettle();
+
+    expect(appRouter.routerDelegate.currentConfiguration.uri.path, '/settings');
+  });
+
+  testWidgets('[T-06] 未ログインで更新履歴画面へ遷移_ログイン画面へリダイレクトされずそのまま表示され続ける', (
+    tester,
+  ) async {
+    await tester.pumpWidget(await _buildLoggedOutApp());
+    await tester.pumpAndSettle();
+
+    appRouter.go('/whats-new');
+    await tester.pumpAndSettle();
+
+    expect(
+      appRouter.routerDelegate.currentConfiguration.uri.path,
+      '/whats-new',
+    );
   });
 }
