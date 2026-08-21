@@ -52,7 +52,12 @@ jobs:
     # 同じ理由: 並列実行され、失敗Issueもパッケージ単位でdedupしたい（1ジョブにまとめると
     # 失敗の切り分け・Issueのタイトルが曖昧になる）。matrix化も検討したが、matrix jobの
     # `needs.<job>.result`は全legの集約（1つでも失敗すればfailure）にしかならず
-    # パッケージ単位の判定ができないため、明示的な個別ジョブを選んだ。
+    # パッケージ単位の判定ができないため、パッケージ間は明示的な個別ジョブを選んだ。
+    # 唯一の例外がmutation-api: パッケージ内でさらにsrcサブディレクトリ単位のmatrixに
+    # 分割している（1ジョブのままだと完走に約6時間かかるため）。この場合は
+    # `needs.mutation-api.result`がshard横断の集約になる粒度の粗さを許容し、
+    # Issue本文側で各shardのログを個別に走査して原因箇所を特定する設計にしている
+    # （詳細はmutation-apiジョブのコメントとreport-mutation-failureジョブ内を参照）。
     mutation-core:
         runs-on: ubuntu-24.04
         # ローカル実測（4コア環境）で約3〜4分/727ミュータント。packages/core全体
@@ -199,12 +204,68 @@ jobs:
                   retention-days: 30
                   if-no-files-found: warn
 
+    # packages/api は他パッケージと桁違いにミュータント数が多く（全体で約4,950。うち
+    # openapi/openApiSpec.ts はStryker設定側で除外済み）、単一ジョブでは実測
+    # 約13.5ミュータント/分のスループットで完走に約6時間かかり、実際に150分タイムアウトで
+    # 40%未達のまま打ち切られた（run 32438847810）。src配下のサブディレクトリ単位で
+    # matrixに分割し、1レグあたりcore並み（20〜30分オーダー、大きいレグでも90分以内）に
+    # 収める。各レグの`mutate`はstryker.api.config.jsonの`mutate`設定を`--mutate`で
+    # 上書きするため、レグごとに必要なindex.ts等の除外を個別に指定している
+    # （CLIの`--mutate`はconfig側のmutate配列を丸ごと置き換える仕様のため、
+    # config側の`!packages/api/src/**/index.ts`等は継承されない）。
+    # 例外: routerレグの`packages/api/src/index.ts`はHonoアプリのエントリポイントで
+    # 実体のあるロジックを持つため、意図的に除外せず対象に含めている
+    # （他サブディレクトリのバレルファイルとしてのindex.tsとは性質が異なる）。
     mutation-api:
         runs-on: ubuntu-24.04
-        # ローカル実測: packages/api/src/controller のみ（26ファイル・568ミュータント）で
-        # 約17〜20分（テストスイート1回=約5.8秒とcore比8倍重い）。api全体は約3,800〜4,200
-        # ミュータント想定で70〜100分程度を見込むが、4パッケージ中最も重いため大きめに確保する。
-        timeout-minutes: 150
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    # 実測609ミュータント。
+                    - name: controller
+                      mutate: "packages/api/src/controller/**/*.ts"
+                      timeout: 60
+                    # 実測424ミュータント。
+                    - name: usecase
+                      mutate: "packages/api/src/usecase/**/*.ts"
+                      timeout: 45
+                    # repository/implement配下は18ファイル・943ミュータントとまとめると
+                    # 重すぎるため、ファイルサイズでa/b/cの3グループに分割（実測287/352/304）。
+                    - name: repository-a
+                      mutate: "packages/api/src/repository/implement/raceRepository.ts,packages/api/src/repository/implement/debugRepository.ts,packages/api/src/repository/implement/favoriteRepository.ts,packages/api/src/repository/implement/backfillRepository.ts,packages/api/src/repository/implement/batchLockRepository.ts,packages/api/src/repository/implement/releaseNoteRepository.ts,packages/api/src/repository/implement/uiLayoutRepository.ts,packages/api/src/repository/implement/webPushSendRepository.ts"
+                      timeout: 35
+                    - name: repository-b
+                      mutate: "packages/api/src/repository/implement/placeRepository.ts,packages/api/src/repository/implement/placeMapper.ts,packages/api/src/repository/implement/authRepository.ts,packages/api/src/repository/implement/playerMapper.ts,packages/api/src/repository/implement/featureFlagRepository.ts"
+                      timeout: 40
+                    - name: repository-c
+                      mutate: "packages/api/src/repository/implement/calendarRepository.ts,packages/api/src/repository/implement/playerRepository.ts,packages/api/src/repository/implement/pushRequestRepository.ts,packages/api/src/repository/implement/pushSubscriptionRepository.ts,packages/api/src/repository/implement/raceMapper.ts"
+                      timeout: 35
+                    # repository/interface・utility。interface/index.tsはインターフェース
+                    # 再エクスポートのみのバレルファイルのため除外（実測185ミュータント）。
+                    - name: repository-shared
+                      mutate: "packages/api/src/repository/utility/**/*.ts,packages/api/src/repository/interface/**/*.ts,!packages/api/src/repository/interface/index.ts"
+                      timeout: 25
+                    # 実測212ミュータント。
+                    - name: gateway
+                      mutate: "packages/api/src/gateway/**/*.ts"
+                      timeout: 30
+                    # 実測477ミュータント。
+                    - name: utility
+                      mutate: "packages/api/src/utility/**/*.ts"
+                      timeout: 50
+                    # di・middleware・dbをまとめた基盤層。di/index.tsはDIコンテナの
+                    # 再エクスポートのみのバレルファイルのため除外（実測457ミュータント）。
+                    - name: platform
+                      mutate: "packages/api/src/di/**/*.ts,packages/api/src/middleware/**/*.ts,packages/api/src/db/**/*.ts,!packages/api/src/di/index.ts"
+                      timeout: 50
+                    # router.ts/scheduled.tsに加え、エントリポイントのindex.ts
+                    # （バレルファイルではなく実体のあるロジックを持つため対象に含める）。
+                    # 実測814ミュータントと最大レグのため、余裕を持って90分。
+                    - name: router
+                      mutate: "packages/api/src/router.ts,packages/api/src/scheduled.ts,packages/api/src/index.ts"
+                      timeout: 90
+        timeout-minutes: ${{ matrix.timeout }}
         env:
             NODE_ENV: ci_github_actions
             CI: "true"
@@ -221,27 +282,27 @@ jobs:
               with:
                   setup-node: "false"
 
-            - name: Run mutation testing (packages/api)
-              run: bun run mutation:api | tee mutation-report.log
+            - name: Run mutation testing (packages/api/${{ matrix.name }})
+              run: bun run mutation:api -- --mutate "${{ matrix.mutate }}" | tee mutation-report.log
 
             - name: Write job summary
               if: always()
               run: |
                   {
-                    echo "## Mutation Testing (packages/api)"
+                    echo "## Mutation Testing (packages/api/${{ matrix.name }})"
                     echo ""
                     echo '```'
                     grep -B2 "^All files" mutation-report.log || echo "(結果テーブルを取得できませんでした。詳細はログを参照してください)"
                     echo '```'
                     echo ""
-                    echo "詳細は本ジョブの \`mutation-report-api\` artifact（HTMLレポート）を参照してください。"
+                    echo "詳細は本ジョブの \`mutation-report-api-${{ matrix.name }}\` artifact（HTMLレポート）を参照してください。"
                   } >> "$GITHUB_STEP_SUMMARY"
 
             - name: Upload mutation report
               if: always()
               uses: actions/upload-artifact@v7
               with:
-                  name: mutation-report-api
+                  name: mutation-report-api-${{ matrix.name }}
                   path: |
                       reports/mutation/api/
                       mutation-report.log
@@ -310,9 +371,17 @@ jobs:
                     pkg="$1"
                     result="$2"
 
-                    # skipped/cancelledはテスト失敗ではないため、既存Issueの状態も変えず
-                    # 何もしない（scheduled-tests.ymlのreport_targetと同じ判断基準）。
-                    if [ "$result" = "skipped" ] || [ "$result" = "cancelled" ]; then
+                    # skippedはテスト失敗ではないため、既存Issueの状態も変えず何もしない
+                    # （scheduled-tests.ymlのreport_targetと同じ判断基準）。
+                    # 注意: scheduled-tests.ymlでは"cancelled"も対象外扱いだが、あちらは
+                    # cancel-in-progress: true の並行実行で他ジョブに巻き込まれて
+                    # cancelledになるケースを想定したもの。本ワークフローは
+                    # `concurrency.cancel-in-progress: false`のため、cancelledは
+                    # そのケースがあり得ず、タイムアウト（実際にmutation-apiが
+                    # 150分タイムアウトで打ち切られた実例あり）か手動キャンセルの
+                    # いずれかを意味する。どちらも見過ごしてはいけない実行基盤側の
+                    # 問題のため、failureと同様にIssue化する。
+                    if [ "$result" = "skipped" ]; then
                       echo "[$pkg] $result（対象外のため何もしません）"
                       exit 0
                     fi
@@ -344,17 +413,42 @@ jobs:
                     # 前後の文脈込みで抜き出し、見つからなければ末尾を、artifact自体が無ければ
                     # その旨を表示する（Actionsログへのクリック遷移なしで一次切り分けできる
                     # ようにするため）。
-                    log_file="mutation-reports/mutation-report-${pkg}/mutation-report.log"
-                    if [ -f "$log_file" ]; then
-                      # grepが無マッチだと終了コード1を返し、pipefail経由でset -eがスクリプト
-                      # ごと落としてしまうため`|| true`で無マッチを正常系として扱う（snippetは
-                      # 空文字になり、直後のフォールバックへ回る）。
-                      snippet=$(grep -inE "error|fail|cannot|enoent" "$log_file" -A3 -B1 | tail -c 4000) || true
+                    #
+                    # mutation-apiのみsubdirectory単位のmatrixに分割されており、
+                    # `mutation-report-api-<shard>`という10個のartifactが個別に存在する
+                    # （`needs.mutation-api.result`はmatrix全legの集約結果のため、
+                    # どのshardが失敗したかはここでは分からない。ログのartifactディレクトリを
+                    # 全shard分走査し、エラーらしき行が見つかったshardのみ抜粋する）。
+                    if [ "$pkg" = "api" ]; then
+                      snippet=""
+                      for shard_log in mutation-reports/mutation-report-api-*/mutation-report.log; do
+                        [ -f "$shard_log" ] || continue
+                        shard_name=$(basename "$(dirname "$shard_log")")
+                        shard_snippet=$(grep -inE "error|fail|cannot|enoent" "$shard_log" -A3 -B1 | tail -c 2000) || true
+                        if [ -n "$shard_snippet" ]; then
+                          # 本文側で全体を単一の```コードフェンスで囲むため、ここでは
+                          # ネストしたコードフェンスを作らずshard名を区切り行として挿む。
+                          # printfで1行に収めているのはYAMLのブロックスカラー内で
+                          # インデント無しの生改行を書くとパースが壊れるため。
+                          snippet="${snippet}$(printf -- '--- %s ---\n%s\n\n' "$shard_name" "$shard_snippet")"
+                        fi
+                      done
                       if [ -z "$snippet" ]; then
-                        snippet=$(tail -n 60 "$log_file")
+                        snippet="(いずれのshardのログにもエラーらしき行が見つかりませんでした。ログartifact一式またはActionsの実行ログを直接確認してください)"
                       fi
                     else
-                      snippet="(ログartifactを取得できませんでした。Actionsの実行ログを直接確認してください)"
+                      log_file="mutation-reports/mutation-report-${pkg}/mutation-report.log"
+                      if [ -f "$log_file" ]; then
+                        # grepが無マッチだと終了コード1を返し、pipefail経由でset -eがスクリプト
+                        # ごと落としてしまうため`|| true`で無マッチを正常系として扱う（snippetは
+                        # 空文字になり、直後のフォールバックへ回る）。
+                        snippet=$(grep -inE "error|fail|cannot|enoent" "$log_file" -A3 -B1 | tail -c 4000) || true
+                        if [ -z "$snippet" ]; then
+                          snippet=$(tail -n 60 "$log_file")
+                        fi
+                      else
+                        snippet="(ログartifactを取得できませんでした。Actionsの実行ログを直接確認してください)"
+                      fi
                     fi
 
                     body="## mutation-${pkg} ジョブが失敗しました

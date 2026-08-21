@@ -45,6 +45,11 @@ NODE_ENV = "production"
 # （packages/admin/src/utility/isProductionAdmin.ts参照）出し分けに使えないため、
 # 予約語的な扱いを受けにくい専用の変数名を新設した。
 ADMIN_ENVIRONMENT = "production"
+# FRONT_BASE_URL（ユーザー依頼: 招待URLをドメイン込みで発行してほしい）:
+# 未設定だと招待発行画面（packages/admin/src/utility/frontConfig.ts）が
+# `/#/invite/<token>`という相対パスにフォールバックし、コピーしても
+# そのままでは開けないURLになってしまうため、front（本番）のURLを明示する。
+FRONT_BASE_URL = "https://race-schedule-front-prod.pages.dev"
 
 # CFARCH-01対応（2026-08-08、CFARCH-02が検知）: [[ratelimits]]はnamed
 # environmentへ継承されないため、トップレベル定義だけでは
@@ -62,6 +67,8 @@ name = "race-schedule-admin-test"
 [env.test.vars]
 WORKER_NAME = "admin"
 ADMIN_ENVIRONMENT = "test"
+# FRONT_BASE_URL: 上記[env.production.vars]と同じ理由。test環境のfront URLを指定する。
+FRONT_BASE_URL = "https://race-schedule-front-test.pages.dev"
 
 # CFARCH-01対応: 環境ごとに複製（上記[env.production.ratelimits]のコメント参照）。
 [[env.test.ratelimits]]
