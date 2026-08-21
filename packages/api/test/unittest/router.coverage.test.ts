@@ -25,6 +25,7 @@
  * | T-17 | GET /docs         | -                                          | 200・Scalar UIのHTML                |
  * | T-18 | GET /docs         | -                                          | CSPがCDN（cdn.jsdelivr.net）からの読み込みを許可する（実機で画面が空白になった不具合の回帰） |
  * | T-19 | GET /openapi.json | -                                          | CSPは他エンドポイント同様 default-src 'none' のまま |
+ * | T-23 | OPTIONS /race（プリフライト） | Access-Control-Request-Headers: Authorization | Access-Control-Allow-HeadersにAuthorizationが含まれる（回帰） |
  */
 import 'reflect-metadata';
 
@@ -633,6 +634,35 @@ describe('API Router (追加カバレッジ)', () => {
             expect(
                 secondResponse.headers.get('Access-Control-Allow-Origin'),
             ).toBe(secondOrigin);
+        });
+    });
+
+    describe('CORS プリフライトのAuthorizationヘッダー許可（回帰）', () => {
+        it('corsPreflight_Authorizationヘッダーを要求するプリフライト_Access-Control-Allow-HeadersにAuthorizationが含まれること', async () => {
+            // Arrange: front（ブラウザ）がログイン後に`Authorization: Bearer <token>`を
+            // 付与してGET /raceを叩く際、ブラウザが先に送るプリフライトを模す。
+            // ALLOWED_HEADERSがContent-Typeのみだと、ブラウザがこのヘッダーを
+            // 拒否されたと判断し実際のリクエストがブロックされる不具合があった。
+            const origin = 'http://cors-preflight-test.example';
+            const request = new Request('http://localhost/race', {
+                method: 'OPTIONS',
+                headers: {
+                    Origin: origin,
+                    'Access-Control-Request-Method': 'GET',
+                    'Access-Control-Request-Headers': 'Authorization',
+                },
+            });
+
+            // Act
+            const response = await router.fetch(request, {
+                ...mockEnv,
+                CORS_ALLOWED_ORIGINS: origin,
+            });
+
+            // Assert
+            expect(response.headers.get('Access-Control-Allow-Headers')).toBe(
+                'Content-Type,Authorization',
+            );
         });
     });
 
