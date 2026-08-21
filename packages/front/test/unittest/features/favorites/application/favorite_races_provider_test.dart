@@ -286,7 +286,9 @@ void main() {
         overrides: [
           sharedPreferencesProvider.overrideWithValue(prefs),
           loggedInSessionOverride(),
-          favoriteIdsProvider.overrideWith(() => _FixedFavoriteIdsNotifier({})),
+          favoriteIdsProvider.overrideWith(
+            () => _FixedFavoriteIdsNotifier({'a'}),
+          ),
         ],
       );
       addTearDown(container.dispose);
