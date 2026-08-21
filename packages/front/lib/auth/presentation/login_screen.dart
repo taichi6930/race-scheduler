@@ -8,17 +8,31 @@ import '../data/auth_repository_impl.dart';
 import '../data/webauthn_client/webauthn_client.dart';
 import '../application/session_provider.dart';
 
+/// 招待コード入力欄の値から、招待登録画面（`/invite/:token`）へ渡す
+/// トークンを取り出す。招待URL全体（`https://.../invite/<token>`）を
+/// そのまま貼り付けた場合はURL末尾のトークン部分だけを、素のトークンを
+/// 入力した場合はそのまま返す（前後の空白は除去する）。ドメイントップから
+/// 入って招待コードを手入力・貼り付けする経路（ユーザー依頼）で、
+/// URLごと貼っても素のトークンを貼ってもどちらでも動くようにするため。
+String extractInviteToken(String input) {
+  final trimmed = input.trim();
+  const marker = '/invite/';
+  final index = trimmed.lastIndexOf(marker);
+  if (index == -1) return trimmed;
+  return trimmed.substring(index + marker.length);
+}
+
 /// ログイン画面（パスキー1つでログインするシンプルな画面）。
 ///
 /// セッションが無い状態で他画面へアクセスすると`appRouter`の`redirect`から
 /// ここへ誘導される（`lib/navigation/app_router.dart`）。ログイン成功後は
 /// [sessionProvider] の更新をトリガーに、同じ`redirect`がタイムラインへ
 /// 自動的に戻すため、ログイン処理自体はこの画面から明示的な画面遷移を
-/// 行わない（招待コードなしの参加リクエスト画面`/join`・未ログインでも
-/// 閲覧できる設定画面`/settings`への導線のみ例外。後者はレース情報を含まず、
-/// 設定内の「管理画面」ボタンへログイン無しで辿り着けるようにするための
-/// 導線のため、この画面から明示的にリンクしないと`/settings`が公開ルートに
-/// なっていても実際には辿り着けなかった）。
+/// 行わない（招待コード入力・招待コードなしの参加リクエスト画面`/join`・
+/// 未ログインでも閲覧できる設定画面`/settings`への導線のみ例外。設定画面は
+/// レース情報を含まず、設定内の「管理画面」ボタンへログイン無しで辿り着ける
+/// ようにするための導線のため、この画面から明示的にリンクしないと
+/// `/settings`が公開ルートになっていても実際には辿り着けなかった）。
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key, WebauthnClient? webauthnClient})
     : _webauthnClient = webauthnClient;
@@ -32,9 +46,22 @@ class LoginScreen extends ConsumerStatefulWidget {
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   late final WebauthnClient _webauthnClient =
       widget._webauthnClient ?? createWebauthnClient();
+  final _inviteTokenController = TextEditingController();
 
   bool _isLoading = false;
   String? _errorMessage;
+
+  @override
+  void dispose() {
+    _inviteTokenController.dispose();
+    super.dispose();
+  }
+
+  void _submitInviteToken() {
+    final token = extractInviteToken(_inviteTokenController.text);
+    if (token.isEmpty) return;
+    context.go('/invite/$token');
+  }
 
   Future<void> _login() async {
     setState(() {
@@ -110,6 +137,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       )
                     : const Icon(Icons.key),
                 label: const Text('パスキーでログイン'),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                '招待コードをお持ちの方',
+                style: AppTypography.bodySmall.copyWith(color: colors.ink3),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _inviteTokenController,
+                decoration: const InputDecoration(
+                  labelText: '招待コード（URLごと貼り付けても可）',
+                  border: OutlineInputBorder(),
+                ),
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _submitInviteToken(),
+              ),
+              const SizedBox(height: 12),
+              FilledButton.tonalIcon(
+                onPressed: _submitInviteToken,
+                icon: const Icon(Icons.arrow_forward),
+                label: const Text('招待コードで進む'),
               ),
               const SizedBox(height: 16),
               TextButton(

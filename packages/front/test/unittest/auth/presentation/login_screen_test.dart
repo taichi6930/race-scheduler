@@ -7,6 +7,12 @@
 // | T-03 | ボタンをタップ・verifyLoginが失敗（401相当・null）  | 「ログインに失敗しました」が表示される      |
 // | T-04 | 画面表示                                             | 「招待コードをお持ちでない方はこちら」リンクが表示される |
 // | T-05 | 画面表示                                             | 「ログインせずに設定を見る」リンクが表示される |
+// | T-06 | extractInviteToken・トークンのみを渡す               | そのまま返す                               |
+// | T-07 | extractInviteToken・招待URL全体を渡す                | URL末尾のトークン部分だけを返す            |
+// | T-08 | extractInviteToken・前後に空白があるトークンを渡す   | トリムして返す                             |
+// | T-09 | 招待コードを入力して「招待コードで進む」をタップ     | 該当トークンで `/invite/:token` へ遷移する |
+// | T-10 | 招待URL全体を貼り付けて「招待コードで進む」をタップ  | 抽出したトークンで `/invite/:token` へ遷移する |
+// | T-11 | 招待コード未入力で「招待コードで進む」をタップ       | 遷移しない                                 |
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,6 +25,7 @@ import 'package:front/auth/domain/i_auth_repository.dart';
 import 'package:front/auth/presentation/login_screen.dart';
 import 'package:front/core/di/shared_preferences_provider.dart';
 import 'package:front/design/theme.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _FakeAuthRepository implements IAuthRepository {
@@ -99,7 +106,90 @@ Future<Widget> _buildApp({
   );
 }
 
+/// 「招待コードで進む」タップ（[GoRouter.go]）検証用に、`/invite/:token`
+/// への遷移だけを扱う簡易ルータで [LoginScreen] を配線する。
+Future<Widget> _buildRoutedApp() async {
+  SharedPreferences.setMockInitialValues({});
+  final prefs = await SharedPreferences.getInstance();
+  final router = GoRouter(
+    initialLocation: '/',
+    routes: [
+      GoRoute(
+        path: '/',
+        builder: (context, state) =>
+            LoginScreen(webauthnClient: _FakeWebauthnClient()),
+      ),
+      GoRoute(
+        path: '/invite/:token',
+        builder: (context, state) =>
+            Scaffold(body: Text('招待画面:${state.pathParameters['token']}')),
+      ),
+    ],
+  );
+  return ProviderScope(
+    overrides: [
+      sharedPreferencesProvider.overrideWithValue(prefs),
+      authRepositoryProvider.overrideWithValue(_FakeAuthRepository()),
+    ],
+    child: MaterialApp.router(theme: AppTheme.light(), routerConfig: router),
+  );
+}
+
 void main() {
+  test('[T-06] extractInviteToken_トークンのみを渡す_そのまま返す', () {
+    expect(extractInviteToken('abc123'), 'abc123');
+  });
+
+  test('[T-07] extractInviteToken_招待URL全体を渡す_URL末尾のトークン部分だけを返す', () {
+    expect(
+      extractInviteToken(
+        'https://race-schedule-front-test.pages.dev/invite/abc123',
+      ),
+      'abc123',
+    );
+  });
+
+  test('[T-08] extractInviteToken_前後に空白があるトークンを渡す_トリムして返す', () {
+    expect(extractInviteToken('  abc123  '), 'abc123');
+  });
+
+  testWidgets('[T-09] 招待コードを入力して進むをタップ_該当トークンでinvite画面へ遷移する', (tester) async {
+    await tester.pumpWidget(await _buildRoutedApp());
+    await tester.pump();
+
+    await tester.enterText(find.byType(TextField), 'abc123');
+    await tester.tap(find.text('招待コードで進む'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('招待画面:abc123'), findsOneWidget);
+  });
+
+  testWidgets('[T-10] 招待URL全体を貼り付けて進むをタップ_抽出したトークンでinvite画面へ遷移する', (
+    tester,
+  ) async {
+    await tester.pumpWidget(await _buildRoutedApp());
+    await tester.pump();
+
+    await tester.enterText(
+      find.byType(TextField),
+      'https://race-schedule-front-test.pages.dev/invite/abc123',
+    );
+    await tester.tap(find.text('招待コードで進む'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('招待画面:abc123'), findsOneWidget);
+  });
+
+  testWidgets('[T-11] 招待コード未入力で進むをタップ_遷移しない', (tester) async {
+    await tester.pumpWidget(await _buildRoutedApp());
+    await tester.pump();
+
+    await tester.tap(find.text('招待コードで進む'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('パスキーでログイン'), findsOneWidget);
+  });
+
   testWidgets('[T-01] パスキーでログイン_成功_sessionProviderにセッションが保存される', (
     tester,
   ) async {
