@@ -77,10 +77,23 @@ const rejectWildcardInProduction = (envOrigins: string[]): string[] => {
  * 完全一致比較（`getAllowedOrigin`）が常に失敗し、「設定したのにCORSエラーのまま」
  * という気づきにくい設定ミスになる。GitHub Actionsのrepository variableのような
  * UI入力は目視でスラッシュの有無を見落としやすいため、両側で正規化して吸収する。
+ * リクエストの`Origin`ヘッダーは攻撃者が任意の値を送れるため、正規表現ではなく
+ * ループで実装する（CodeQLがpolynomial regular expression使用を指摘したSEC対応。
+ * `/\/+$/`のような末尾に固定される`+`量指定子自体は本来ReDoSを起こさないが、
+ * 外部入力に対する正規表現の使用自体を避けた方が静的解析上も安全なため）。
  * @param value - 正規化対象のオリジン文字列
  * @returns 末尾スラッシュを除いた文字列
  */
-const stripTrailingSlash = (value: string): string => value.replace(/\/+$/, '');
+const stripTrailingSlash = (value: string): string => {
+    const hasTrailingSlashAt = (end: number): boolean =>
+        end > 0 && value[end - 1] === '/';
+
+    let end = value.length;
+    while (hasTrailingSlashAt(end)) {
+        end--;
+    }
+    return value.slice(0, end);
+};
 
 /**
  * envOriginsRaw（CORS_ALLOWED_ORIGINS の生値）から許可オリジンの配列を解決する。
