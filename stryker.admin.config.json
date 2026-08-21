@@ -2,21 +2,21 @@
     "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
 
     "mutate": [
-        "packages/core/src/**/*.ts",
-        "!packages/core/src/**/index.ts",
-        "!packages/core/src/**/constants/**",
-        "!packages/core/src/**/types/**"
+        "packages/admin/src/**/*.ts",
+        "!packages/admin/src/**/index.ts",
+        "!packages/admin/src/**/constants/**",
+        "!packages/admin/src/**/types/**"
     ],
 
     "testRunner": "command",
     "commandRunner": {
-        "command": "NODE_ENV=ci_local TZ=jst HTML_FETCH_DELAY_MS=0 bun test packages/core/test/unittest"
+        "command": "NODE_ENV=ci_local TZ=jst HTML_FETCH_DELAY_MS=0 bun test packages/admin/test/unittest"
     },
     "coverageAnalysis": "off",
 
     "reporters": ["html", "clear-text", "progress-append-only"],
     "htmlReporter": {
-        "fileName": "reports/mutation/core/index.html"
+        "fileName": "reports/mutation/admin/index.html"
     },
 
     "thresholds": {

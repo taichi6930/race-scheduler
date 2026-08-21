@@ -307,7 +307,7 @@ front（Flutter）のテストは `packages/front/test/` に widget test とし�
   詳細は [`.claude/docs/testing-conventions.md`](../.claude/docs/testing-conventions.md) §7.5）
 - `test/mock/`, `test/common/` は対象外（透明性のため計測のみ）
 
-### ミューテーションテスト（packages/core, 週次・非ブロッキング）
+### ミューテーションテスト（packages/{core,admin,batch,api}, 週次・非ブロッキング）
 
 C0/C1カバレッジ100%は「そのコードが実行されたか」しか保証せず、「アサーションが実際に
 振る舞いを検証しているか」までは保証しない。[Stryker Mutator](https://stryker-mutator.io/)
@@ -315,18 +315,25 @@ C0/C1カバレッジ100%は「そのコードが実行されたか」しか保�
 を注入し、既存テストがその変異を検知して落ちるか（kill できるか）を計測することで、
 アサーションの実効性を可視化する。
 
-- **対象**: `packages/core`（外部依存の少ない純粋なドメインロジックが集中し、効果が
-  出やすいため）のみ。他パッケージへの拡大は将来判断。
+- **対象**: `packages/core`・`packages/admin`・`packages/batch`・`packages/api`。
+  `packages/front` は Flutter/Dart のため Stryker（JS/TS向け）の対象外、`packages/db` は
+  マイグレーション専用で `src` が無いため対象外。
 - **実行方法**: `bun test` を直接サポートするミューテーションツールが無いため、Stryker の
   command runner（任意のテストコマンドを実行し終了コードで判定する汎用ランナー）を使う
-  （設定は [`stryker.core.config.json`](../stryker.core.config.json)、ローカル実行は
-  `bun run mutation:core`）。1ミュータントごとに `packages/core` の単体テストスイート
+  （設定はパッケージごとに `stryker.<pkg>.config.json`、ローカル実行は
+  `bun run mutation:<pkg>`）。1ミュータントごとに対象パッケージの単体テストスイート
   全体を実行し直すため実行コストが高く、PRごとには実行しない
   （sIT/UATと同じ理由。[`.github/workflows/mutation-testing.yml`](../.github/workflows/mutation-testing.yml)
-  が週次で実行し、HTMLレポートをArtifactとしてアップロードする）。
+  がパッケージごとに並列ジョブとして週次実行し、HTMLレポートをArtifactとしてアップロードする）。
+  各configの `ignorePatterns` は壊れたシンボリックリンク（private submodule由来）のみを除外し、
+  兄弟パッケージや `tests/` は除外しない（`packages/api` が `packages/db/migrations` と
+  `tests/shared` に実際に依存しているため）。
 - **非ブロッキング**: `thresholds.break` は `null` に設定しており、スコアの高低に
   関わらずジョブは常に成功する。まずは結果を可視化して傾向を把握することを優先し、
   PRのブロッキング化（CIゲート）は別途判断する。
+- **失敗時の可視化**: Stryker自体のクラッシュ・タイムアウト等でジョブが失敗した場合は、
+  `report-mutation-failure` ジョブがパッケージ単位でGitHub Issueを自動作成・自動Closeする
+  （`scheduled-tests.yml` の `report-test-failures` と同じ作法）。
 
 ---
 
