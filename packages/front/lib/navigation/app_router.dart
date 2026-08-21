@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../auth/application/auth_router_state.dart';
 import '../auth/presentation/invite_register_screen.dart';
+import '../auth/presentation/join_request_screen.dart';
 import '../auth/presentation/login_screen.dart';
 import '../design/breakpoints.dart';
 import '../features/announcement/presentation/announcement_banner_listener.dart';
@@ -43,8 +44,8 @@ final GoRouter appRouter = GoRouter(
   // のいずれも404画面へ着地していた）。タイムラインへ誘導する。
   //
   // 全画面ログイン必須（招待制クローズドサービス化）: セッションが無い状態で
-  // `/login`・`/invite/:token` 以外へアクセスしたらログイン画面へ、逆に
-  // ログイン済みで`/login`へアクセスしたらタイムラインへ誘導する。
+  // `/login`・`/invite/:token`・`/join` 以外へアクセスしたらログイン画面へ、
+  // 逆にログイン済みで`/login`へアクセスしたらタイムラインへ誘導する。
   // [authRouterState] は `MyApp`（`app.dart`）が `sessionProvider` の変化の
   // たびに反映するブリッジで、[refreshListenable] 経由でこの `redirect` を
   // 再評価させる（`appRouter`はトップレベル定数のためRiverpodの`ref`を
@@ -55,7 +56,8 @@ final GoRouter appRouter = GoRouter(
     if (state.uri.path == '/') return _AppDestination.timeline.path;
 
     final path = state.uri.path;
-    final isAuthRoute = path == '/login' || path.startsWith('/invite/');
+    final isAuthRoute =
+        path == '/login' || path == '/join' || path.startsWith('/invite/');
     if (!authRouterState.isLoggedIn && !isAuthRoute) return '/login';
     // ログイン済みで認証系ルート（/login・/invite/:token）に居る場合は
     // タイムラインへ誘導する。以前は`path == '/login'`のみを見ていたため、
@@ -72,9 +74,12 @@ final GoRouter appRouter = GoRouter(
     GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
     GoRoute(
       path: '/invite/:token',
-      builder: (context, state) => InviteRegisterScreen(
-        inviteToken: state.pathParameters['token']!,
-      ),
+      builder: (context, state) =>
+          InviteRegisterScreen(inviteToken: state.pathParameters['token']!),
+    ),
+    GoRoute(
+      path: '/join',
+      builder: (context, state) => const JoinRequestScreen(),
     ),
     GoRoute(
       path: '/trip-groups',

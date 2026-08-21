@@ -13,10 +13,30 @@ class AuthChallenge {
   final Map<String, dynamic> options;
 }
 
+/// 参加リクエスト（招待コードなしの自己申請）の承認状況
+/// （`GET /auth/join-request/:id` のレスポンス）。
+class JoinRequestStatus {
+  const JoinRequestStatus({required this.status, required this.inviteToken});
+
+  /// `'pending'`（承認待ち）・`'approved'`（承認済み）・`'rejected'`（却下）のいずれか。
+  final String status;
+
+  /// 承認済み（[status] == `'approved'`）の場合のみ非null。
+  /// [IAuthRepository.fetchRegisterOptions] へそのまま渡せる。
+  final String? inviteToken;
+}
+
 /// 招待制パスキー(WebAuthn)認証基盤（`packages/api`の`/auth/*`）との通信。
 abstract class IAuthRepository {
   /// 招待URLのトークンが有効か検証する。
   Future<bool> verifyInvite(String inviteToken);
+
+  /// 招待コードなしで参加をリクエストする。
+  /// @returns 承認状況のポーリングに使うリクエストID
+  Future<String> requestJoin(String nickname);
+
+  /// 参加リクエストの承認状況を取得する。
+  Future<JoinRequestStatus> fetchJoinRequestStatus(String requestId);
 
   /// 登録用チャレンジを取得する。招待が無効（400）な場合はnull。
   Future<AuthChallenge?> fetchRegisterOptions(String inviteToken);

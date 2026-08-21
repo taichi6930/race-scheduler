@@ -30,6 +30,30 @@ class AuthRepositoryImpl implements IAuthRepository {
   }
 
   @override
+  Future<String> requestJoin(String nickname) {
+    return handleDioCall(() async {
+      final response = await dio.post(
+        '/auth/join-request',
+        data: {'nickname': nickname},
+      );
+      final data = response.data as Map<String, dynamic>;
+      return data['requestId'] as String;
+    });
+  }
+
+  @override
+  Future<JoinRequestStatus> fetchJoinRequestStatus(String requestId) {
+    return handleDioCall(() async {
+      final response = await dio.get('/auth/join-request/$requestId');
+      final data = response.data as Map<String, dynamic>;
+      return JoinRequestStatus(
+        status: data['status'] as String,
+        inviteToken: data['inviteToken'] as String?,
+      );
+    });
+  }
+
+  @override
   Future<AuthChallenge?> fetchRegisterOptions(String inviteToken) async {
     try {
       return await handleDioCall(() async {
@@ -99,11 +123,10 @@ class AuthRepositoryImpl implements IAuthRepository {
     }
   }
 
-  AuthChallenge _challengeFromJson(Map<String, dynamic> json) =>
-      AuthChallenge(
-        challengeId: json['challengeId'] as String,
-        options: json['options'] as Map<String, dynamic>,
-      );
+  AuthChallenge _challengeFromJson(Map<String, dynamic> json) => AuthChallenge(
+    challengeId: json['challengeId'] as String,
+    options: json['options'] as Map<String, dynamic>,
+  );
 
   AuthSession _sessionFromJson(Map<String, dynamic> json) => AuthSession(
     token: json['sessionToken'] as String,
