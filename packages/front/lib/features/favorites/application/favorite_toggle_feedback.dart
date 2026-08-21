@@ -16,6 +16,7 @@ import 'favorite_ids_provider.dart';
 /// timeline_filter_feedback.dart（QERR-11）と同じパターンで、失敗した
 /// 場合のみ後追いでSnackBarを出す（登録直後の成功SnackBarはそれとは別に
 /// 即座に表示する。ここまで待って出すと連打時の反応が遅く見えるため）。
+/// 保存に失敗した場合は、表示を元の状態（[wasFavorite]）へ巻き戻す。
 void toggleFavoriteWithFeedback(
   BuildContext context,
   WidgetRef ref,
@@ -27,7 +28,12 @@ void toggleFavoriteWithFeedback(
   final saveResult = ref.read(favoriteIdsProvider.notifier).toggle(raceId);
   unawaited(
     saveResult.then((succeeded) {
-      if (succeeded || !context.mounted) return;
+      if (succeeded) return;
+      final notifier = ref.read(favoriteIdsProvider.notifier);
+      if (notifier.isFavorite(raceId) != wasFavorite) {
+        notifier.toggle(raceId);
+      }
+      if (!context.mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('お気に入りの保存に失敗しました')));
