@@ -22,3 +22,11 @@ export const isStringValue = (value: unknown): value is string =>
  */
 export const isNonNullObject = (value: unknown): value is object =>
     typeof value === 'object' && value !== null;
+
+/**
+ * 値が数値かどうかを判定する。
+ * @param value - 判定対象の値
+ * @returns 数値であれば true
+ */
+export const isNumberValue = (value: unknown): value is number =>
+    typeof value === 'number';
