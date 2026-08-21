@@ -11,7 +11,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:front/app.dart';
 import 'package:front/auth/application/session_provider.dart';
+import 'package:front/auth/data/auth_repository_impl.dart';
 import 'package:front/auth/domain/auth_session.dart';
+import 'package:front/auth/domain/i_auth_repository.dart';
 import 'package:front/core/di/shared_preferences_provider.dart';
 import 'package:front/domain/entities/race_entity.dart';
 import 'package:front/features/timeline/application/timeline_provider.dart';
@@ -19,6 +21,33 @@ import 'package:front/navigation/app_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/session_test_overrides.dart';
+
+/// T-03専用: `/invite/:token` 表示中に実HTTPを呼ばせないためのフェイク。
+/// InviteRegisterScreenはverifyInviteのみ呼ぶため、それ以外は使わない想定。
+class _FakeAuthRepository implements IAuthRepository {
+  @override
+  Future<bool> verifyInvite(String inviteToken) async => true;
+
+  @override
+  Future<AuthChallenge?> fetchRegisterOptions(String inviteToken) =>
+      throw UnimplementedError();
+
+  @override
+  Future<AuthSession?> verifyRegister({
+    required String challengeId,
+    required String nickname,
+    required Map<String, dynamic> credentialResponse,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<AuthChallenge> fetchLoginOptions() => throw UnimplementedError();
+
+  @override
+  Future<AuthSession?> verifyLogin({
+    required String challengeId,
+    required Map<String, dynamic> credentialResponse,
+  }) => throw UnimplementedError();
+}
 
 Future<Widget> _buildApp() async {
   SharedPreferences.setMockInitialValues({});
@@ -43,6 +72,7 @@ Future<Widget> _buildLoggedOutApp() async {
     overrides: [
       sharedPreferencesProvider.overrideWithValue(prefs),
       timelineProvider.overrideWith((ref, date) async => const <RaceEntity>[]),
+      authRepositoryProvider.overrideWithValue(_FakeAuthRepository()),
     ],
     child: const MyApp(),
   );
@@ -97,6 +127,7 @@ void main() {
 
     final container = ProviderScope.containerOf(
       tester.element(find.byType(MyApp)),
+      listen: false,
     );
     await container
         .read(sessionProvider.notifier)
