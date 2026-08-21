@@ -31,8 +31,9 @@
 // | T-27 | 「通知を受け取る」OFF・通知タイミングの＋をタップ（QSET-06） | notificationLeadMinutesは変化しない（無効化されている） |
 // | T-28 | 「バージョン」行をタップ（QSUP-04） | クリップボードへコピーされ、確認SnackBarが表示される |
 // | T-29 | 「このアプリについて」の内容確認（PUBGATE-02） | 非公式アプリである旨の免責文言が表示される |
-// | T-31 | 「お気に入りをすべて削除」→確認ダイアログで「削除」（QPRIV-05） | favoriteIdsProviderが空になり成功SnackBarが表示される |
-// | T-32 | 「お気に入りをすべて削除」→確認ダイアログで「キャンセル」（QPRIV-05） | favoriteIdsProviderは変更されない |
+// | T-31 | ログイン時・「お気に入りをすべて削除」→確認ダイアログで「削除」（QPRIV-05） | favoriteIdsProviderが空になり成功SnackBarが表示される |
+// | T-32 | ログイン時・「お気に入りをすべて削除」→確認ダイアログで「キャンセル」（QPRIV-05） | favoriteIdsProviderは変更されない |
+// | T-33 | 未ログイン時・「お気に入りをすべて削除」をタップ | 無効化されており確認ダイアログが表示されない |
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -50,6 +51,8 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher_platform_interface/link.dart';
 import 'package:url_launcher_platform_interface/url_launcher_platform_interface.dart';
+
+import '../../../../support/session_test_overrides.dart';
 
 class _FakeUrlLauncher extends UrlLauncherPlatform {
   _FakeUrlLauncher({required this.result});
@@ -73,6 +76,32 @@ Future<Widget> _buildApp(void Function(WidgetRef ref) captureRef) async {
   final prefs = await SharedPreferences.getInstance();
   return ProviderScope(
     overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+    child: Consumer(
+      builder: (context, ref, _) {
+        captureRef(ref);
+        return MaterialApp(
+          theme: AppTheme.light(),
+          home: const SettingsScreen(),
+        );
+      },
+    ),
+  );
+}
+
+/// [SettingsScreen] を、ログイン済み状態（[loggedInSessionOverride]）で
+/// 配線する。「お気に入りをすべて削除」（アカウントに紐づくデータの削除）は
+/// ログイン時のみ有効化されるため、その検証（T-31/T-32）専用に使う
+/// （設定画面自体は未ログインでも閲覧できるため、他のテストは既定の
+/// [_buildApp]＝未ログイン状態のままでよい）。
+Future<Widget> _buildLoggedInApp(
+  void Function(WidgetRef ref) captureRef,
+) async {
+  final prefs = await SharedPreferences.getInstance();
+  return ProviderScope(
+    overrides: [
+      sharedPreferencesProvider.overrideWithValue(prefs),
+      loggedInSessionOverride(),
+    ],
     child: Consumer(
       builder: (context, ref, _) {
         captureRef(ref);
@@ -635,10 +664,10 @@ void main() {
   });
 
   testWidgets(
-    '[T-31] お気に入りをすべて削除_確認ダイアログで削除_favoriteIdsProviderが空になり成功SnackBarが表示される',
+    '[T-31] ログイン時_お気に入りをすべて削除_確認ダイアログで削除_favoriteIdsProviderが空になり成功SnackBarが表示される',
     (tester) async {
       WidgetRef? ref;
-      await tester.pumpWidget(await _buildApp((r) => ref = r));
+      await tester.pumpWidget(await _buildLoggedInApp((r) => ref = r));
       await tester.pump();
       ref!.read(favoriteIdsProvider.notifier).toggle('race-001');
       await tester.pump();
@@ -675,13 +704,43 @@ void main() {
     },
   );
 
-  testWidgets('[T-32] お気に入りをすべて削除_確認ダイアログでキャンセル_favoriteIdsProviderは変更されない', (
+  testWidgets(
+    '[T-32] ログイン時_お気に入りをすべて削除_確認ダイアログでキャンセル_favoriteIdsProviderは変更されない',
+    (tester) async {
+      WidgetRef? ref;
+      await tester.pumpWidget(await _buildLoggedInApp((r) => ref = r));
+      await tester.pump();
+      ref!.read(favoriteIdsProvider.notifier).toggle('race-001');
+      await tester.pump();
+
+      await tester.dragUntilVisible(
+        find.text('お気に入りをすべて削除'),
+        find.byType(ListView),
+        const Offset(0, -300),
+      );
+      await tester.pump();
+      await tester.tap(
+        find.descendant(
+          of: find.ancestor(
+            of: find.text('お気に入りをすべて削除'),
+            matching: find.byType(SettingsActionRow),
+          ),
+          matching: find.text('削除'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('キャンセル'));
+      await tester.pumpAndSettle();
+
+      expect(ref!.read(favoriteIdsProvider).value, contains('race-001'));
+    },
+  );
+
+  testWidgets('[T-33] 未ログイン時_お気に入りをすべて削除は無効化されタップしても確認ダイアログが表示されない', (
     tester,
   ) async {
-    WidgetRef? ref;
-    await tester.pumpWidget(await _buildApp((r) => ref = r));
-    await tester.pump();
-    ref!.read(favoriteIdsProvider.notifier).toggle('race-001');
+    await tester.pumpWidget(await _buildApp((_) {}));
     await tester.pump();
 
     await tester.dragUntilVisible(
@@ -701,10 +760,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('キャンセル'));
-    await tester.pumpAndSettle();
-
-    expect(ref!.read(favoriteIdsProvider).value, contains('race-001'));
+    expect(find.text('お気に入りをすべて削除しますか？'), findsNothing);
   });
 
   testWidgets('[T-26] 通知を受け取るOFF_重賞を自動で通知トグルをタップ_変化しない', (tester) async {

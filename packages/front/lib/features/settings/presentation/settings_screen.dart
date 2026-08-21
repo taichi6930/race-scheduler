@@ -6,6 +6,7 @@ import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../auth/application/session_provider.dart';
 import '../../../core/app_version.dart';
 import '../../../core/config/admin_config.dart';
 import '../../../core/utils/external_link_launcher.dart';
@@ -32,6 +33,7 @@ class SettingsScreen extends ConsumerWidget {
     final colors = context.colors;
     final settings = ref.watch(settingsProvider);
     final notifier = ref.read(settingsProvider.notifier);
+    final isLoggedIn = ref.watch(sessionProvider) != null;
 
     return Scaffold(
       backgroundColor: colors.bg,
@@ -241,8 +243,12 @@ class SettingsScreen extends ConsumerWidget {
               SettingsActionRow(
                 icon: '🗑',
                 title: 'お気に入りをすべて削除',
-                subtitle: '登録済みのお気に入りレースを一括で削除する',
+                // お気に入りはアカウントに紐づくデータのため、未ログイン時は
+                // 無効化する（設定画面自体は未ログインでも閲覧できるが、
+                // このボタンだけは意味のある操作にならないため）。
+                subtitle: isLoggedIn ? '登録済みのお気に入りレースを一括で削除する' : 'ログインすると使えます',
                 actionLabel: '削除',
+                enabled: isLoggedIn,
                 onTap: () => _onClearAllFavorites(context, ref),
               ),
             ],
