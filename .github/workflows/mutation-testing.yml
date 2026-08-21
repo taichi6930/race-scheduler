@@ -111,6 +111,19 @@ jobs:
             - name: Checkout repository
               uses: actions/checkout@v7
 
+            # mutation-core が失敗した場合、原因（どのファイルの instrumentation/dry-run で
+            # こけたか）をIssue本文に直接埋め込むため、ログを含むartifactを取得する。
+            # mutation-core がartifactアップロード（`if: always()`）まで到達せずに落ちた
+            # 場合はartifact自体が存在しないため、continue-on-errorで握り潰す
+            # （後段でファイルが無ければ「ログ取得不可」として扱う）。
+            - name: Download mutation report log
+              if: needs.mutation-core.result == 'failure'
+              continue-on-error: true
+              uses: actions/download-artifact@v8
+              with:
+                  name: mutation-report
+                  path: mutation-report-artifact
+
             - name: Create GitHub App Token
               uses: ./.github/actions/create-github-app-token
               id: app-token
@@ -158,6 +171,23 @@ jobs:
                     exit 0
                   fi
 
+                  # どのファイル（instrumentation対象のsrcファイル・dry-runで落ちたテストファイル等）が
+                  # 原因かをIssue本文に直接埋め込む。「ERROR」等を含む行を前後の文脈込みで抜き出し、
+                  # 見つからなければ末尾を、artifact自体が無ければその旨を表示する（Actionsログへの
+                  # クリック遷移なしで一次切り分けできるようにするため）。
+                  log_file="mutation-report-artifact/mutation-report.log"
+                  if [ -f "$log_file" ]; then
+                    # grepが無マッチだと終了コード1を返し、pipefail経由でset -eがスクリプトごと
+                    # 落としてしまうため`|| true`で無マッチを正常系として扱う（snippetは空文字になり、
+                    # 直後のフォールバックへ回る）。
+                    snippet=$(grep -inE "error|fail|cannot|enoent" "$log_file" -A3 -B1 | tail -c 4000) || true
+                    if [ -z "$snippet" ]; then
+                      snippet=$(tail -n 60 "$log_file")
+                    fi
+                  else
+                    snippet="(ログartifactを取得できませんでした。Actionsの実行ログを直接確認してください)"
+                  fi
+
                   body="## mutation-core ジョブが失敗しました
 
                   - ワークフロー: \`mutation-testing.yml\` / ジョブ: \`mutation-core\`
@@ -169,6 +199,12 @@ jobs:
                   \`thresholds.break\` は null のためスコアではこのジョブは失敗しません）。
                   次回のスケジュール実行またはこのIssueを見た人による \`workflow_dispatch\` 手動実行で
                   成功すれば自動でCloseされます。
+
+                  ### ログ抜粋（原因ファイルの特定用）
+
+                  \`\`\`
+                  ${snippet}
+                  \`\`\`
 
                   _このIssueは \`.github/workflows/mutation-testing.yml\` により自動作成されました。_"
 
