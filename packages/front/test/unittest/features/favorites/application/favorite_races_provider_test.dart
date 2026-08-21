@@ -13,12 +13,68 @@
 // | T-09 | UpcomingFavoritesCache      | 結果が空（該当お気に入り無し）            | nowが進んでも再利用される  |
 // | T-10 | filterUpcomingFavoriteRaces | isWatched=trueだがfavoriteIdsに未登録（KPLAYER-07） | 結果に含まれる |
 // | T-11 | filterUpcomingFavoriteRaces | isWatched=false・favoriteIdsにも未登録    | 結果に含まれない          |
+// | T-12 | favoriteRacesRawProvider     | 未ログイン                                | 空リストを返しAPIを呼ばない |
+// | T-13 | favoriteRacesRawProvider     | ログイン済み                              | APIを呼び結果を返す       |
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:front/core/di/service_locator.dart';
+import 'package:front/core/di/shared_preferences_provider.dart';
+import 'package:front/domain/entities/calendar_event_preview.dart';
+import 'package:front/domain/entities/race_detail_ui.dart';
 import 'package:front/domain/entities/race_entity.dart';
+import 'package:front/domain/entities/race_player_entity.dart';
+import 'package:front/domain/repositories/i_race_repository.dart';
+import 'package:front/domain/usecases/get_races_by_date_range.dart';
+import 'package:front/features/favorites/application/favorite_ids_provider.dart';
 import 'package:front/features/favorites/application/favorite_races_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../../../support/session_test_overrides.dart';
 
 final _now = DateTime(2026, 4, 19, 15, 35);
+
+class _FixedFavoriteIdsNotifier extends FavoriteIdsNotifier {
+  _FixedFavoriteIdsNotifier(this._initial);
+
+  final Set<String> _initial;
+
+  @override
+  Set<String> build() => _initial;
+}
+
+class _CountingRaceRepository implements IRaceRepository {
+  int callCount = 0;
+
+  @override
+  Future<List<RaceEntity>> getRacesByDateRange({
+    required String startDate,
+    required String finishDate,
+    required List<String> raceTypeList,
+    List<String>? locationList,
+    List<String>? gradeList,
+    bool? isDisplayPlaceHeldDays,
+  }) async {
+    callCount++;
+    return [_race(id: 'a', offsetFromNow: const Duration(minutes: 5))];
+  }
+
+  @override
+  Future<CalendarEventPreview> getCalendarEventPreview(String raceId) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<RaceEntity?> getRaceDetail(String raceId) async => null;
+
+  @override
+  Future<RaceDetailUi> getRaceDetailUi(String raceId) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<RacePlayerEntity>> getRacePlayers(String raceId) async => [];
+}
 
 RaceEntity _race({
   required String id,
@@ -190,6 +246,57 @@ void main() {
 
       expect(identical(first, second), isTrue);
       expect(first, isEmpty);
+    });
+  });
+
+  group('favoriteRacesRawProvider', () {
+    late SharedPreferences prefs;
+    late _CountingRaceRepository repository;
+
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({});
+      prefs = await SharedPreferences.getInstance();
+      repository = _CountingRaceRepository();
+      if (getIt.isRegistered<GetRacesByDateRangeUseCase>()) {
+        getIt.unregister<GetRacesByDateRangeUseCase>();
+      }
+      getIt.registerSingleton<GetRacesByDateRangeUseCase>(
+        GetRacesByDateRangeUseCase(repository),
+      );
+    });
+
+    tearDown(() {
+      getIt.unregister<GetRacesByDateRangeUseCase>();
+    });
+
+    test('[T-12] 未ログイン_空リストを返しAPIを呼ばない', () async {
+      final container = ProviderContainer(
+        overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+      );
+      addTearDown(container.dispose);
+
+      final races = await container.read(favoriteRacesRawProvider.future);
+
+      expect(races, isEmpty);
+      expect(repository.callCount, 0);
+    });
+
+    test('[T-13] ログイン済み_APIを呼び結果を返す', () async {
+      final container = ProviderContainer(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          loggedInSessionOverride(),
+          favoriteIdsProvider.overrideWith(
+            () => _FixedFavoriteIdsNotifier({'a'}),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final races = await container.read(favoriteRacesRawProvider.future);
+
+      expect(races.map((r) => r.raceId), ['a']);
+      expect(repository.callCount, 1);
     });
   });
 }

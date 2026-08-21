@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../auth/application/session_provider.dart';
 import '../../../core/di/service_locator.dart';
 import '../../../core/jst_time.dart';
 import '../../../core/riverpod/ttl_refresh.dart';
@@ -31,7 +32,15 @@ const int favoritesSearchRangeDays = 30;
 /// レース一覧を実際に取得しないと判定できないため、favoriteIdsが空でも
 /// 常にAPIを呼ぶ（以前は空なら呼ばずに済ませていたが、注目選手のみ登録して
 /// いるユーザーがいるため早期returnは廃止した）。
+///
+/// 未ログイン時はAPIを呼ばない: `MyApp`（app.dart）が起動直後から
+/// [favoriteRacesProvider] を `ref.listen` するため、この関数がsession状態を
+/// 見ずに即APIを叩くと、ログイン画面が表示されるだけの未認証状態でも
+/// レースAPIへの不要なリクエストが発生してしまう（全画面ログイン必須の
+/// 設計と矛盾する）。
 final favoriteRacesRawProvider = FutureProvider<List<RaceEntity>>((ref) async {
+  if (ref.watch(sessionProvider) == null) return const <RaceEntity>[];
+
   scheduleTtlInvalidate(ref, defaultCacheTtl);
   final favoriteIds = ref.watch(favoriteIdsProvider).value ?? const <String>{};
 
