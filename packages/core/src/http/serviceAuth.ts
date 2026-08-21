@@ -97,6 +97,9 @@ export const readServiceAuthToken = (): string | undefined => {
  * @param headers - 元のヘッダ
  * @returns トークン付与後のヘッダ
  */
+/* oxlint-disable anti-slop/no-known-value-widening -- headers は呼び出し元が任意に
+   持つHTTPヘッダーの集合（キー・値ともに固定形状を持たない）で、そのままマージして
+   返す汎用関数のためRecord<string, string>が唯一正直な型。 */
 export const withServiceAuthHeader = (
     headers?: Record<string, string>,
 ): Record<string, string> => {
@@ -109,3 +112,4 @@ export const withServiceAuthHeader = (
     }
     return { ...headers, [SERVICE_AUTH_HEADER]: token };
 };
+/* oxlint-enable anti-slop/no-known-value-widening */
