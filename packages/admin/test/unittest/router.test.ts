@@ -295,7 +295,7 @@ describe('Admin Router', () => {
             inviteUrl: string;
         };
         expect(body.token).toBe('invite-token');
-        expect(body.inviteUrl).toBe('/invite/invite-token');
+        expect(body.inviteUrl).toBe('/#/invite/invite-token');
     });
 
     it('T-19: GET /participantsは200とHTMLを返す', async () => {

@@ -70,7 +70,7 @@ describe('admin/controller/InviteController', () => {
                 inviteUrl: string;
             };
             expect(body.token).toBe('invite-token');
-            expect(body.inviteUrl).toBe('/invite/invite-token');
+            expect(body.inviteUrl).toBe('/#/invite/invite-token');
         });
 
         it('3: bodyが不正な場合は400を返す', async () => {
