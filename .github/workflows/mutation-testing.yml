@@ -1,6 +1,7 @@
-name: Mutation Testing (core)
+name: Mutation Testing
 
-# packages/core（外部依存の少ない純粋なドメインロジックが集中するパッケージ）に対する
+# packages/{core,admin,batch,api}（front除く全TSパッケージ。front はFlutter/Dartのため
+# Stryker Mutatorの対象外。dbはマイグレーション専用でsrcが無いため対象外）に対する
 # ミューテーションテスト（Stryker Mutator）を週次で実行し、結果をレポートするだけの
 # 非ブロッキングなワークフロー。
 #
@@ -14,15 +15,19 @@ name: Mutation Testing (core)
 #
 # bun test を直接サポートするミューテーションツールが無いため、Stryker の
 # command runner（任意のテストコマンドを実行し終了コードで判定する汎用ランナー）を
-# 使う（stryker.core.config.json）。1ミュータントごとに対象パッケージの単体テスト
+# 使う（stryker.<pkg>.config.json）。1ミュータントごとに対象パッケージの単体テスト
 # スイート全体を実行し直すため、PRごとに実行するには重すぎる
 # （scheduled-tests.yml の sIT/UAT と同じ理由でスケジュール実行に分離している）。
 #
-# スコープをpackages/coreのみに限定しているのは、外部依存（Cloudflare Workers/D1等）が
-# 少なく揮発性の低い純粋ロジックが集中しており、ミューテーションテストの効果
-# （＝アサーションの実効性検証）が最も出やすいため。他パッケージへの拡大は将来判断。
+# 各stryker.<pkg>.config.jsonのignorePatternsは、壊れたシンボリックリンク
+# （private submoduleが本セッション・CIとも未checkoutのため、それを指す.claude/
+# CLAUDE.md/AGENTS.md/aidlc-docs/docsは実体が無い）だけを除外し、兄弟パッケージや
+# tests/は一切除外しない。api用configを作った際、`packages/db/migrations`
+# （apiのin-memory D1セットアップが参照）と`tests/shared`（ファクトリ）を除外して
+# dry-run自体が失敗する事故を実際に起こしており、パッケージ間の依存を安易に
+# 「使ってなさそうだから」で除外しないことを教訓として全パッケージのconfigに反映している。
 #
-# thresholds.break は意図的に null（stryker.core.config.json参照）にしており、
+# thresholds.break は意図的に null（各stryker.<pkg>.config.json参照）にしており、
 # スコアの高低に関わらずジョブは常に成功する。まずは結果を可視化して傾向を把握する
 # ことを優先し、PRのブロッキング化（CIゲート）は別途判断する
 # （audit/license-check等の既存の「まずは可視化」ジョブと同じ思想）。
@@ -43,11 +48,16 @@ concurrency:
     cancel-in-progress: false
 
 jobs:
+    # パッケージごとに別ジョブにしているのは、scheduled-tests.yml（uat-smoke/sit/audit）と
+    # 同じ理由: 並列実行され、失敗Issueもパッケージ単位でdedupしたい（1ジョブにまとめると
+    # 失敗の切り分け・Issueのタイトルが曖昧になる）。matrix化も検討したが、matrix jobの
+    # `needs.<job>.result`は全legの集約（1つでも失敗すればfailure）にしかならず
+    # パッケージ単位の判定ができないため、明示的な個別ジョブを選んだ。
     mutation-core:
         runs-on: ubuntu-24.04
         # ローカル実測（4コア環境）で約3〜4分/727ミュータント。packages/core全体
-        # （本ワークフロー実行時点で約6,500ミュータント想定）では30〜60分程度を見込むが、
-        # GitHub-hosted runnerのコア数・負荷次第で変動するため大きめに確保する。
+        # （約6,500ミュータント想定）では30〜60分程度を見込むが、GitHub-hosted runnerの
+        # コア数・負荷次第で変動するため大きめに確保する。
         timeout-minutes: 90
         env:
             NODE_ENV: ci_github_actions
@@ -78,29 +88,176 @@ jobs:
                     grep -B2 "^All files" mutation-report.log || echo "(結果テーブルを取得できませんでした。詳細はログを参照してください)"
                     echo '```'
                     echo ""
-                    echo "詳細は本ジョブの \`mutation-report\` artifact（HTMLレポート）を参照してください。"
+                    echo "詳細は本ジョブの \`mutation-report-core\` artifact（HTMLレポート）を参照してください。"
                   } >> "$GITHUB_STEP_SUMMARY"
 
             - name: Upload mutation report
               if: always()
               uses: actions/upload-artifact@v7
               with:
-                  name: mutation-report
+                  name: mutation-report-core
                   path: |
                       reports/mutation/core/
                       mutation-report.log
                   retention-days: 30
                   if-no-files-found: warn
 
-    # 週次・無人実行のため、mutation-core ジョブ自体が失敗（Strykerのクラッシュ・
+    mutation-admin:
+        runs-on: ubuntu-24.04
+        # ローカル実測: packages/admin全体で508ミュータント、テストスイート実行~0.4秒/回と
+        # 軽量。数分〜十数分程度を見込むが、初回の実挙動確認までは大きめに確保する。
+        timeout-minutes: 30
+        env:
+            NODE_ENV: ci_github_actions
+            CI: "true"
+            TZ: jst
+            HTML_FETCH_DELAY_MS: "0"
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v7
+              with:
+                  filter: blob:none
+
+            - name: Setup workspace
+              uses: ./.github/actions/setup-workspace
+              with:
+                  setup-node: "false"
+
+            - name: Run mutation testing (packages/admin)
+              run: bun run mutation:admin | tee mutation-report.log
+
+            - name: Write job summary
+              if: always()
+              run: |
+                  {
+                    echo "## Mutation Testing (packages/admin)"
+                    echo ""
+                    echo '```'
+                    grep -B2 "^All files" mutation-report.log || echo "(結果テーブルを取得できませんでした。詳細はログを参照してください)"
+                    echo '```'
+                    echo ""
+                    echo "詳細は本ジョブの \`mutation-report-admin\` artifact（HTMLレポート）を参照してください。"
+                  } >> "$GITHUB_STEP_SUMMARY"
+
+            - name: Upload mutation report
+              if: always()
+              uses: actions/upload-artifact@v7
+              with:
+                  name: mutation-report-admin
+                  path: |
+                      reports/mutation/admin/
+                      mutation-report.log
+                  retention-days: 30
+                  if-no-files-found: warn
+
+    mutation-batch:
+        runs-on: ubuntu-24.04
+        # ローカル実測: packages/batch全体で855ミュータント。HTTPクライアント系テストが
+        # コアより重く、1ファイル31ミュータントで1分15秒かかったケースを確認済みのため、
+        # admin相当のミュータント数でもより大きめの余裕を見る。
+        timeout-minutes: 45
+        env:
+            NODE_ENV: ci_github_actions
+            CI: "true"
+            TZ: jst
+            HTML_FETCH_DELAY_MS: "0"
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v7
+              with:
+                  filter: blob:none
+
+            - name: Setup workspace
+              uses: ./.github/actions/setup-workspace
+              with:
+                  setup-node: "false"
+
+            - name: Run mutation testing (packages/batch)
+              run: bun run mutation:batch | tee mutation-report.log
+
+            - name: Write job summary
+              if: always()
+              run: |
+                  {
+                    echo "## Mutation Testing (packages/batch)"
+                    echo ""
+                    echo '```'
+                    grep -B2 "^All files" mutation-report.log || echo "(結果テーブルを取得できませんでした。詳細はログを参照してください)"
+                    echo '```'
+                    echo ""
+                    echo "詳細は本ジョブの \`mutation-report-batch\` artifact（HTMLレポート）を参照してください。"
+                  } >> "$GITHUB_STEP_SUMMARY"
+
+            - name: Upload mutation report
+              if: always()
+              uses: actions/upload-artifact@v7
+              with:
+                  name: mutation-report-batch
+                  path: |
+                      reports/mutation/batch/
+                      mutation-report.log
+                  retention-days: 30
+                  if-no-files-found: warn
+
+    mutation-api:
+        runs-on: ubuntu-24.04
+        # ローカル実測: packages/api/src/controller のみ（26ファイル・568ミュータント）で
+        # 約17〜20分（テストスイート1回=約5.8秒とcore比8倍重い）。api全体は約3,800〜4,200
+        # ミュータント想定で70〜100分程度を見込むが、4パッケージ中最も重いため大きめに確保する。
+        timeout-minutes: 150
+        env:
+            NODE_ENV: ci_github_actions
+            CI: "true"
+            TZ: jst
+            HTML_FETCH_DELAY_MS: "0"
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v7
+              with:
+                  filter: blob:none
+
+            - name: Setup workspace
+              uses: ./.github/actions/setup-workspace
+              with:
+                  setup-node: "false"
+
+            - name: Run mutation testing (packages/api)
+              run: bun run mutation:api | tee mutation-report.log
+
+            - name: Write job summary
+              if: always()
+              run: |
+                  {
+                    echo "## Mutation Testing (packages/api)"
+                    echo ""
+                    echo '```'
+                    grep -B2 "^All files" mutation-report.log || echo "(結果テーブルを取得できませんでした。詳細はログを参照してください)"
+                    echo '```'
+                    echo ""
+                    echo "詳細は本ジョブの \`mutation-report-api\` artifact（HTMLレポート）を参照してください。"
+                  } >> "$GITHUB_STEP_SUMMARY"
+
+            - name: Upload mutation report
+              if: always()
+              uses: actions/upload-artifact@v7
+              with:
+                  name: mutation-report-api
+                  path: |
+                      reports/mutation/api/
+                      mutation-report.log
+                  retention-days: 30
+                  if-no-files-found: warn
+
+    # 週次・無人実行のため、各mutation-<pkg>ジョブ自体が失敗（Strykerのクラッシュ・
     # タイムアウト等）してもActionsのRun一覧を人が見に行かない限り気づけない。
     # scheduled-tests.yml の report-test-failures ジョブと同じ作法（GitHub App token +
-    # タイトルでdedupしたIssueを作成、復旧したら自動Close）で可視化する。
+    # タイトルでdedupしたIssueを作成、復旧したら自動Close。パッケージ単位で1関数を
+    # 使い回す構成も同ジョブのreport_targetパターンを踏襲）で可視化する。
     # 対象はジョブの失敗のみ（ミューテーションスコアの高低はthresholds.breakがnullのため
     # ここでは検知しない。スコアの傾向は別途 docs/tasks/test-quality-audit.md への
     # 手動トリアージで扱う）。
     report-mutation-failure:
-        needs: mutation-core
+        needs: [mutation-core, mutation-admin, mutation-batch, mutation-api]
         if: always()
         runs-on: ubuntu-24.04
         timeout-minutes: 5
@@ -111,18 +268,19 @@ jobs:
             - name: Checkout repository
               uses: actions/checkout@v7
 
-            # mutation-core が失敗した場合、原因（どのファイルの instrumentation/dry-run で
-            # こけたか）をIssue本文に直接埋め込むため、ログを含むartifactを取得する。
-            # mutation-core がartifactアップロード（`if: always()`）まで到達せずに落ちた
-            # 場合はartifact自体が存在しないため、continue-on-errorで握り潰す
-            # （後段でファイルが無ければ「ログ取得不可」として扱う）。
-            - name: Download mutation report log
-              if: needs.mutation-core.result == 'failure'
+            # 失敗した場合、原因（どのファイルのinstrumentation/dry-runでこけたか）を
+            # Issue本文に直接埋め込むため、各ジョブがアップロードしたログartifactを
+            # まとめて取得する。`pattern`で`mutation-report-*`を一括ダウンロードし、
+            # artifact名ごとのサブディレクトリに展開する（download-artifact@v8の既定挙動）。
+            # 該当ジョブがartifactアップロード（`if: always()`）まで到達せずに落ちた場合は
+            # そのartifact自体が存在しないため、continue-on-errorで握り潰す（後段でファイルが
+            # 無ければ「ログ取得不可」として扱う）。
+            - name: Download mutation report logs
               continue-on-error: true
               uses: actions/download-artifact@v8
               with:
-                  name: mutation-report
-                  path: mutation-report-artifact
+                  pattern: mutation-report-*
+                  path: mutation-reports
 
             - name: Create GitHub App Token
               uses: ./.github/actions/create-github-app-token
@@ -131,66 +289,77 @@ jobs:
                   app-id: ${{ secrets.BOT_APP_ID }}
                   private-key: ${{ secrets.BOT_PRIVATE_KEY }}
 
-            - name: Sync GitHub Issue for mutation-core job failure
+            - name: Sync GitHub Issues for mutation job failures
               env:
                   GH_TOKEN: ${{ steps.app-token.outputs.token }}
                   GH_REPO: ${{ github.repository }}
                   RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-                  RESULT_MUTATION_CORE: ${{ needs.mutation-core.result }}
+                  RESULT_CORE: ${{ needs.mutation-core.result }}
+                  RESULT_ADMIN: ${{ needs.mutation-admin.result }}
+                  RESULT_BATCH: ${{ needs.mutation-batch.result }}
+                  RESULT_API: ${{ needs.mutation-api.result }}
               run: |
-                  set -euo pipefail
+                  set -uo pipefail
 
-                  result="$RESULT_MUTATION_CORE"
+                  # 対象1パッケージ分の同期。サブシェル関数として定義し、内部で
+                  # `set -euo pipefail`を有効にすることで、1対象で想定外のエラー
+                  # （gh CLI失敗等）が起きても呼び出し元のループやスクリプト全体を止めず、
+                  # 他対象の同期を継続できるようにしている（scheduled-tests.ymlと同じ設計）。
+                  report_target() (
+                    set -euo pipefail
+                    pkg="$1"
+                    result="$2"
 
-                  # skipped/cancelledはテスト失敗ではないため、既存Issueの状態も変えず何もしない
-                  # （scheduled-tests.ymlのreport_targetと同じ判断基準）。
-                  if [ "$result" = "skipped" ] || [ "$result" = "cancelled" ]; then
-                    echo "mutation-core: $result（対象外のため何もしません）"
-                    exit 0
-                  fi
+                    # skipped/cancelledはテスト失敗ではないため、既存Issueの状態も変えず
+                    # 何もしない（scheduled-tests.ymlのreport_targetと同じ判断基準）。
+                    if [ "$result" = "skipped" ] || [ "$result" = "cancelled" ]; then
+                      echo "[$pkg] $result（対象外のため何もしません）"
+                      exit 0
+                    fi
 
-                  title="[Test Failure] mutation-core（Mutation Testing）が失敗"
-                  label="test-failure:mutation-core"
+                    title="[Test Failure] mutation-${pkg}（Mutation Testing）が失敗"
+                    label="test-failure:mutation-${pkg}"
 
-                  gh label create "test-failure" --color "B60205" \
-                    --description "テスト失敗の自動起票" >/dev/null 2>&1 || true
-                  gh label create "$label" --color "B60205" \
-                    --description "テスト失敗 (mutation-core)" >/dev/null 2>&1 || true
+                    gh label create "test-failure" --color "B60205" \
+                      --description "テスト失敗の自動起票" >/dev/null 2>&1 || true
+                    gh label create "$label" --color "B60205" \
+                      --description "テスト失敗 (mutation-${pkg})" >/dev/null 2>&1 || true
 
-                  existing=$(gh issue list --state open --json number,title \
-                    | jq --arg t "$title" '[.[] | select(.title == $t)] | .[0].number // empty')
+                    existing=$(gh issue list --state open --json number,title \
+                      | jq --arg t "$title" '[.[] | select(.title == $t)] | .[0].number // empty')
 
-                  if [ "$result" = "success" ]; then
-                    if [ -n "$existing" ]; then
-                      gh issue comment "$existing" --body "直近の実行（${RUN_URL}）でmutation-coreジョブが成功したため、自動的にCloseします。再発した場合は新しいIssueが作成されます。"
-                      gh issue close "$existing"
-                      echo "復旧を確認し、Issue #$existing をCloseしました"
+                    if [ "$result" = "success" ]; then
+                      if [ -n "$existing" ]; then
+                        gh issue comment "$existing" --body "直近の実行（${RUN_URL}）でmutation-${pkg}ジョブが成功したため、自動的にCloseします。再発した場合は新しいIssueが作成されます。"
+                        gh issue close "$existing"
+                        echo "[$pkg] 復旧を確認し、Issue #$existing をCloseしました"
+                      else
+                        echo "[$pkg] 成功。対象Issueもなし（何もしません）"
+                      fi
+                      exit 0
+                    fi
+
+                    # どのファイル（instrumentation対象のsrcファイル・dry-runで落ちたテスト
+                    # ファイル等）が原因かをIssue本文に直接埋め込む。「ERROR」等を含む行を
+                    # 前後の文脈込みで抜き出し、見つからなければ末尾を、artifact自体が無ければ
+                    # その旨を表示する（Actionsログへのクリック遷移なしで一次切り分けできる
+                    # ようにするため）。
+                    log_file="mutation-reports/mutation-report-${pkg}/mutation-report.log"
+                    if [ -f "$log_file" ]; then
+                      # grepが無マッチだと終了コード1を返し、pipefail経由でset -eがスクリプト
+                      # ごと落としてしまうため`|| true`で無マッチを正常系として扱う（snippetは
+                      # 空文字になり、直後のフォールバックへ回る）。
+                      snippet=$(grep -inE "error|fail|cannot|enoent" "$log_file" -A3 -B1 | tail -c 4000) || true
+                      if [ -z "$snippet" ]; then
+                        snippet=$(tail -n 60 "$log_file")
+                      fi
                     else
-                      echo "成功。対象Issueもなし（何もしません）"
+                      snippet="(ログartifactを取得できませんでした。Actionsの実行ログを直接確認してください)"
                     fi
-                    exit 0
-                  fi
 
-                  # どのファイル（instrumentation対象のsrcファイル・dry-runで落ちたテストファイル等）が
-                  # 原因かをIssue本文に直接埋め込む。「ERROR」等を含む行を前後の文脈込みで抜き出し、
-                  # 見つからなければ末尾を、artifact自体が無ければその旨を表示する（Actionsログへの
-                  # クリック遷移なしで一次切り分けできるようにするため）。
-                  log_file="mutation-report-artifact/mutation-report.log"
-                  if [ -f "$log_file" ]; then
-                    # grepが無マッチだと終了コード1を返し、pipefail経由でset -eがスクリプトごと
-                    # 落としてしまうため`|| true`で無マッチを正常系として扱う（snippetは空文字になり、
-                    # 直後のフォールバックへ回る）。
-                    snippet=$(grep -inE "error|fail|cannot|enoent" "$log_file" -A3 -B1 | tail -c 4000) || true
-                    if [ -z "$snippet" ]; then
-                      snippet=$(tail -n 60 "$log_file")
-                    fi
-                  else
-                    snippet="(ログartifactを取得できませんでした。Actionsの実行ログを直接確認してください)"
-                  fi
+                    body="## mutation-${pkg} ジョブが失敗しました
 
-                  body="## mutation-core ジョブが失敗しました
-
-                  - ワークフロー: \`mutation-testing.yml\` / ジョブ: \`mutation-core\`
+                  - ワークフロー: \`mutation-testing.yml\` / ジョブ: \`mutation-${pkg}\`
                   - 実行結果: ${result}
                   - 実行ログ: ${RUN_URL}
 
@@ -208,15 +377,24 @@ jobs:
 
                   _このIssueは \`.github/workflows/mutation-testing.yml\` により自動作成されました。_"
 
-                  if [ -n "$existing" ]; then
-                    gh issue comment "$existing" --body "$body"
-                    target="$existing"
-                    echo "既存Issue #$existing にコメントを追加しました"
-                  else
-                    issue_url=$(gh issue create --title "$title" --body "$body")
-                    target="${issue_url##*/}"
-                    echo "新規Issue #$target を作成しました"
-                  fi
+                    if [ -n "$existing" ]; then
+                      gh issue comment "$existing" --body "$body"
+                      target="$existing"
+                      echo "[$pkg] 既存Issue #$existing にコメントを追加しました"
+                    else
+                      issue_url=$(gh issue create --title "$title" --body "$body")
+                      target="${issue_url##*/}"
+                      echo "[$pkg] 新規Issue #$target を作成しました"
+                    fi
 
-                  gh issue edit "$target" --add-label "$label" --add-label "test-failure" \
-                    || echo "::warning::Issue #$target へのラベル付与に失敗しました"
+                    gh issue edit "$target" --add-label "$label" --add-label "test-failure" \
+                      || echo "::warning::[$pkg] Issue #$target へのラベル付与に失敗しました"
+                  )
+
+                  overall_status=0
+                  report_target "core" "$RESULT_CORE" || overall_status=1
+                  report_target "admin" "$RESULT_ADMIN" || overall_status=1
+                  report_target "batch" "$RESULT_BATCH" || overall_status=1
+                  report_target "api" "$RESULT_API" || overall_status=1
+
+                  exit "$overall_status"
