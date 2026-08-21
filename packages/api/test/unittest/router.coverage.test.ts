@@ -25,6 +25,9 @@
  * | T-17 | GET /docs         | -                                          | 200・Scalar UIのHTML                |
  * | T-18 | GET /docs         | -                                          | CSPがCDN（cdn.jsdelivr.net）からの読み込みを許可する（実機で画面が空白になった不具合の回帰） |
  * | T-19 | GET /openapi.json | -                                          | CSPは他エンドポイント同様 default-src 'none' のまま |
+ * | T-20 | GET /auth/join-request/:id | controller.joinRequestStatus が throw | 500・handleApiError で返る |
+ * | T-21 | POST /auth/join-requests/:id/approve | controller.approveJoinRequest が throw | 500・handleApiError で返る |
+ * | T-22 | POST /auth/join-requests/:id/reject | controller.rejectJoinRequest が throw | 500・handleApiError で返る |
  */
 import 'reflect-metadata';
 
@@ -138,13 +141,38 @@ interface RenameCredentialControllerLike {
 }
 
 /**
- * AuthController を差し替える（renameCredential が例外を投げるダブル）。
+ * router 内の GET /auth/join-request/:id ハンドラが呼ぶ AuthController の
+ * メソッドと同型の最小インターフェース。joinRequestStatus のみを差し替えて
+ * catch 分岐を検証する。
+ */
+interface JoinRequestStatusControllerLike {
+    joinRequestStatus: (requestId: string) => Promise<Response>;
+}
+
+/**
+ * router 内の POST /auth/join-requests/:id/approve・reject ハンドラが呼ぶ
+ * AuthController のメソッドと同型の最小インターフェース。承認/却下のみを
+ * 差し替えて catch 分岐を検証する。
+ */
+interface JoinRequestDecisionControllerLike {
+    approveJoinRequest: (requestId: string) => Promise<Response>;
+    rejectJoinRequest: (requestId: string) => Promise<Response>;
+}
+
+type BrokenAuthController =
+    | RenameCredentialControllerLike
+    | JoinRequestStatusControllerLike
+    | JoinRequestDecisionControllerLike;
+
+/**
+ * AuthController を差し替える（renameCredential/join-request系メソッドが
+ * 例外を投げるダブル）。
  * @param controller - 登録するコントローラダブル
  */
 const registerBrokenAuthController = (
-    controller: RenameCredentialControllerLike,
+    controller: BrokenAuthController,
 ): void => {
-    container.register<RenameCredentialControllerLike>(AuthController, {
+    container.register<BrokenAuthController>(AuthController, {
         useValue: controller,
     });
 };
@@ -658,6 +686,80 @@ describe('API Router (追加カバレッジ)', () => {
                     },
                     body: JSON.stringify({ deviceLabel: '新ラベル' }),
                 },
+            );
+
+            // Act
+            const response = await router.fetch(request, mockEnv);
+
+            // Assert
+            expect(response.status).toBe(500);
+        });
+    });
+
+    describe('GET /auth/join-request/:id (controller 例外)', () => {
+        it('joinRequestStatus_controllerがthrow_500でhandleApiErrorが返ること', async () => {
+            // Arrange
+            await warmUpDI();
+            const brokenController: JoinRequestStatusControllerLike = {
+                joinRequestStatus: (): Promise<Response> => {
+                    throw new Error('joinRequestStatus boom');
+                },
+            };
+            registerBrokenAuthController(brokenController);
+            const request = new Request(
+                'http://localhost/auth/join-request/some-request-id',
+            );
+
+            // Act
+            const response = await router.fetch(request, mockEnv);
+
+            // Assert
+            expect(response.status).toBe(500);
+        });
+    });
+
+    describe('POST /auth/join-requests/:id/approve (controller 例外)', () => {
+        it('approveJoinRequest_controllerがthrow_500でhandleApiErrorが返ること', async () => {
+            // Arrange
+            await warmUpDI();
+            const brokenController: JoinRequestDecisionControllerLike = {
+                approveJoinRequest: (): Promise<Response> => {
+                    throw new Error('approveJoinRequest boom');
+                },
+                rejectJoinRequest: (): Promise<Response> => {
+                    throw new Error('rejectJoinRequest boom');
+                },
+            };
+            registerBrokenAuthController(brokenController);
+            const request = new Request(
+                'http://localhost/auth/join-requests/some-request-id/approve',
+                { method: 'POST', headers: authHeaders() },
+            );
+
+            // Act
+            const response = await router.fetch(request, mockEnv);
+
+            // Assert
+            expect(response.status).toBe(500);
+        });
+    });
+
+    describe('POST /auth/join-requests/:id/reject (controller 例外)', () => {
+        it('rejectJoinRequest_controllerがthrow_500でhandleApiErrorが返ること', async () => {
+            // Arrange
+            await warmUpDI();
+            const brokenController: JoinRequestDecisionControllerLike = {
+                approveJoinRequest: (): Promise<Response> => {
+                    throw new Error('approveJoinRequest boom');
+                },
+                rejectJoinRequest: (): Promise<Response> => {
+                    throw new Error('rejectJoinRequest boom');
+                },
+            };
+            registerBrokenAuthController(brokenController);
+            const request = new Request(
+                'http://localhost/auth/join-requests/some-request-id/reject',
+                { method: 'POST', headers: authHeaders() },
             );
 
             // Act

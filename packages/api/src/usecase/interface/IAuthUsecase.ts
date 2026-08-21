@@ -1,4 +1,14 @@
-import type { ParticipantRow } from '../../repository/interface/IAuthRepository';
+import type {
+    JoinRequestRecord,
+    ParticipantRow,
+} from '../../repository/interface/IAuthRepository';
+
+/** join-requestの現在状態（front側のポーリングに返す値）。 */
+export interface JoinRequestStatusResult {
+    readonly status: 'pending' | 'approved' | 'rejected';
+    /** 承認済みなら、既存の招待登録フロー（getRegistrationOptions）にそのまま渡せる招待トークン。 */
+    readonly inviteToken: string | null;
+}
 
 export interface InviteVerifyResult {
     readonly valid: boolean;
@@ -63,4 +73,18 @@ export interface IAuthUsecase {
         credentialId: string,
         deviceLabel: string,
     ) => Promise<boolean>;
+
+    /** 招待コードを持たないユーザーが参加リクエストを送る（front、未ログイン）。 */
+    requestJoin: (nickname: string) => Promise<{ requestId: string }>;
+    /** リクエストした端末が承認状況をポーリングする（front、未ログイン）。 */
+    getJoinRequestStatus: (
+        requestId: string,
+    ) => Promise<JoinRequestStatusResult | null>;
+
+    /** 承認待ちの参加リクエスト一覧（admin専用、サービス間認証）。 */
+    listJoinRequests: () => Promise<JoinRequestRecord[]>;
+    /** 参加リクエストを承認し、招待を発行して紐付ける（admin専用）。 */
+    approveJoinRequest: (requestId: string) => Promise<boolean>;
+    /** 参加リクエストを却下する（admin専用）。 */
+    rejectJoinRequest: (requestId: string) => Promise<boolean>;
 }

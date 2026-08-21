@@ -56,4 +56,8 @@ export const RenameCredentialRequestSchema = z.object({
     deviceLabel: z.string().min(1).max(DEVICE_LABEL_MAX_LENGTH),
 });
 
+export const JoinRequestSchema = z.object({
+    nickname: z.string().min(1).max(NICKNAME_MAX_LENGTH),
+});
+
 export { USER_AGENT_MAX_LENGTH };

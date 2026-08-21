@@ -543,6 +543,8 @@ export const SERVICE_AUTH_EXEMPT_ROUTES: readonly ServiceAuthExemptRoute[] = [
     { method: 'POST', path: '/auth/login/options', reason: 'front-public' },
     { method: 'POST', path: '/auth/login/verify', reason: 'front-public' },
     { method: 'POST', path: '/auth/logout', reason: 'front-public' },
+    { method: 'POST', path: '/auth/join-request', reason: 'front-public' },
+    { method: 'GET', path: '/auth/join-request/*', reason: 'front-public' },
 ];
 
 /**
@@ -571,6 +573,9 @@ export const APP_AUTH_ROUTES: readonly AppAuthRoute[] = [
     { method: 'POST', path: '/auth/login/options', policy: 'public' },
     { method: 'POST', path: '/auth/login/verify', policy: 'public' },
     { method: 'POST', path: '/auth/logout', policy: 'public' },
+    // 招待コードを持たないユーザーの参加リクエスト自体もログイン前に呼ぶ必要があるため公開
+    { method: 'POST', path: '/auth/join-request', policy: 'public' },
+    { method: 'GET', path: '/auth/join-request/*', policy: 'public' },
 
     // frontの閲覧 + calendar/scraping Workerからのサービス間呼び出しの両方から呼ばれる
     { method: 'GET', path: '/ui/announcement', policy: 'service-or-session' },
@@ -602,6 +607,8 @@ export const APP_AUTH_ROUTES: readonly AppAuthRoute[] = [
     // admin専用（サービス間認証のみ）。他は既定のservice-onlyに委ねる
     { method: 'POST', path: '/auth/invite', policy: 'service-only' },
     { method: 'GET', path: '/auth/participants', policy: 'service-only' },
+    { method: 'GET', path: '/auth/join-requests', policy: 'service-only' },
+    { method: 'POST', path: '/auth/join-requests/*', policy: 'service-only' },
 ];
 
 /**
@@ -835,6 +842,43 @@ const registerAuthAdminRoutes = (router: Hono): void => {
             invoke: (controller) => controller.participants(),
         },
     ]);
+    registerMethodDispatch(router, '/auth/join-requests', AuthController, [
+        {
+            httpMethod: 'get',
+            invoke: (controller) => controller.joinRequests(),
+        },
+    ]);
+    registerJoinRequestDecisionRoutes(router);
+};
+
+/**
+ * `POST /auth/join-requests/:id/approve`・`POST /auth/join-requests/:id/reject`
+ * （動的パスのためregisterMethodDispatchでは扱えない）。
+ * @param router
+ */
+const registerJoinRequestDecisionRoutes = (router: Hono): void => {
+    router.post('/auth/join-requests/:id/approve', async (c: Context) => {
+        try {
+            const requestId = c.req.param('id');
+            if (!requestId) return badRequest('idが不正です', 400);
+            ensureDIInitialized(c.env);
+            const controller = container.resolve(AuthController);
+            return await controller.approveJoinRequest(requestId);
+        } catch (error) {
+            return handleApiError(c, error);
+        }
+    });
+    router.post('/auth/join-requests/:id/reject', async (c: Context) => {
+        try {
+            const requestId = c.req.param('id');
+            if (!requestId) return badRequest('idが不正です', 400);
+            ensureDIInitialized(c.env);
+            const controller = container.resolve(AuthController);
+            return await controller.rejectJoinRequest(requestId);
+        } catch (error) {
+            return handleApiError(c, error);
+        }
+    });
 };
 
 /**
@@ -880,6 +924,39 @@ const registerAuthCeremonyRoutes = (router: Hono): void => {
         },
     ]);
     registerRenameCredentialRoute(router);
+    registerJoinRequestRoutes(router);
+};
+
+/**
+ * `POST /auth/join-request`・`GET /auth/join-request/:id`。
+ * @param router
+ */
+const registerJoinRequestRoutes = (router: Hono): void => {
+    registerMethodDispatch(router, '/auth/join-request', AuthController, [
+        {
+            httpMethod: 'post',
+            invoke: (controller, c) => controller.requestJoin(c.req.raw),
+        },
+    ]);
+    registerJoinRequestStatusRoute(router);
+};
+
+/**
+ * `GET /auth/join-request/:id`（動的パスのためregisterMethodDispatchでは扱えない）。
+ * @param router
+ */
+const registerJoinRequestStatusRoute = (router: Hono): void => {
+    router.get('/auth/join-request/:id', async (c: Context) => {
+        try {
+            const requestId = c.req.param('id');
+            if (!requestId) return badRequest('idが不正です', 400);
+            ensureDIInitialized(c.env);
+            const controller = container.resolve(AuthController);
+            return await controller.joinRequestStatus(requestId);
+        } catch (error) {
+            return handleApiError(c, error);
+        }
+    });
 };
 
 /**

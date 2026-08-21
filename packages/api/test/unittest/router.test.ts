@@ -910,6 +910,7 @@ describe('サービス間認証: ルート分類の回帰防止（SECAUTH-08）'
         'POST /auth/login/options',
         'POST /auth/login/verify',
         'POST /auth/logout',
+        'POST /auth/join-request',
     ];
 
     const EXPECTED_PROTECTED_ROUTE_KEYS = [
@@ -938,6 +939,16 @@ describe('サービス間認証: ルート分類の回帰防止（SECAUTH-08）'
         // 実際の認可はrequireAppAuth/APP_AUTH_ROUTES側がワイルドカード対応込みで
         // session-onlyとして正しく処理しており、本テストはrate-limit分類のみを検証する。
         'PATCH /auth/credential/:id',
+        // /auth/join-request/:id も同様の理由（SERVICE_AUTH_EXEMPT_ROUTES側は
+        // /auth/join-request/*ワイルドカード表記）でrate-limit分類上は「保護対象」
+        // 寄りの扱いになるが、実際の認可はAPP_AUTH_ROUTES側でpublicとして
+        // 正しく処理されている（下記it.eachでも確認しない、isExemptがfalseになる点のみ）。
+        'GET /auth/join-request/:id',
+        // 参加リクエストの管理者向けエンドポイント（サービス間認証のみ、招待発行・
+        // 参加者一覧と同じ扱い）。
+        'GET /auth/join-requests',
+        'POST /auth/join-requests/:id/approve',
+        'POST /auth/join-requests/:id/reject',
     ];
 
     it('ルート一覧が想定どおりに分類されていること（免除リスト+保護対象=登録済み全ルート）', () => {
