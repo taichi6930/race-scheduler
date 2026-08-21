@@ -36,8 +36,13 @@ const DEFAULT_ALLOWED_ORIGINS = [
 /** CORS で許可する HTTP メソッド（Access-Control-Allow-Methods） */
 const ALLOWED_METHODS = 'GET, POST, PUT, DELETE, OPTIONS';
 
-/** CORS で許可するリクエストヘッダー（Access-Control-Allow-Headers） */
-const ALLOWED_HEADERS = 'Content-Type';
+/**
+ * CORS で許可するリクエストヘッダー（Access-Control-Allow-Headers）。
+ * Authorization: front（ブラウザ）がセッショントークンを
+ * `Authorization: Bearer <token>` で送るため必要（api側のHono `cors()`
+ * ミドルウェア設定・`packages/api/src/router.ts` の `allowHeaders` と揃える）。
+ */
+const ALLOWED_HEADERS = 'Content-Type, Authorization';
 
 /**
  * 実行環境が production かどうかを判定する（SEC-014）。

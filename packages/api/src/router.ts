@@ -195,7 +195,13 @@ const buildCorsMiddleware = (): ReturnType<typeof cors> =>
             return allowedOrigins.includes(origin) ? origin : '';
         },
         allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-        allowHeaders: ['Content-Type'],
+        // Authorization: front（ブラウザ）がセッショントークンを
+        // `Authorization: Bearer <token>` で送るため必須（session-only/
+        // service-or-sessionポリシーの全エンドポイントが対象）。無いと
+        // ブラウザのCORSプリフライトがこのヘッダーを許可されないと判断し、
+        // ログイン後の全APIリクエストが実際には送信されずブロックされる
+        // （招待制ログイン導入時に見落とされていた設定漏れ）。
+        allowHeaders: ['Content-Type', 'Authorization'],
     });
 
 /**

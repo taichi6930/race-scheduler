@@ -122,7 +122,9 @@ describe('CORS Utilities', () => {
 
             expect(result['Access-Control-Allow-Methods']).toContain('DELETE');
             expect(result['Access-Control-Allow-Methods']).toContain('OPTIONS');
-            expect(result['Access-Control-Allow-Headers']).toBe('Content-Type');
+            expect(result['Access-Control-Allow-Headers']).toBe(
+                'Content-Type, Authorization',
+            );
         });
 
         it('PERF-037: Varyヘッダーが"Origin"で付与される（共有キャッシュの誤配信防止）', () => {
