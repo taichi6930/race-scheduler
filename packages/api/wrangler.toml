@@ -115,6 +115,14 @@ NODE_ENV = "production"
 # D1側は GET /admin/flags の管理画面から環境ごとに個別に上書きできるため、通常この
 # 既定値自体を書き換える必要はない（初回導入時のフォールバックとして "false" のまま）。
 FEATURE_ANNOUNCEMENT_BANNER_ENABLED = "false"
+# WEBAUTHN_RP_ID: パスキー登録/ログイン儀式のRelying Party ID。値はfrontの
+# ホスト名（`https://<値>`がoriginになる、resolveWebauthnRpConfig参照）。
+# このvarが無いと`resolveWebauthnRpConfig`が常にnullを返し、
+# `/auth/register/options`・`/auth/login/options`が「招待が無効です」/
+# 「ログインに失敗しました」という別の理由に見えるエラーで常に失敗する
+# （招待制ログイン必須化リリース時に設定漏れがあり、招待受け取り後の
+# 新規登録が本番で一切できない状態になっていたのを修正）。
+WEBAUTHN_RP_ID = "race-schedule-front-prod.pages.dev"
 
 [[env.production.d1_databases]]
 binding = "DB"
@@ -192,6 +200,9 @@ crons = ["*/5 * * * *"]
 # WORKER_NAME: appLogger のJSON構造化ログ（OBS-001）を有効化し、
 # `worker` フィールドへ埋め込む識別子
 WORKER_NAME = "api"
+# WEBAUTHN_RP_ID: 上記[env.production.vars]のコメント参照。test環境も同様に
+# 未設定だと登録/ログインが常に失敗するため、production側と同時に設定する。
+WEBAUTHN_RP_ID = "race-schedule-front-test.pages.dev"
 
 [[env.test.d1_databases]]
 binding = "DB"
