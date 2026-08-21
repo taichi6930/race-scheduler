@@ -6,6 +6,7 @@
 // | T-02 | ボタンをタップ・認証がキャンセルされる（authenticate()がnull） | 「ログインがキャンセルされました」が表示される |
 // | T-03 | ボタンをタップ・verifyLoginが失敗（401相当・null）  | 「ログインに失敗しました」が表示される      |
 // | T-04 | 画面表示                                             | 「招待コードをお持ちでない方はこちら」リンクが表示される |
+// | T-05 | 画面表示                                             | 「ログインせずに設定を見る」リンクが表示される |
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -169,5 +170,17 @@ void main() {
     );
 
     expect(find.text('招待コードをお持ちでない方はこちら'), findsOneWidget);
+  });
+
+  testWidgets('[T-05] 画面表示_ログインせずに設定を見るリンクが表示される', (tester) async {
+    await tester.pumpWidget(
+      await _buildApp(
+        repository: _FakeAuthRepository(),
+        webauthnClient: _FakeWebauthnClient(),
+        captureRef: (_) {},
+      ),
+    );
+
+    expect(find.text('ログインせずに設定を見る'), findsOneWidget);
   });
 }
