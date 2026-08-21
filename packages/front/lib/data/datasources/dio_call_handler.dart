@@ -64,6 +64,30 @@ ApiErrorKind _classify(DioException e) {
   }
 }
 
+/// [error] が [ApiCallException] の場合、原因を短い日本語の補足文言にする
+/// （例: `（HTTP 401）`）。
+///
+/// 実機のみ・DevToolsが使えない環境でも、エラーカードの文言だけで
+/// 「認証切れ等の実エラーなのか」「対象期間に本当に0件なのか」を
+/// 切り分けられるようにする（[ErrorRetryCard] から利用）。
+/// [ApiCallException] 以外（`Failed to load races` 等の素の [Exception]）は
+/// 空文字を返し、既存の表示文言を変えない。
+String describeApiErrorDetail(Object error) {
+  if (error is! ApiCallException) return '';
+  switch (error.kind) {
+    case ApiErrorKind.badResponse:
+      final statusCode = error.statusCode;
+      return statusCode == null ? '' : '（HTTP $statusCode）';
+    case ApiErrorKind.connection:
+      return '（通信エラー）';
+    case ApiErrorKind.timeout:
+      return '（タイムアウト）';
+    case ApiErrorKind.cancel:
+    case ApiErrorKind.other:
+      return '';
+  }
+}
+
 /// dio呼び出しを実行し、[DioException] を [ApiCallException] へ変換する。
 /// 各 RemoteDataSource の
 /// `try { ... } on DioException catch (e) { throw Exception('API Error: ${e.message}'); }`

@@ -47,6 +47,7 @@
 // | T-44 | 日別モードで今日以外の日付を表示中          | アプリバーに「今日に移動」ボタンが表示される |
 // | T-45 | 日別モードで今日を表示中                    | アプリバーに「今日に移動」ボタンが表示されない |
 // | T-46 | 「今日に移動」ボタンをタップ                | 今日の日付に切り替わる                    |
+// | T-47 | 日別モードでtimelineProviderがApiCallException(401)で失敗 | エラーメッセージに（HTTP 401）が付与される |
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -54,6 +55,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:front/core/di/shared_preferences_provider.dart';
 import 'package:front/core/jst_time.dart' show jstNow;
+import 'package:front/data/datasources/dio_call_handler.dart';
 import 'package:front/design/theme.dart';
 import 'package:front/design/molecules/keiba_type_chips_bar.dart';
 import 'package:front/design/organisms/race_row.dart';
@@ -822,6 +824,40 @@ void main() {
     expect(find.text('レースの取得に失敗しました'), findsNothing);
     expect(find.text('伏竜特別'), findsWidgets);
   });
+
+  testWidgets(
+    '[T-47] 日別モードでApiCallException(401)で失敗_メッセージに（HTTP 401）が付与される',
+    (tester) async {
+      final app = ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(_FakePrefsHolder.prefs),
+          nowProvider.overrideWith((ref) => Stream.value(_fixedNow)),
+          timelineProvider.overrideWith(
+            (ref, date) async => throw ApiCallException(
+              kind: ApiErrorKind.badResponse,
+              statusCode: 401,
+              message: 'Unauthorized',
+            ),
+          ),
+          monthRaceChunkProvider.overrideWith(
+            (ref, monthKey) async => [plain],
+          ),
+          notificationSchedulerProvider.overrideWithValue(
+            _FakeNotificationScheduler(),
+          ),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: const TimelineScreen(),
+        ),
+      );
+
+      await tester.pumpWidget(app);
+      await tester.pumpAndSettle();
+
+      expect(find.text('レースの取得に失敗しました（HTTP 401）'), findsOneWidget);
+    },
+  );
 
   testWidgets('[T-29] 競走場チップをタップ_選択した競走場のレースのみ表示される', (tester) async {
     final nakayama = _race(

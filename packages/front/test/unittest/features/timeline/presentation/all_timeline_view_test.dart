@@ -23,11 +23,13 @@
 // | ID   | 条件                          | 期待                                                     |
 // | ---- | ------------------------------ | ---------------------------------------------------------- |
 // | T-10 | 読み込み済み全月の取得が失敗   | 「条件に合うレースがありません」ではなくErrorRetryCardが表示される |
+// | T-12 | 読み込み済み全月の取得がApiCallException(401)で失敗 | エラーメッセージに（HTTP 401）が付与される |
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:front/core/di/shared_preferences_provider.dart';
+import 'package:front/data/datasources/dio_call_handler.dart';
 import 'package:front/design/theme.dart';
 import 'package:front/domain/entities/race_entity.dart';
 import 'package:front/features/timeline/application/all_timeline_provider.dart';
@@ -330,5 +332,43 @@ void main() {
       expect(find.text('レースの取得に失敗しました'), findsOneWidget);
       expect(find.text('条件に合うレースがありません'), findsNothing);
     });
+
+    testWidgets(
+      '[T-12] 読み込み済み全月の取得がApiCallException(401)で失敗_メッセージに（HTTP 401）が付与される',
+      (tester) async {
+        final spy = _SpyLoadedMonthsNotifier();
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              sharedPreferencesProvider.overrideWithValue(
+                _FakePrefsHolder.prefs,
+              ),
+              nowProvider.overrideWith((ref) => Stream.value(_now)),
+              monthRaceChunkProvider.overrideWith(
+                (ref, monthKey) async => throw ApiCallException(
+                  kind: ApiErrorKind.badResponse,
+                  statusCode: 401,
+                  message: 'Unauthorized',
+                ),
+              ),
+              loadedMonthsProvider.overrideWith(() => spy),
+            ],
+            child: MaterialApp(
+              theme: AppTheme.light(),
+              home: Scaffold(
+                body: AllTimelineBody(
+                  favoriteRaceIds: const {},
+                  onToggleFavorite: (_) {},
+                  onRaceTap: (_) {},
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('レースの取得に失敗しました（HTTP 401）'), findsOneWidget);
+      },
+    );
   });
 }
