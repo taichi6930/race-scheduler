@@ -9,6 +9,7 @@
 // | T-05 | ポーリングでstatus=approvedを取得・登録成功                   | sessionProviderにセッションが保存される  |
 // | T-06 | status=approvedだが登録直前にfetchRegisterOptionsが招待無効(null) | 「登録に失敗しました」が表示される    |
 // | T-07 | T-06の状態から「パスキー登録をやり直す」をタップ・成功        | sessionProviderにセッションが保存される  |
+// | T-08 | 2回のポーリングがほぼ同時にstatus=approvedを検知              | 登録（register呼び出し）は1回だけ実行される |
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -26,6 +27,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class _FakeAuthRepository implements IAuthRepository {
   _FakeAuthRepository({
     List<JoinRequestStatus>? statusQueue,
+    this.statusDelay,
     this.registerOptions = const AuthChallenge(
       challengeId: 'challenge-1',
       options: {},
@@ -34,6 +36,10 @@ class _FakeAuthRepository implements IAuthRepository {
   }) : _statusQueue = statusQueue ?? [];
 
   final List<JoinRequestStatus> _statusQueue;
+
+  /// fetchJoinRequestStatusの応答を遅らせる時間（T-08: 複数tickが重複して
+  /// 承認を検知する状況を再現するために使う）。
+  final Duration? statusDelay;
 
   /// fetchRegisterOptionsが返すチャレンジ。nullなら招待無効（400相当）を模擬する。
   final AuthChallenge? registerOptions;
@@ -46,6 +52,8 @@ class _FakeAuthRepository implements IAuthRepository {
 
   @override
   Future<JoinRequestStatus> fetchJoinRequestStatus(String requestId) async {
+    final delay = statusDelay;
+    if (delay != null) await Future<void>.delayed(delay);
     if (_statusQueue.isEmpty) {
       return const JoinRequestStatus(status: 'pending', inviteToken: null);
     }
@@ -91,10 +99,14 @@ class _FakeWebauthnClient implements WebauthnClient {
   final Map<String, dynamic>? registerResult;
   final List<Map<String, dynamic>?>? _registerResults;
 
+  /// register()が呼ばれた回数（T-08: 重複登録が起きていないことの検証用）。
+  int registerCallCount = 0;
+
   @override
   Future<Map<String, dynamic>?> register(
     Map<String, dynamic> optionsJson,
   ) async {
+    registerCallCount++;
     final results = _registerResults;
     if (results == null) return registerResult;
     return results.length == 1 ? results.first : results.removeAt(0);
@@ -325,5 +337,49 @@ void main() {
     final session = ref.read(sessionProvider);
     expect(session?.token, 'token-1');
     expect(session?.nickname, 'テスト花子');
+  });
+
+  testWidgets('[T-08] 2回のポーリングがほぼ同時に承認を検知_登録は1回だけ実行される', (tester) async {
+    final webauthnClient = _FakeWebauthnClient(
+      registerResult: const {'id': 'cred-1'},
+    );
+    late WidgetRef ref;
+    await tester.pumpWidget(
+      await _buildApp(
+        repository: _FakeAuthRepository(
+          statusQueue: [
+            const JoinRequestStatus(
+              status: 'approved',
+              inviteToken: 'invite-token-1',
+            ),
+          ],
+          // status応答を4秒遅らせることで、3秒間隔のtickが2回（t=3s/t=6s）
+          // 発火してから承認が判明する状況（重複登録の温床）を再現する。
+          statusDelay: const Duration(seconds: 4),
+          registerSession: const AuthSession(
+            token: 'token-1',
+            nickname: 'テスト花子',
+          ),
+        ),
+        webauthnClient: webauthnClient,
+        captureRef: (r) => ref = r,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'テスト花子');
+    await tester.tap(find.text('リクエストを送信'));
+    await tester.pumpAndSettle();
+
+    await tester.pump(const Duration(seconds: 3)); // t=3s: 1回目のtick
+    await tester.pump(const Duration(seconds: 3)); // t=6s: 2回目のtick
+    // t=7s: 1回目のtickの応答が届き登録開始／t=10s: 2回目のtickの応答が
+    // 届くが、既に登録中のためガードされる。
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+
+    expect(webauthnClient.registerCallCount, 1);
+    final session = ref.read(sessionProvider);
+    expect(session?.token, 'token-1');
   });
 }

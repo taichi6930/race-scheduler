@@ -84,6 +84,12 @@ class _JoinRequestScreenState extends ConsumerState<JoinRequestScreen> {
           .read(authRepositoryProvider)
           .fetchJoinRequestStatus(requestId);
       if (!mounted || status.status == 'pending') return;
+      // Timer.periodicは前回のtickの完了を待たずに次のtickを発火するため、
+      // 直前のtickがまだ`fetchJoinRequestStatus`のawait中に承認されると、
+      // 複数tickが揃って承認を検知しうる。既に登録処理へ進んでいる（waiting
+      // から抜けている）場合は後続tickを無視し、パスキーが複数作られる
+      // （二重登録）のを防ぐ。
+      if (_phase != _Phase.waiting) return;
 
       _pollTimer?.cancel();
       if (status.status == 'rejected') {
