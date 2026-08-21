@@ -24,6 +24,22 @@
  * | T-12 | ['patch','minor'] / 0 | eligible=true, bumpLevel='minor'（minorも自動リリース対象） |
  * | T-13 | ['minor','minor'] / 0 | eligible=true, bumpLevel='minor' |
  *
+ * ### determineMajorDraftEligibility
+ * | # | prLevels / unresolvedCommitCount | 期待 |
+ * |---|-----------------------------------|------|
+ * | T-20 | ['major'] / 0 | eligible=true |
+ * | T-21 | ['patch','minor'] / 0 | eligible=false（majorが含まれない） |
+ * | T-22 | ['major', undefined] / 0 | eligible=false（未設定ラベルを含む） |
+ * | T-23 | ['major'] / 1 | eligible=false（PR番号不明コミットあり） |
+ * | T-24 | ['major','none'] / 0 | eligible=true（noneを除外した残りにmajorが含まれる） |
+ *
+ * ### computeNextMajorVersion
+ * | # | lastTag | 期待 |
+ * |---|---------|------|
+ * | T-25 | 'v1.55.5' | 'v2.0.0' |
+ * | T-26 | null | null |
+ * | T-27 | 'not-a-version' | null |
+ *
  * ### buildReleaseNoteWritePayload
  * | # | 入力 | 期待 |
  * |---|------|------|
@@ -42,8 +58,10 @@ import { describe, expect, it } from 'bun:test';
 
 import {
     buildReleaseNoteWritePayload,
+    computeNextMajorVersion,
     computeNextVersion,
     determineAutoReleaseEligibility,
+    determineMajorDraftEligibility,
     resolveDualWriteSkipReason,
 } from './autoRelease';
 
@@ -156,6 +174,73 @@ describe('determineAutoReleaseEligibility', () => {
 
         expect(result.eligible).toBe(true);
         expect(result.bumpLevel).toBe('minor');
+    });
+});
+
+describe('determineMajorDraftEligibility', () => {
+    it('T-20_majorのみの場合_eligibleがtrue', () => {
+        const result = determineMajorDraftEligibility({
+            prLevels: ['major'],
+            unresolvedCommitCount: 0,
+        });
+
+        expect(result.eligible).toBe(true);
+    });
+
+    it('T-21_majorが含まれない場合_eligibleがfalse', () => {
+        const result = determineMajorDraftEligibility({
+            prLevels: ['patch', 'minor'],
+            unresolvedCommitCount: 0,
+        });
+
+        expect(result.eligible).toBe(false);
+    });
+
+    it('T-22_ラベル未設定のPRが含まれる場合_eligibleがfalse', () => {
+        const result = determineMajorDraftEligibility({
+            prLevels: ['major', undefined],
+            unresolvedCommitCount: 0,
+        });
+
+        expect(result.eligible).toBe(false);
+    });
+
+    it('T-23_PR番号不明のコミットがある場合_eligibleがfalse', () => {
+        const result = determineMajorDraftEligibility({
+            prLevels: ['major'],
+            unresolvedCommitCount: 1,
+        });
+
+        expect(result.eligible).toBe(false);
+    });
+
+    it('T-24_noneとmajorが混在する場合_noneを除外してeligibleがtrue', () => {
+        const result = determineMajorDraftEligibility({
+            prLevels: ['major', 'none'],
+            unresolvedCommitCount: 0,
+        });
+
+        expect(result.eligible).toBe(true);
+    });
+});
+
+describe('computeNextMajorVersion', () => {
+    it('T-25_通常のバージョンタグの場合_majorを1つ上げてminor-patchを0にリセットする', () => {
+        const result = computeNextMajorVersion('v1.55.5');
+
+        expect(result).toBe('v2.0.0');
+    });
+
+    it('T-26_lastTagがnullの場合_nullを返す', () => {
+        const result = computeNextMajorVersion(null);
+
+        expect(result).toBeNull();
+    });
+
+    it('T-27_バージョン形式でない場合_nullを返す', () => {
+        const result = computeNextMajorVersion('not-a-version');
+
+        expect(result).toBeNull();
     });
 });
 
