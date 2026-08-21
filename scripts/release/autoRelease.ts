@@ -3,7 +3,8 @@
  * autoRelease.ts
  *
  * deploy.yml の post-merge-verify（sIT+UAT smoke）成功後に呼び出される、
- * patch/minor限定の自動タグ作成・自動リリーススクリプト（auto-semver-release-requirements.md）。
+ * patch/minor自動リリース + major下書きReleaseの自動作成スクリプト
+ * （auto-semver-release-requirements.md §12）。
  *
  * 1. 直前の実タグ以降にマージされた全PRを、コミットメッセージの `(#NNNN)` サフィックス
  *    （squash merge時にGitHubが自動付与）から特定する（commitPrLookup.ts）
@@ -15,11 +16,17 @@
  *    自動作成する（本文はgenerateReleaseSummary.tsが各PR本文の更新履歴セクションから
  *    集約する。外部APIキーは使わない）。`semver:none` のPRだけしか無い場合はバージョンを
  *    変更しない
- * 4. 除外後に1件でもmajor・ラベル未設定・PR番号を特定できないコミットが含まれる場合は
- *    何もしない（現状どおり人間の手動publish待ち。majorは常に要確認）
+ * 4. 除外後に `semver:major` が1件でも含まれ、かつ他に未設定ラベル・PR番号不明コミットが
+ *    無い場合は、実リリースは行わず**下書き（draft）Release**を自動作成/更新する（次のmajor
+ *    バージョン、例: `v1.55.0` → `v2.0.0`）。draft ReleaseはGitHub上ではtag_nameを予約する
+ *    だけで実タグは作られないため、公開（Publish）は引き続き人間が判断して行う——
+ *    「実際にリリースするか」の最終判断は変えず、「次のバージョン番号を計算し本文を
+ *    集約する」という人間の手作業だけを肩代わりする
+ * 5. 未設定ラベル・PR番号を特定できないコミットが含まれる場合は、実リリースも
+ *    下書き作成も行わない（安全側に倒す）
  *
  * Kill Switch（vars.AUTO_RELEASE_ENABLED）の判定はワークフロー側のジョブ`if`で行う
- * （このスクリプトは呼ばれた時点で常に実行する）。
+ * （このスクリプトは呼ばれた時点で常に実行する。draft Release作成もこのKill Switch配下）。
  *
  * 使い方:
  *   GITHUB_TOKEN=... GITHUB_REPOSITORY=owner/repo bun scripts/release/autoRelease.ts
@@ -32,6 +39,7 @@ import {
 } from './commitPrLookup';
 import {
     fetchLatestReleaseTag,
+    findReleaseByTagName,
     generateReleaseSummary,
 } from './generateReleaseSummary';
 
@@ -41,6 +49,10 @@ const buildAutoReleaseNotice = (bumpLevel: ReleaseBumpLevel): string =>
     bumpLevel === 'minor'
         ? '> 🤖 このリリースはminor（後方互換の新機能追加）までの変更のため自動作成されました\n\n'
         : '> 🤖 このリリースはpatchのみの変更のため自動作成されました\n\n';
+
+const buildMajorDraftNotice = (): string =>
+    '> 🤖 major（既存挙動を変える変更）を含むため、下書き（draft）Releaseとして自動作成しました。\n' +
+    '> 内容を確認し、問題なければ公開（Publish）してください。公開すると実タグが作成され、production への自動デプロイが走ります。\n\n';
 
 /** 自動リリースが対象とするバンプの大きさ。majorは常に人間の手動publish待ち。 */
 export type ReleaseBumpLevel = 'patch' | 'minor';
@@ -96,6 +108,54 @@ export const determineAutoReleaseEligibility = (params: {
     };
 };
 
+export interface MajorDraftEligibility {
+    eligible: boolean;
+    reason: string;
+}
+
+/**
+ * PR番号ごとのsemverラベルから、major下書きRelease作成の可否を判定する。
+ * 'none'を除外した残りに'major'が1件でも含まれ、かつ'patch'/'minor'/'major'以外
+ * （未設定ラベル）が無い場合のみeligible=true。PR番号を特定できないコミットが
+ * 1件でもあれば安全側でfalse（determineAutoReleaseEligibilityと同じ方針）。
+ * このスキップ条件は「実リリースを見送る」ことと同義ではない点に注意——
+ * majorを含む区間は実リリース（determineAutoReleaseEligibility）では常にfalseになるため、
+ * 両者は同じ入力に対して排他的に呼ばれる。
+ */
+export const determineMajorDraftEligibility = (params: {
+    prLevels: (string | undefined)[];
+    unresolvedCommitCount: number;
+}): MajorDraftEligibility => {
+    if (params.unresolvedCommitCount > 0) {
+        return {
+            eligible: false,
+            reason: `PR番号を特定できないコミットが${params.unresolvedCommitCount}件あるため下書き作成を見送ります`,
+        };
+    }
+    const releasablePrLevels = params.prLevels.filter(
+        (level) => level !== 'none',
+    );
+    if (!releasablePrLevels.includes('major')) {
+        return {
+            eligible: false,
+            reason: 'majorラベルのPRが含まれないため下書き作成を見送ります',
+        };
+    }
+    const hasUnlabeled = releasablePrLevels.some(
+        (level) => level !== 'patch' && level !== 'minor' && level !== 'major',
+    );
+    if (hasUnlabeled) {
+        return {
+            eligible: false,
+            reason: '未設定ラベルのPRが含まれるため下書き作成を見送ります',
+        };
+    }
+    return {
+        eligible: true,
+        reason: `対象${releasablePrLevels.length}件のPRにmajorラベルが含まれるため下書きReleaseを作成します`,
+    };
+};
+
 /**
  * lastTagをbumpLevelに応じて次のバージョンへ進める（例: "v1.32.0" →
  * patch: "v1.32.1" / minor: "v1.33.0"）。パース不能な場合はnull（初回リリース等、
@@ -121,6 +181,24 @@ export const computeNextVersion = (
     return `v${major}.${minor}.${patch + 1}`;
 };
 
+/**
+ * lastTagのmajorを1つ上げ、minor/patchを0にリセットする（例: "v1.32.5" → "v2.0.0"）。
+ * パース不能な場合はnull。
+ */
+export const computeNextMajorVersion = (
+    lastTag: string | null,
+): string | null => {
+    if (!lastTag) {
+        return null;
+    }
+    const match = lastTag.match(/^v(\d+)\.(\d+)\.(\d+)$/);
+    if (!match) {
+        return null;
+    }
+    const major = Number.parseInt(match[1], 10);
+    return `v${major + 1}.0.0`;
+};
+
 interface RunAutoReleaseParams {
     githubToken: string;
     owner: string;
@@ -132,6 +210,88 @@ interface RunAutoReleaseParams {
     mainApiUrl?: string;
     serviceAuthToken?: string;
 }
+
+interface UpsertMajorDraftReleaseParams extends RunAutoReleaseParams {
+    lastTag: string | null;
+}
+
+/**
+ * majorラベルを含む未リリース区間向けに、下書き（draft）Releaseを作成/更新する。
+ * draft Releaseはtag_nameを予約するだけで実タグは作られないため、人間が内容を確認して
+ * 公開（Publish）するまで本番デプロイは走らない。同じtag_nameの下書きが既にあれば
+ * 本文のみ更新し（新たにPRがマージされるたびにこの関数が呼ばれるため）、無ければ新規作成する。
+ * release_note テーブルへのdual-writeは実リリース（公開済みRelease）専用のため、
+ * 下書きの間は行わない（公開後の扱いは既存どおり、必要なら
+ * backfill-release-notes.yml を手動実行する）。
+ */
+const upsertMajorDraftRelease = async (
+    params: UpsertMajorDraftReleaseParams,
+): Promise<string> => {
+    const nextVersion = computeNextMajorVersion(params.lastTag);
+    if (!nextVersion) {
+        return '直前の実タグが無い、または解析できないためmajor下書きReleaseの作成を見送りました。';
+    }
+
+    const summaryBody = await generateReleaseSummary({
+        ...params,
+        nextVersion,
+    });
+    const body = `${buildMajorDraftNotice()}${summaryBody}`;
+
+    const existing = await findReleaseByTagName({
+        ...params,
+        tagName: nextVersion,
+    });
+    if (existing?.draft) {
+        const response = await fetch(
+            `${GITHUB_API_URL}/repos/${params.owner}/${params.repo}/releases/${existing.id}`,
+            {
+                method: 'PATCH',
+                headers: {
+                    ...githubHeaders(params.githubToken),
+                    'content-type': 'application/json',
+                },
+                body: JSON.stringify({ body }),
+            },
+        );
+        if (!response.ok) {
+            const errorBody = await response.text();
+            throw new Error(
+                `major下書きReleaseの更新に失敗しました (HTTP ${response.status}): ${errorBody}`,
+            );
+        }
+        return `major下書きReleaseを更新しました: ${nextVersion}`;
+    }
+
+    // 既存の下書きが無い場合、新規作成する（既存releaseが同名でdraft以外の場合、
+    // GitHub側のcreate APIが422で失敗する。この稀なケースを特別扱いする価値は低いため、
+    // その場合はエラーがそのままthrowされる想定でよい）。
+    const response = await fetch(
+        `${GITHUB_API_URL}/repos/${params.owner}/${params.repo}/releases`,
+        {
+            method: 'POST',
+            headers: {
+                ...githubHeaders(params.githubToken),
+                'content-type': 'application/json',
+            },
+            body: JSON.stringify({
+                tag_name: nextVersion,
+                target_commitish: 'main',
+                name: nextVersion,
+                body,
+                draft: true,
+                prerelease: false,
+            }),
+        },
+    );
+    if (!response.ok) {
+        const errorBody = await response.text();
+        throw new Error(
+            `major下書きReleaseの作成に失敗しました (HTTP ${response.status}): ${errorBody}`,
+        );
+    }
+    return `major下書きReleaseを作成しました: ${nextVersion}（人間の確認後、Publishしてください）`;
+};
 
 /**
  * 作成直後のGitHub Releaseレスポンスから release_note テーブルへの書き込みペイロードを
@@ -196,6 +356,13 @@ export const runAutoRelease = async (
         unresolvedCommitCount,
     });
     if (!eligibility.eligible || !eligibility.bumpLevel) {
+        const majorDraftEligibility = determineMajorDraftEligibility({
+            prLevels,
+            unresolvedCommitCount,
+        });
+        if (majorDraftEligibility.eligible) {
+            return upsertMajorDraftRelease({ ...params, lastTag });
+        }
         return `自動リリースを見送りました: ${eligibility.reason}`;
     }
 

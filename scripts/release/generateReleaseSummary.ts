@@ -31,7 +31,7 @@
  *   bun scripts/release/generateReleaseSummary.ts > body.md
  */
 
-import { isNonNullObject } from '../lib/typeGuards';
+import { isNonNullObject, isNumberValue } from '../lib/typeGuards';
 import { fetchMergedPrNumbersSinceTag, githubHeaders } from './commitPrLookup';
 import { extractLayerLabels, formatLayerPrefix } from './packageLabels';
 import {
@@ -111,6 +111,49 @@ export const fetchLatestReleaseTag = async (
             (r as { prerelease?: unknown }).prerelease === false,
     ) as { tag_name?: string } | undefined;
     return latestPublished?.tag_name ?? null;
+};
+
+interface FindReleaseByTagNameParams {
+    githubToken: string;
+    owner: string;
+    repo: string;
+    tagName: string;
+}
+
+/**
+ * 指定したtag_nameを持つ既存のRelease（draft・prerelease問わず）を探す。
+ * autoRelease.tsのmajor下書きRelease作成/更新（同じtag_nameで複数回呼ばれても
+ * 重複作成せず既存の下書きを更新するための冪等性チェック）が使う。無ければnull。
+ */
+export const findReleaseByTagName = async (
+    params: FindReleaseByTagNameParams,
+): Promise<{ id: number; draft: boolean } | null> => {
+    const response = await fetch(
+        `${GITHUB_API_URL}/repos/${params.owner}/${params.repo}/releases?per_page=100`,
+        { headers: githubHeaders(params.githubToken) },
+    );
+    if (!response.ok) {
+        throw new Error(
+            `GitHub releases一覧の取得に失敗しました (HTTP ${response.status})`,
+        );
+    }
+    const releases: unknown = await response.json();
+    if (!Array.isArray(releases)) {
+        throw new Error(
+            'GitHub releases一覧のレスポンス形式が想定と異なります',
+        );
+    }
+    // SAFETY: isNonNullObject(r) の通過後にキャストしており、tag_nameが一致した
+    // GitHub releaseオブジェクトのみに絞り込めるため、続くid/draftのアクセスも安全
+    const found = releases.find(
+        (r) =>
+            isNonNullObject(r) &&
+            (r as { tag_name?: unknown }).tag_name === params.tagName,
+    ) as { id?: unknown; draft?: unknown } | undefined;
+    if (!found || !isNumberValue(found.id)) {
+        return null;
+    }
+    return { id: found.id, draft: found.draft === true };
 };
 
 /** PRのタイトル・本文を取得する。 */
