@@ -20,6 +20,9 @@
  * | 13 | fetchReleaseNotes | 正常系 | GET /internal/release-notes を叩きリリースノート配列を返す | Line |
  * | 14 | issueInvite | 正常系 | POST /auth/invite にmemoを渡し発行結果を返す | Line |
  * | 15 | fetchParticipants | 正常系 | GET /auth/participants を叩きparticipants[]を返す | Line |
+ * | 16 | fetchJoinRequests | 正常系 | GET /auth/join-requests を叩きrequests[]を返す | Line |
+ * | 17 | approveJoinRequest | 正常系 | POST /auth/join-requests/{id}/approve を叩く | Line |
+ * | 18 | rejectJoinRequest | 正常系 | POST /auth/join-requests/{id}/reject を叩く | Line |
  */
 import 'reflect-metadata';
 
@@ -32,6 +35,7 @@ import {
 
 import type { BackfillFilter } from '../../../../src/dto/backfillResult';
 import type { FeatureFlagStatus } from '../../../../src/dto/featureFlagStatus';
+import type { JoinRequestSummary } from '../../../../src/dto/joinRequest';
 import type { ParticipantSummary } from '../../../../src/dto/participant';
 import type { RaceSummary } from '../../../../src/dto/raceSummary';
 import { MainApiGateway } from '../../../../src/gateway/implement/mainApiGateway';
@@ -401,5 +405,63 @@ describe('MainApiGateway', () => {
         const url = new URL(capturedUrl ?? '');
         expect(url.pathname).toBe('/auth/participants');
         expect(result).toEqual([participant]);
+    });
+
+    it('#16: fetchJoinRequestsはGET /auth/join-requestsを叩きrequests[]を返す', async () => {
+        const request: JoinRequestSummary = {
+            id: 'request-1',
+            nickname: 'にっくねーむ',
+        };
+        let capturedUrl: string | undefined;
+        globalThis.fetch = mock((url: string) => {
+            capturedUrl = url;
+            return Promise.resolve(
+                new Response(JSON.stringify({ requests: [request] }), {
+                    status: 200,
+                }),
+            );
+        }) as unknown as typeof fetch;
+
+        const result = await gateway.fetchJoinRequests();
+
+        const url = new URL(capturedUrl ?? '');
+        expect(url.pathname).toBe('/auth/join-requests');
+        expect(result).toEqual([request]);
+    });
+
+    it('#17: approveJoinRequestはPOST /auth/join-requests/{id}/approveを叩く', async () => {
+        let capturedUrl: string | undefined;
+        let capturedInit: RequestInit | undefined;
+        globalThis.fetch = mock((url: string, init?: RequestInit) => {
+            capturedUrl = url;
+            capturedInit = init;
+            return Promise.resolve(
+                new Response(JSON.stringify({ ok: true }), { status: 200 }),
+            );
+        }) as unknown as typeof fetch;
+
+        await gateway.approveJoinRequest('request-1');
+
+        const url = new URL(capturedUrl ?? '');
+        expect(url.pathname).toBe('/auth/join-requests/request-1/approve');
+        expect(capturedInit?.method).toBe('POST');
+    });
+
+    it('#18: rejectJoinRequestはPOST /auth/join-requests/{id}/rejectを叩く', async () => {
+        let capturedUrl: string | undefined;
+        let capturedInit: RequestInit | undefined;
+        globalThis.fetch = mock((url: string, init?: RequestInit) => {
+            capturedUrl = url;
+            capturedInit = init;
+            return Promise.resolve(
+                new Response(JSON.stringify({ ok: true }), { status: 200 }),
+            );
+        }) as unknown as typeof fetch;
+
+        await gateway.rejectJoinRequest('request-1');
+
+        const url = new URL(capturedUrl ?? '');
+        expect(url.pathname).toBe('/auth/join-requests/request-1/reject');
+        expect(capturedInit?.method).toBe('POST');
     });
 });

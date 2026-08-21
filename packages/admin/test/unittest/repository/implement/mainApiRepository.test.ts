@@ -15,6 +15,9 @@
  * | 8  | fetchReleaseNotes 呼び出し    | gateway.fetchReleaseNotes へ委譲し結果を返す                 | Line     |
  * | 9  | issueInvite 呼び出し          | gateway.issueInvite へmemoを渡して委譲し結果を返す           | Line     |
  * | 10 | fetchParticipants 呼び出し    | gateway.fetchParticipants へ委譲し結果を返す                 | Line     |
+ * | 11 | fetchJoinRequests 呼び出し    | gateway.fetchJoinRequests へ委譲し結果を返す                 | Line     |
+ * | 12 | approveJoinRequest 呼び出し   | gateway.approveJoinRequest へidを渡して委譲する              | Line     |
+ * | 13 | rejectJoinRequest 呼び出し    | gateway.rejectJoinRequest へidを渡して委譲する               | Line     |
  */
 import 'reflect-metadata';
 
@@ -65,6 +68,9 @@ const createRepository = (flags: FeatureFlagStatus[] = SAMPLE_FLAGS) => {
         fetchReleaseNotes: mock(() => Promise.resolve([])),
         issueInvite: mock(() => Promise.resolve({ token: 'invite-token' })),
         fetchParticipants: mock(() => Promise.resolve([])),
+        fetchJoinRequests: mock(() => Promise.resolve([])),
+        approveJoinRequest: mock(() => Promise.resolve()),
+        rejectJoinRequest: mock(() => Promise.resolve()),
     };
 
     return {
@@ -191,5 +197,34 @@ describe('MainApiRepository', () => {
 
         expect(mainApiGateway.fetchParticipants).toHaveBeenCalled();
         expect(result).toEqual([]);
+    });
+
+    it('#11: fetchJoinRequestsはgatewayへ委譲し結果を返す', async () => {
+        const { mainApiGateway, repository } = createRepository();
+
+        const result = await repository.fetchJoinRequests();
+
+        expect(mainApiGateway.fetchJoinRequests).toHaveBeenCalled();
+        expect(result).toEqual([]);
+    });
+
+    it('#12: approveJoinRequestはgatewayへidを渡して委譲する', async () => {
+        const { mainApiGateway, repository } = createRepository();
+
+        await repository.approveJoinRequest('request-1');
+
+        expect(mainApiGateway.approveJoinRequest).toHaveBeenCalledWith(
+            'request-1',
+        );
+    });
+
+    it('#13: rejectJoinRequestはgatewayへidを渡して委譲する', async () => {
+        const { mainApiGateway, repository } = createRepository();
+
+        await repository.rejectJoinRequest('request-1');
+
+        expect(mainApiGateway.rejectJoinRequest).toHaveBeenCalledWith(
+            'request-1',
+        );
     });
 });

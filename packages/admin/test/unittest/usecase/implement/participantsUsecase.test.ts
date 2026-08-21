@@ -54,6 +54,9 @@ const createUsecase = () => {
         fetchReleaseNotes: mock(() => Promise.resolve([])),
         issueInvite: mock(() => Promise.resolve({ token: 'invite-token' })),
         fetchParticipants: mock(() => Promise.resolve(SAMPLE_PARTICIPANTS)),
+        fetchJoinRequests: mock(() => Promise.resolve([])),
+        approveJoinRequest: mock(() => Promise.resolve()),
+        rejectJoinRequest: mock(() => Promise.resolve()),
     };
 
     return {

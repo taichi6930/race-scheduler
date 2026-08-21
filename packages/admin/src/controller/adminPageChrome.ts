@@ -68,6 +68,7 @@ const NAV_ITEMS = [
     { path: '/release-notes', label: '更新履歴（全リポジトリ）' },
     { path: '/invite', label: '招待発行' },
     { path: '/participants', label: '参加者一覧' },
+    { path: '/join-requests', label: '参加リクエスト' },
 ] as const;
 
 /**

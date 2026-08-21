@@ -76,6 +76,9 @@ describe('コンポーネントテスト: FeatureFlags Router → Controller →
             fetchReleaseNotes: mock(() => Promise.resolve([])),
             issueInvite: mock(() => Promise.resolve({ token: 'invite-token' })),
             fetchParticipants: mock(() => Promise.resolve([])),
+            fetchJoinRequests: mock(() => Promise.resolve([])),
+            approveJoinRequest: mock(() => Promise.resolve()),
+            rejectJoinRequest: mock(() => Promise.resolve()),
         };
 
         container.register<IMainApiGateway>(DI_TOKENS.MainApiGateway, {

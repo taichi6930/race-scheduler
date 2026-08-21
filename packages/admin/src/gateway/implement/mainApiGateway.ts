@@ -18,6 +18,7 @@ import type {
 } from '../../dto/backfillResult';
 import type { FeatureFlagStatus } from '../../dto/featureFlagStatus';
 import type { InviteIssueResult } from '../../dto/invite';
+import type { JoinRequestSummary } from '../../dto/joinRequest';
 import type { ParticipantSummary } from '../../dto/participant';
 import type { RaceSummary } from '../../dto/raceSummary';
 import { getMainApiUrl } from '../../utility/mainApiConfig';
@@ -31,6 +32,11 @@ interface FeatureFlagListResponse {
 /** メインAPI `GET /auth/participants` のレスポンス */
 interface ParticipantsResponse {
     participants: ParticipantSummary[];
+}
+
+/** メインAPI `GET /auth/join-requests` のレスポンス */
+interface JoinRequestsResponse {
+    requests: JoinRequestSummary[];
 }
 
 /** メインAPI `GET /race` のレスポンス（レース詳細レイアウト編集キットが使う項目のみ） */
@@ -200,5 +206,35 @@ export class MainApiGateway implements IMainApiGateway {
             headers: withServiceAuthHeader(),
         });
         return response.participants;
+    }
+
+    public async fetchJoinRequests(): Promise<JoinRequestSummary[]> {
+        const url = new URL('/auth/join-requests', getMainApiUrl());
+        const response = await fetchWithTimeout<JoinRequestsResponse>(url, {
+            headers: withServiceAuthHeader(),
+        });
+        return response.requests;
+    }
+
+    public async approveJoinRequest(id: string): Promise<void> {
+        const url = new URL(
+            `/auth/join-requests/${id}/approve`,
+            getMainApiUrl(),
+        );
+        await fetchWithTimeout(url, {
+            method: 'POST',
+            headers: withServiceAuthHeader(),
+        });
+    }
+
+    public async rejectJoinRequest(id: string): Promise<void> {
+        const url = new URL(
+            `/auth/join-requests/${id}/reject`,
+            getMainApiUrl(),
+        );
+        await fetchWithTimeout(url, {
+            method: 'POST',
+            headers: withServiceAuthHeader(),
+        });
     }
 }

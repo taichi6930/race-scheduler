@@ -54,6 +54,9 @@ const createUsecase = (flags: FeatureFlagStatus[] = SAMPLE_FLAGS) => {
         fetchReleaseNotes: mock(() => Promise.resolve([])),
         issueInvite: mock(() => Promise.resolve({ token: 'invite-token' })),
         fetchParticipants: mock(() => Promise.resolve([])),
+        fetchJoinRequests: mock(() => Promise.resolve([])),
+        approveJoinRequest: mock(() => Promise.resolve()),
+        rejectJoinRequest: mock(() => Promise.resolve()),
     };
 
     return {

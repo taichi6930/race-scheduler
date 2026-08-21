@@ -14,6 +14,7 @@ import type {
 } from '../../dto/backfillResult';
 import type { FeatureFlagStatus } from '../../dto/featureFlagStatus';
 import type { InviteIssueResult } from '../../dto/invite';
+import type { JoinRequestSummary } from '../../dto/joinRequest';
 import type { ParticipantSummary } from '../../dto/participant';
 import type { RaceSummary } from '../../dto/raceSummary';
 import type { IMainApiGateway } from '../../gateway/interface/IMainApiGateway';
@@ -92,5 +93,17 @@ export class MainApiRepository implements IMainApiRepository {
 
     public async fetchParticipants(): Promise<ParticipantSummary[]> {
         return this.mainApiGateway.fetchParticipants();
+    }
+
+    public async fetchJoinRequests(): Promise<JoinRequestSummary[]> {
+        return this.mainApiGateway.fetchJoinRequests();
+    }
+
+    public async approveJoinRequest(id: string): Promise<void> {
+        return this.mainApiGateway.approveJoinRequest(id);
+    }
+
+    public async rejectJoinRequest(id: string): Promise<void> {
+        return this.mainApiGateway.rejectJoinRequest(id);
     }
 }
