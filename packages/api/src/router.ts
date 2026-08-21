@@ -146,10 +146,10 @@ interface CacheTtlConfig {
  * `/calendar/flag`（PERF-034参照）は `/calendar` のワイルドカード登録に
  * 含まれるため、個別のエントリは不要。
  */
-const CACHE_TTL_BY_PATH: Record<string, CacheTtlConfig> = {
+const CACHE_TTL_BY_PATH = {
     '/calendar': { maxAgeSeconds: 60, sMaxAgeSeconds: 300 },
     '/place': { maxAgeSeconds: 300, sMaxAgeSeconds: 1800 },
-};
+} satisfies Record<string, CacheTtlConfig>;
 
 /**
  * ユーザー操作で随時変わる値（priority由来のisWatched等）を含むため、
@@ -362,9 +362,10 @@ const PLACE_GRADE_PARAM_DOC = {
  * @param config.includePlaceGrade - isDisplayPlaceGrade パラメータを含めるか
  * @returns parameters レスポンス用オブジェクト
  */
-/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- /place/docs・/race/docs が返す
-   人間向けAPIドキュメントJSONで、パラメータごとに持つフィールド（type/required/
-   description/example）が異なる。型検証される値ではないためRecord<string, unknown>で正しい。 */
+/* oxlint-disable anti-slop/no-unsafe-dictionary-type, anti-slop/no-known-value-widening --
+   /place/docs・/race/docs が返す人間向けAPIドキュメントJSONで、パラメータごとに持つ
+   フィールド（type/required/description/example）が異なる。型検証される値ではないため
+   Record<string, unknown>で正しい。 */
 const buildEndpointParameters = (config: {
     gradeDescription: string;
     gradeExample: string;

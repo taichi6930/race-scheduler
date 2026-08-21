@@ -19,7 +19,7 @@ export default defineConfig({
     rules: {
         'anti-slop/no-chained-type-assertions': 'error',
         'anti-slop/no-conditional-empty-object-spread': 'error',
-        'anti-slop/no-known-value-widening': 'warn',
+        'anti-slop/no-known-value-widening': 'error',
         'anti-slop/no-module-mocking': 'warn',
         'anti-slop/no-object-parameters': 'error',
         'anti-slop/no-reflect-apply': 'warn',

@@ -136,7 +136,8 @@ const truncateStackForProduction = (
 const isNullish = (value: unknown): value is null | undefined =>
     value === null || value === undefined;
 
-/* oxlint-disable anti-slop/no-unknown-returns, anti-slop/no-unsafe-dictionary-type --
+/* oxlint-disable anti-slop/no-unknown-returns, anti-slop/no-unsafe-dictionary-type,
+   anti-slop/no-known-value-widening --
    ログ・エラーに渡される値は形状不定（任意のオブジェクト・配列・プリミティブ）で、
    このマスク処理はキー名だけを見て再帰的にそのまま返す。マスク後も元の値の形状を
    保つ必要があるためunknown/Record<string, unknown>が唯一正直な型。 */
