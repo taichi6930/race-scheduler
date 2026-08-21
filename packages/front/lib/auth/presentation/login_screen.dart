@@ -14,7 +14,11 @@ import '../application/session_provider.dart';
 /// ここへ誘導される（`lib/navigation/app_router.dart`）。ログイン成功後は
 /// [sessionProvider] の更新をトリガーに、同じ`redirect`がタイムラインへ
 /// 自動的に戻すため、ログイン処理自体はこの画面から明示的な画面遷移を
-/// 行わない（招待コードなしの参加リクエスト画面`/join`への導線のみ例外）。
+/// 行わない（招待コードなしの参加リクエスト画面`/join`・未ログインでも
+/// 閲覧できる設定画面`/settings`への導線のみ例外。後者はレース情報を含まず、
+/// 設定内の「管理画面」ボタンへログイン無しで辿り着けるようにするための
+/// 導線のため、この画面から明示的にリンクしないと`/settings`が公開ルートに
+/// なっていても実際には辿り着けなかった）。
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key, WebauthnClient? webauthnClient})
     : _webauthnClient = webauthnClient;
@@ -111,6 +115,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               TextButton(
                 onPressed: () => context.go('/join'),
                 child: const Text('招待コードをお持ちでない方はこちら'),
+              ),
+              TextButton(
+                onPressed: () => context.go('/settings'),
+                child: const Text('ログインせずに設定を見る'),
               ),
             ],
           ),
