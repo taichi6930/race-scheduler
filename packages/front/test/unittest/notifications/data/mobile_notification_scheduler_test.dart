@@ -30,6 +30,8 @@ import 'package:front/navigation/app_router.dart';
 import 'package:front/notifications/data/mobile_notification_scheduler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../support/session_test_overrides.dart';
+
 /// `FlutterLocalNotificationsPlatform.instance`はlateフィールドで、
 /// 実機ではプラグイン登録時に自動設定されるがflutter testでは未設定のまま
 /// （`resolvePlatformSpecificImplementation`がLateInitializationErrorを
@@ -43,6 +45,7 @@ Future<Widget> _buildApp() async {
   return ProviderScope(
     overrides: [
       sharedPreferencesProvider.overrideWithValue(prefs),
+      loggedInSessionOverride(),
       timelineProvider.overrideWith((ref, date) async => const <RaceEntity>[]),
       favoriteRacesRawProvider.overrideWith((ref) async => const <RaceEntity>[]),
     ],

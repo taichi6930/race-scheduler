@@ -40,7 +40,7 @@ const EXEMPT_ROUTES: readonly ServiceAuthExemptRoute[] = [
     {
         method: 'POST',
         path: '/push/subscription',
-        reason: 'pending-user-auth',
+        reason: 'user-auth-required',
     },
 ];
 

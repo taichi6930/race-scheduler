@@ -683,6 +683,7 @@ describe('コンポーネントテスト: Race GET Router → Controller → Use
             playerName: '高久保雄介',
         });
         await db.insert(schema.playerWatch).values({
+            userId: 'test-user-id',
             raceType: 'keirin',
             playerNo: '014833',
             priority: 10,

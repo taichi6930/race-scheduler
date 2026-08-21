@@ -45,7 +45,7 @@ export type ServiceAuthExemptReason =
     | 'has-own-auth' // 別の認証機構を既に持つ（不特定多数からの到達を前提としない）
     | 'admin-own-auth' // 別の認証機構(X-Admin-Token)を持つが、ブラウザから不特定多数が
     // 到達しうるため`has-own-auth`とは異なりレート制限は外さない（feature-flag-design.md）
-    | 'pending-user-auth'; // ユーザー単位の認可へ移行予定（push-ownership-design.md）
+    | 'user-auth-required'; // ユーザー単位の認可が必須（appAuthMiddlewareのsession-only/service-or-sessionと対）
 
 export interface ServiceAuthExemptRoute {
     readonly method: string;

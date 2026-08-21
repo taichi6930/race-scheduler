@@ -37,7 +37,7 @@
  * | 28 | /health     | GET     | No        | Yes          | GET            | 200 + X-Request-Id  | Yes  | QERR-06: 正常系にもX-Request-Idヘッダーが付与されること |
  * | 29 | /race/calendar-event | GET | No | Yes          | GET            | 400 + X-Request-Id  | Yes  | QERR-06: エラー応答にもX-Request-Idヘッダーが付与されること |
  * | 30 | /health     | GET     | No        | Yes          | GET            | 200 + X-Request-Id（伝搬） | Yes | QERR-06: リクエストの X-Request-Id が渡された場合、そのまま応答に引き継がれること |
- * | 31 | /player     | POST    | No        | Yes          | POST           | 401ではない          | Yes  | KPLAYER-07回帰: サービス認証ヘッダー無しでも401にならないこと（front由来の注目選手登録のため） |
+ * | 31 | /player     | POST    | No        | Yes          | POST           | 401ではない          | Yes  | KPLAYER-07回帰: 有効なセッショントークンがあれば401にならないこと（front由来の注目選手登録のため。パスキー認証導入によりsession-only化） |
  * | 32 | /health     | GET     | No        | Yes          | GET            | 200 + Cache-Control(no-store) | Yes | CFCACHE-09: 監視対象のためヘッダー無しによる中間キャッシュの発見的挙動を避け明示的に無効化すること |
  * | 33 | /ui/race-detail | GET | No        | Yes          | GET            | 404                 | Yes  | レース詳細UIスキーマ（該当レースなし） |
  * | 34 | /ui/race-detail | GET | No        | Yes          | GET            | 400                 | Yes  | レース詳細UIスキーマ（raceId欠落） |
@@ -53,13 +53,16 @@ import 'reflect-metadata';
 
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { isExempt, SERVICE_AUTH_HEADER } from '@race-schedule/core';
+import { drizzle } from 'drizzle-orm/d1';
 
+import * as schema from '../../src/db/schema';
 import { router, SERVICE_AUTH_EXEMPT_ROUTES } from '../../src/router';
 import { createInMemoryD1Database } from '../common/inMemoryD1';
 import {
     buildMockHonoEnv,
     MOCK_SERVICE_AUTH_TOKEN,
 } from '../common/mockHonoEnv';
+import { insertTestSession } from '../common/sessionAuth';
 import { setupGlobalMocks } from '../common/setupGlobalMocks';
 
 /** 保護対象ルート向けに、サービス間認証ヘッダーを付与したヘッダーを組み立てる */
@@ -159,7 +162,7 @@ describe('API Router', () => {
         it('29: エラー応答（400）にもX-Request-Idヘッダーが付与されること', async () => {
             const request = new Request(
                 'http://localhost:8787/race/calendar-event',
-                { method: 'GET' },
+                { method: 'GET', headers: authHeaders() },
             );
 
             const response = await router.fetch(request, mockHonoEnv);
@@ -201,7 +204,7 @@ describe('API Router', () => {
         it('placeエンドポイントがルーティングされ空データで200を返すこと', async () => {
             const request = new Request(
                 'http://localhost:8787/place?startDate=2026-01-01&finishDate=2026-12-31&raceTypeList=JRA',
-                { method: 'GET' },
+                { method: 'GET', headers: authHeaders() },
             );
 
             // InMemoryDBは各テストで空の状態から始まるため、正常系は決定的に200になる
@@ -219,7 +222,7 @@ describe('API Router', () => {
             // （旧クエリのplaceIdListはこのエンドポイントのスキーマに存在しない不正パラメータだった）
             const request = new Request(
                 'http://localhost:8787/race?startDate=2026-01-01&finishDate=2026-12-31&raceTypeList=JRA',
-                { method: 'GET' },
+                { method: 'GET', headers: authHeaders() },
             );
 
             const response = await router.fetch(request, mockHonoEnv);
@@ -234,7 +237,7 @@ describe('API Router', () => {
         it('該当レースが存在しない場合404を返すこと', async () => {
             const request = new Request(
                 'http://localhost:8787/race/calendar-event?raceId=jra202601010101',
-                { method: 'GET' },
+                { method: 'GET', headers: authHeaders() },
             );
 
             const response = await router.fetch(request, mockHonoEnv);
@@ -244,7 +247,7 @@ describe('API Router', () => {
         it('raceIdが指定されていない場合400を返すこと', async () => {
             const request = new Request(
                 'http://localhost:8787/race/calendar-event',
-                { method: 'GET' },
+                { method: 'GET', headers: authHeaders() },
             );
 
             const response = await router.fetch(request, mockHonoEnv);
@@ -256,7 +259,7 @@ describe('API Router', () => {
         it('該当レースが存在しない場合404を返すこと', async () => {
             const request = new Request(
                 'http://localhost:8787/ui/race-detail?raceId=jra202601010101',
-                { method: 'GET' },
+                { method: 'GET', headers: authHeaders() },
             );
 
             const response = await router.fetch(request, mockHonoEnv);
@@ -266,7 +269,7 @@ describe('API Router', () => {
         it('raceIdが指定されていない場合400を返すこと', async () => {
             const request = new Request(
                 'http://localhost:8787/ui/race-detail',
-                { method: 'GET' },
+                { method: 'GET', headers: authHeaders() },
             );
 
             const response = await router.fetch(request, mockHonoEnv);
@@ -334,7 +337,7 @@ describe('API Router', () => {
         it('calendarエンドポイントがルーティングされること', async () => {
             const request = new Request(
                 'http://localhost:8787/calendar?startDate=2026-01-01&finishDate=2026-12-31&raceTypeList=jra',
-                { method: 'GET' },
+                { method: 'GET', headers: authHeaders() },
             );
 
             const response = await router.fetch(request, mockHonoEnv);
@@ -423,9 +426,14 @@ describe('API Router', () => {
             // searchPlayerFilterParamsSchemaはraceTypeListのみを受け付ける(.strict())ため、
             // startDate/finishDateを含めると「Unrecognized keys」で400になってしまう。
             // 正常系を決定的に検証するためraceTypeListのみを指定する。
+            // /playerはパスキー認証導入によりsession-onlyへ移行したため、有効な
+            // セッショントークンが必要。
+            const sessionHeaders = await insertTestSession(
+                drizzle(mockHonoEnv.DB, { schema }),
+            );
             const request = new Request(
                 'http://localhost:8787/player?raceTypeList=jra',
-                { method: 'GET' },
+                { method: 'GET', headers: sessionHeaders },
             );
 
             const response = await router.fetch(request, mockHonoEnv);
@@ -437,9 +445,15 @@ describe('API Router', () => {
         it('player POSTエンドポイントが空配列を拒否し400を返すこと', async () => {
             // parsePlayerEntityUpsertは空配列を「配列は1件以上必要です」で拒否する
             // （#2001でplace/raceと対称の.min(1)制約が追加され、決定的に400になる）
+            const sessionHeaders = await insertTestSession(
+                drizzle(mockHonoEnv.DB, { schema }),
+            );
             const request = new Request('http://localhost:8787/player', {
                 method: 'POST',
-                headers: authHeaders({ 'Content-Type': 'application/json' }),
+                headers: {
+                    ...sessionHeaders,
+                    'Content-Type': 'application/json',
+                },
                 body: JSON.stringify([]),
             });
 
@@ -447,11 +461,31 @@ describe('API Router', () => {
             expect(response.status).toBe(400);
         });
 
-        it('KPLAYER-07回帰_サービス認証ヘッダーを付けなくても401にならないこと', async () => {
+        it('KPLAYER-07回帰_有効なセッションであれば401にならないこと', async () => {
             // front（player_remote_data_source.dart の upsertPlayers）は
-            // サービス認証トークンを持たないため、認証ヘッダー無しでリクエストする。
+            // パスキー認証導入により、ログイン後のセッショントークンを
+            // Authorizationヘッダーで送る（サービス間認証トークンは使わない）。
             // 以前はSERVICE_AUTH_EXEMPT_ROUTESへの登録漏れで401になり、
             // 注目選手の登録/解除ボタンが機能しなかった（本テストはその回帰防止）。
+            // パスキー認証導入後は「認証ヘッダー無しで通る」が「有効なセッション
+            // トークンで通る」に置き換わった（front全体がログイン必須になったため）。
+            const sessionHeaders = await insertTestSession(
+                drizzle(mockHonoEnv.DB, { schema }),
+            );
+            const request = new Request('http://localhost:8787/player', {
+                method: 'POST',
+                headers: {
+                    ...sessionHeaders,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify([]),
+            });
+
+            const response = await router.fetch(request, mockHonoEnv);
+            expect(response.status).not.toBe(401);
+        });
+
+        it('認証ヘッダー無しでは401になること', async () => {
             const request = new Request('http://localhost:8787/player', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -459,7 +493,7 @@ describe('API Router', () => {
             });
 
             const response = await router.fetch(request, mockHonoEnv);
-            expect(response.status).not.toBe(401);
+            expect(response.status).toBe(401);
         });
     });
 
@@ -522,11 +556,17 @@ describe('API Router', () => {
 
     describe('POST /push/subscription', () => {
         it('push/subscriptionエンドポイント(購読登録)がルーティングされること', async () => {
+            const sessionHeaders = await insertTestSession(
+                drizzle(mockHonoEnv.DB, { schema }),
+            );
             const request = new Request(
                 'http://localhost:8787/push/subscription',
                 {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        ...sessionHeaders,
+                        'Content-Type': 'application/json',
+                    },
                     body: JSON.stringify({
                         endpoint: 'https://push.example.com/subscription/abc',
                         keys: { p256dh: 'p256dh-value', auth: 'auth-value' },
@@ -539,11 +579,17 @@ describe('API Router', () => {
         });
 
         it('bodyが不正な場合は400を返すこと', async () => {
+            const sessionHeaders = await insertTestSession(
+                drizzle(mockHonoEnv.DB, { schema }),
+            );
             const request = new Request(
                 'http://localhost:8787/push/subscription',
                 {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        ...sessionHeaders,
+                        'Content-Type': 'application/json',
+                    },
                     body: JSON.stringify({ endpoint: 'not-a-url' }),
                 },
             );
@@ -555,11 +601,17 @@ describe('API Router', () => {
 
     describe('DELETE /push/subscription', () => {
         it('push/subscriptionエンドポイント(購読解除)がルーティングされること', async () => {
+            const sessionHeaders = await insertTestSession(
+                drizzle(mockHonoEnv.DB, { schema }),
+            );
             const request = new Request(
                 'http://localhost:8787/push/subscription',
                 {
                     method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        ...sessionHeaders,
+                        'Content-Type': 'application/json',
+                    },
                     body: JSON.stringify({
                         endpoint: 'https://push.example.com/subscription/abc',
                     }),
@@ -573,9 +625,15 @@ describe('API Router', () => {
 
     describe('POST /push/request', () => {
         it('push/requestエンドポイント(発火予約登録)がルーティングされること', async () => {
+            const sessionHeaders = await insertTestSession(
+                drizzle(mockHonoEnv.DB, { schema }),
+            );
             const request = new Request('http://localhost:8787/push/request', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    ...sessionHeaders,
+                    'Content-Type': 'application/json',
+                },
                 body: JSON.stringify({
                     subscriptionId: 'sub-1',
                     raceId: 'jra202601010101',
@@ -590,9 +648,15 @@ describe('API Router', () => {
         });
 
         it('raceIdの形式が不正な場合は400を返すこと', async () => {
+            const sessionHeaders = await insertTestSession(
+                drizzle(mockHonoEnv.DB, { schema }),
+            );
             const request = new Request('http://localhost:8787/push/request', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    ...sessionHeaders,
+                    'Content-Type': 'application/json',
+                },
                 body: JSON.stringify({
                     subscriptionId: 'sub-1',
                     raceId: 'not-a-valid-race-id',
@@ -609,9 +673,15 @@ describe('API Router', () => {
 
     describe('DELETE /push/request', () => {
         it('push/requestエンドポイント(発火予約取消)がルーティングされること', async () => {
+            const sessionHeaders = await insertTestSession(
+                drizzle(mockHonoEnv.DB, { schema }),
+            );
             const request = new Request('http://localhost:8787/push/request', {
                 method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    ...sessionHeaders,
+                    'Content-Type': 'application/json',
+                },
                 body: JSON.stringify({
                     subscriptionId: 'sub-1',
                     raceId: 'jra202601010101',
@@ -637,9 +707,15 @@ describe('API Router', () => {
 
     describe('POST /push/test', () => {
         it('push/testエンドポイントがルーティングされること（購読なしのためok:false）', async () => {
+            const sessionHeaders = await insertTestSession(
+                drizzle(mockHonoEnv.DB, { schema }),
+            );
             const request = new Request('http://localhost:8787/push/test', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    ...sessionHeaders,
+                    'Content-Type': 'application/json',
+                },
                 body: JSON.stringify({ subscriptionId: 'sub-not-exist' }),
             });
 
@@ -715,9 +791,12 @@ describe('API Router', () => {
         // 再取得が60秒以内に収まり、トグル前のキャッシュを再利用してしまう
         // レース条件が残っていた（実機で再現）ため、キャッシュ自体を無効化した。
         it('GET /player が 200 を返す場合に Cache-Control: no-store が設定されること', async () => {
+            const sessionHeaders = await insertTestSession(
+                drizzle(mockHonoEnv.DB, { schema }),
+            );
             const request = new Request(
                 'http://localhost:8787/player?raceTypeList=jra',
-                { method: 'GET' },
+                { method: 'GET', headers: sessionHeaders },
             );
 
             const response = await router.fetch(request, mockHonoEnv);
@@ -904,7 +983,10 @@ describe('サービス間認証: ルート分類の回帰防止（SECAUTH-08）'
         expect(response.status).toBe(401);
     });
 
-    it('主要な公開ルート（GET /race）はトークン無しでも200系になること', async () => {
+    it('service-or-session対象ルート（GET /race）はサービス間認証トークンのみでも200系になること', async () => {
+        // GET /raceはcalendar/scraping Workerからのサービス間呼び出しとfrontの閲覧の
+        // 両方から呼ばれるため、パスキー認証導入後もservice-or-session（どちらか
+        // 一方があれば通す）に分類されている。サービス間認証トークンのみで通ることを確認する。
         const searchParams = new URLSearchParams({
             startDate: '2026-01-01',
             finishDate: '2026-01-31',
@@ -915,6 +997,7 @@ describe('サービス間認証: ルート分類の回帰防止（SECAUTH-08）'
                 `http://localhost:8787/race?${searchParams.toString()}`,
                 {
                     method: 'GET',
+                    headers: { [SERVICE_AUTH_HEADER]: MOCK_SERVICE_AUTH_TOKEN },
                 },
             ),
             regressionMockHonoEnv,
