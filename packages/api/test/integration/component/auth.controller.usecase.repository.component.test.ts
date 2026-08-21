@@ -97,7 +97,6 @@ const registerViaCeremony = async (
         body: JSON.stringify({
             challengeId,
             nickname: 'たなか',
-            deviceLabel: '新端末',
             credentialResponse,
         }),
     });
@@ -169,7 +168,6 @@ describe('コンポーネントテスト: Auth Router → Controller → Usecase
             body: JSON.stringify({
                 challengeId,
                 nickname: 'たなか',
-                deviceLabel: '新端末',
                 credentialResponse,
             }),
         });

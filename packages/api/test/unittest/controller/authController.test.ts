@@ -172,10 +172,11 @@ describe('AuthController', () => {
     });
 
     describe('registrationVerify', () => {
+        // deviceLabelを含めない: frontは送らず、サーバー側で自動生成するため
+        // （回帰テスト。authController.schemas.tsのコメント参照）。
         const validBody = {
             challengeId: 'c1',
             nickname: 'たなか',
-            deviceLabel: '端末A',
             credentialResponse: {
                 id: 'cred-1',
                 rawId: 'cred-1',
