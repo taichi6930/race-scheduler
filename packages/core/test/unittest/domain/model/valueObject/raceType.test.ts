@@ -14,6 +14,7 @@
  * | 7 | 'JRA'（大文字）| RaceType.JRA を返す（小文字変換後）|
  * | 8 | 'invalid'   | エラーをスロー              |
  * | 9 | ''          | エラーをスロー              |
+ * | 14| 'invalid'   | エラーのcauseに元のZodエラーを保持する |
  *
  * ## デシジョンテーブル: isIncludedRaceType
  *
@@ -77,6 +78,19 @@ describe('validateRaceType', () => {
 
         it('ケース#9: 空文字はエラーをスロー', () => {
             expect(() => validateRaceType('')).toThrow('Invalid race_type:');
+        });
+
+        it('ケース#14: エラーのcauseに元のZodエラーを保持する', () => {
+            let caught: unknown;
+            try {
+                validateRaceType('invalid');
+            } catch (error) {
+                caught = error;
+            }
+
+            expect(caught).toBeInstanceOf(Error);
+            expect((caught as Error).cause).toBeInstanceOf(Error);
+            expect(((caught as Error).cause as Error).name).toBe('ZodError');
         });
     });
 });

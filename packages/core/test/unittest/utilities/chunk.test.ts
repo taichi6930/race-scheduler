@@ -24,6 +24,7 @@
  * | 2  | 正常系 | 環境変数に正の整数 | その値を返す | Line |
  * | 3  | 異常系 | 環境変数が0以下 | defaultValueにフォールバック | Branch |
  * | 4  | 異常系 | 環境変数が数値以外 | defaultValueにフォールバック | Branch |
+ * | 5  | 正常系（境界値） | 環境変数が1 | フォールバックせず1を返す | Branch |
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
@@ -109,5 +110,11 @@ describe('resolveChunkSize', () => {
         process.env[ENV_VAR_NAME] = 'not-a-number';
 
         expect(resolveChunkSize(ENV_VAR_NAME, 500)).toBe(500);
+    });
+
+    it('#5: 環境変数が1（境界値）の場合defaultValueにフォールバックせず1を返す', () => {
+        process.env[ENV_VAR_NAME] = '1';
+
+        expect(resolveChunkSize(ENV_VAR_NAME, 500)).toBe(1);
     });
 });
