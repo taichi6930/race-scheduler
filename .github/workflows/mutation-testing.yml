@@ -1,0 +1,93 @@
+name: Mutation Testing (core)
+
+# packages/core（外部依存の少ない純粋なドメインロジックが集中するパッケージ）に対する
+# ミューテーションテスト（Stryker Mutator）を週次で実行し、結果をレポートするだけの
+# 非ブロッキングなワークフロー。
+#
+# 背景: このリポジトリは C0/C1 カバレッジ100%を要件にしている
+# （docs/README.md §8「カバレッジ要件」）が、行/分岐カバレッジは「そのコードが
+# 実行されたか」しか見ておらず、「そのコードの振る舞いをテストが実際に検証しているか」
+# は保証しない（例: アサーション漏れのテストでもカバレッジ上は100%になり得る）。
+# ミューテーションテストはソースコードに小さな変異（比較演算子の反転・定数の変更等）を
+# 注入し、既存のテストスイートがその変異を検知して落ちるか（＝ kill できるか）を機械的に
+# 判定することで、アサーションの実効性を可視化する。
+#
+# bun test を直接サポートするミューテーションツールが無いため、Stryker の
+# command runner（任意のテストコマンドを実行し終了コードで判定する汎用ランナー）を
+# 使う（stryker.core.config.json）。1ミュータントごとに対象パッケージの単体テスト
+# スイート全体を実行し直すため、PRごとに実行するには重すぎる
+# （scheduled-tests.yml の sIT/UAT と同じ理由でスケジュール実行に分離している）。
+#
+# スコープをpackages/coreのみに限定しているのは、外部依存（Cloudflare Workers/D1等）が
+# 少なく揮発性の低い純粋ロジックが集中しており、ミューテーションテストの効果
+# （＝アサーションの実効性検証）が最も出やすいため。他パッケージへの拡大は将来判断。
+#
+# thresholds.break は意図的に null（stryker.core.config.json参照）にしており、
+# スコアの高低に関わらずジョブは常に成功する。まずは結果を可視化して傾向を把握する
+# ことを優先し、PRのブロッキング化（CIゲート）は別途判断する
+# （audit/license-check等の既存の「まずは可視化」ジョブと同じ思想）。
+
+on:
+    schedule:
+        # 毎週月曜 05:00 JST (日曜 20:00 UTC)。scheduled-tests.yml（毎日 06:00 UTC）・
+        # health-check-data-freshness.yml（14:00 JST）と重複しない時間帯を選んでいる。
+        - cron: "0 20 * * 0"
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+concurrency:
+    # CICD-30/31: 別ワークフロー同士が誤って同じグループに入らないよう、ワークフロー名を含める。
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: false
+
+jobs:
+    mutation-core:
+        runs-on: ubuntu-24.04
+        # ローカル実測（4コア環境）で約3〜4分/727ミュータント。packages/core全体
+        # （本ワークフロー実行時点で約6,500ミュータント想定）では30〜60分程度を見込むが、
+        # GitHub-hosted runnerのコア数・負荷次第で変動するため大きめに確保する。
+        timeout-minutes: 90
+        env:
+            NODE_ENV: ci_github_actions
+            CI: "true"
+            TZ: jst
+            HTML_FETCH_DELAY_MS: "0"
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v7
+              with:
+                  filter: blob:none
+
+            - name: Setup workspace
+              uses: ./.github/actions/setup-workspace
+              with:
+                  setup-node: "false"
+
+            - name: Run mutation testing (packages/core)
+              run: bun run mutation:core | tee mutation-report.log
+
+            - name: Write job summary
+              if: always()
+              run: |
+                  {
+                    echo "## Mutation Testing (packages/core)"
+                    echo ""
+                    echo '```'
+                    grep -B2 "^All files" mutation-report.log || echo "(結果テーブルを取得できませんでした。詳細はログを参照してください)"
+                    echo '```'
+                    echo ""
+                    echo "詳細は本ジョブの \`mutation-report\` artifact（HTMLレポート）を参照してください。"
+                  } >> "$GITHUB_STEP_SUMMARY"
+
+            - name: Upload mutation report
+              if: always()
+              uses: actions/upload-artifact@v7
+              with:
+                  name: mutation-report
+                  path: |
+                      reports/mutation/core/
+                      mutation-report.log
+                  retention-days: 30
+                  if-no-files-found: warn

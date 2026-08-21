@@ -1,6 +1,10 @@
 {
     "$schema": "https://unpkg.com/knip@6/schema.json",
-    "ignoreDependencies": ["esbuild", "cloudflare"],
+    "ignoreDependencies": [
+        "esbuild",
+        "cloudflare",
+        "@stryker-mutator/command-runner"
+    ],
     "ignoreBinaries": ["awk", "flutter", "checkSchemaDrift.ts"],
     "ignoreExportsUsedInFile": true,
     "ignore": [

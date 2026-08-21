@@ -1,0 +1,45 @@
+{
+    "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+
+    "mutate": [
+        "packages/core/src/**/*.ts",
+        "!packages/core/src/**/index.ts",
+        "!packages/core/src/**/constants/**",
+        "!packages/core/src/**/types/**"
+    ],
+
+    "testRunner": "command",
+    "commandRunner": {
+        "command": "NODE_ENV=ci_local TZ=jst HTML_FETCH_DELAY_MS=0 bun test packages/core/test/unittest"
+    },
+    "coverageAnalysis": "off",
+
+    "reporters": ["html", "clear-text", "progress-append-only"],
+    "htmlReporter": {
+        "fileName": "reports/mutation/core/index.html"
+    },
+
+    "thresholds": {
+        "high": 80,
+        "low": 60,
+        "break": null
+    },
+
+    "timeoutMS": 30000,
+
+    "ignorePatterns": [
+        "private",
+        ".claude",
+        ".aidlc-rule-details",
+        "CLAUDE.md",
+        "AGENTS.md",
+        "aidlc-docs",
+        "packages/admin",
+        "packages/api",
+        "packages/batch",
+        "packages/db",
+        "packages/front",
+        "docs",
+        "tests"
+    ]
+}

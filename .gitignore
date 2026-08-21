@@ -26,6 +26,10 @@ dist/
 # ===================================
 coverage/
 
+# Mutation testing (Stryker)。作業ディレクトリ（サンドボックス）とHTMLレポート出力。
+.stryker-tmp/
+reports/mutation/
+
 # ESLint cache
 .eslintcache
 

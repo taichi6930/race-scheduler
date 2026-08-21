@@ -307,6 +307,27 @@ front（Flutter）のテストは `packages/front/test/` に widget test とし�
   詳細は [`.claude/docs/testing-conventions.md`](../.claude/docs/testing-conventions.md) §7.5）
 - `test/mock/`, `test/common/` は対象外（透明性のため計測のみ）
 
+### ミューテーションテスト（packages/core, 週次・非ブロッキング）
+
+C0/C1カバレッジ100%は「そのコードが実行されたか」しか保証せず、「アサーションが実際に
+振る舞いを検証しているか」までは保証しない。[Stryker Mutator](https://stryker-mutator.io/)
+を使ったミューテーションテストで、ソースコードへ小さな変異（比較演算子の反転・定数変更等）
+を注入し、既存テストがその変異を検知して落ちるか（kill できるか）を計測することで、
+アサーションの実効性を可視化する。
+
+- **対象**: `packages/core`（外部依存の少ない純粋なドメインロジックが集中し、効果が
+  出やすいため）のみ。他パッケージへの拡大は将来判断。
+- **実行方法**: `bun test` を直接サポートするミューテーションツールが無いため、Stryker の
+  command runner（任意のテストコマンドを実行し終了コードで判定する汎用ランナー）を使う
+  （設定は [`stryker.core.config.json`](../stryker.core.config.json)、ローカル実行は
+  `bun run mutation:core`）。1ミュータントごとに `packages/core` の単体テストスイート
+  全体を実行し直すため実行コストが高く、PRごとには実行しない
+  （sIT/UATと同じ理由。[`.github/workflows/mutation-testing.yml`](../.github/workflows/mutation-testing.yml)
+  が週次で実行し、HTMLレポートをArtifactとしてアップロードする）。
+- **非ブロッキング**: `thresholds.break` は `null` に設定しており、スコアの高低に
+  関わらずジョブは常に成功する。まずは結果を可視化して傾向を把握することを優先し、
+  PRのブロッキング化（CIゲート）は別途判断する。
+
 ---
 
 ## 9. セキュリティポリシー
