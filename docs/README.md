@@ -317,7 +317,8 @@ C0/C1カバレッジ100%は「そのコードが実行されたか」しか保�
 
 - **対象**: `packages/core`・`packages/admin`・`packages/batch`・`packages/api`。
   `packages/front` は Flutter/Dart のため Stryker（JS/TS向け）の対象外、`packages/db` は
-  マイグレーション専用で `src` が無いため対象外。
+  マイグレーション専用で `src` が無いため対象外。`packages/api/src/openapi/` は
+  手書きの静的OpenAPI仕様（振る舞いを持たないドキュメントデータ）のため対象外。
 - **実行方法**: `bun test` を直接サポートするミューテーションツールが無いため、Stryker の
   command runner（任意のテストコマンドを実行し終了コードで判定する汎用ランナー）を使う
   （設定はパッケージごとに `stryker.<pkg>.config.json`、ローカル実行は
@@ -328,12 +329,19 @@ C0/C1カバレッジ100%は「そのコードが実行されたか」しか保�
   各configの `ignorePatterns` は壊れたシンボリックリンク（private submodule由来）のみを除外し、
   兄弟パッケージや `tests/` は除外しない（`packages/api` が `packages/db/migrations` と
   `tests/shared` に実際に依存しているため）。
+  `packages/api` のみミュータント数が桁違いに多く（openapi除外後も約4,000弱）単一ジョブでは
+  完走に数時間かかるため、`mutation-api` ジョブは `src` サブディレクトリ単位（controller・
+  usecase・repository（3分割）・gateway・utility・di+middleware+db・router等、計10レグ）の
+  matrix並列実行に分割している。他パッケージ同様1レグあたり20〜90分程度に収まる。
 - **非ブロッキング**: `thresholds.break` は `null` に設定しており、スコアの高低に
   関わらずジョブは常に成功する。まずは結果を可視化して傾向を把握することを優先し、
   PRのブロッキング化（CIゲート）は別途判断する。
 - **失敗時の可視化**: Stryker自体のクラッシュ・タイムアウト等でジョブが失敗した場合は、
   `report-mutation-failure` ジョブがパッケージ単位でGitHub Issueを自動作成・自動Closeする
-  （`scheduled-tests.yml` の `report-test-failures` と同じ作法）。
+  （`scheduled-tests.yml` の `report-test-failures` と同じ作法）。`mutation-api` は
+  matrix jobのため`needs.mutation-api.result`はレグ横断の集約結果になるが、失敗時は
+  各shardのログartifactを走査し、エラーが見つかったshard名をIssue本文に併記して
+  原因箇所を特定しやすくしている。
 
 ---
 
