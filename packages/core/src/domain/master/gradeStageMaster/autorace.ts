@@ -37,6 +37,11 @@ export const AUTORACE_STAGE_ALIAS_LIST: readonly StageAliasEntry[] = [
         raceType: RaceType.AUTORACE,
     },
     {
+        stage: 'ダイヤモンドドリーム',
+        stageByWebSite: ['ダイヤモンドドリーム'],
+        raceType: RaceType.AUTORACE,
+    },
+    {
         stage: '特別選抜戦',
         stageByWebSite: ['特別選抜戦'],
         raceType: RaceType.AUTORACE,
@@ -135,6 +140,14 @@ export const AUTORACE_STAGE_PRIORITY_LIST: readonly StagePriorityEntry[] = [
         raceType: RaceType.AUTORACE,
         priority: 0,
         description: 'GⅠの一般戦。',
+    },
+    {
+        grade: ['GⅠ'],
+        stage: 'ダイヤモンドドリーム',
+        raceType: RaceType.AUTORACE,
+        priority: 6,
+        description:
+            '飯塚GⅠ「ダイヤモンドレース」の初日メインレース。優勝戦ではないが、開催の目玉となる特別なレース。',
     },
     {
         grade: ['SG'],
