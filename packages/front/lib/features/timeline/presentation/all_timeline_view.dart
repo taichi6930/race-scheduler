@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/jst_time.dart';
+import '../../../data/datasources/dio_call_handler.dart';
 import '../../../design/tokens.dart';
 import '../../../design/typography.dart';
 import '../../../design/weekday_colors.dart';
@@ -198,9 +199,10 @@ class _AllTimelineBodyState extends ConsumerState<AllTimelineBody> {
       // 読み込み済み月の取得自体が失敗している場合、本当に該当レースが
       // 無いのではなくAPI障害が原因のため、日別モードと同様に
       // ErrorRetryCardで区別する（FEDGE-03）。
-      if (data.earliestMonthHasError || data.latestMonthHasError) {
+      final monthError = data.earliestMonthError ?? data.latestMonthError;
+      if (monthError != null) {
         return ErrorRetryCard(
-          message: 'レースの取得に失敗しました',
+          message: 'レースの取得に失敗しました${describeApiErrorDetail(monthError)}',
           onRetry: () {
             final months = ref.read(loadedMonthsProvider);
             ref.invalidate(monthRaceChunkProvider(months.first));

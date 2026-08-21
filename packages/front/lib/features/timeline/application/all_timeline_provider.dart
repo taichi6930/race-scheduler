@@ -94,8 +94,8 @@ class AllTimelineData {
     required this.races,
     required this.isLoadingEarlier,
     required this.isLoadingLater,
-    required this.earliestMonthHasError,
-    required this.latestMonthHasError,
+    required this.earliestMonthError,
+    required this.latestMonthError,
   });
 
   /// 読み込み済み月のうち取得成功分を統合・ソート・フィルタ適用したレース一覧。
@@ -107,8 +107,13 @@ class AllTimelineData {
   /// 最も未来側の月を取得中かどうか（末尾に読み込み中インジケータを出す）。
   final bool isLoadingLater;
 
-  final bool earliestMonthHasError;
-  final bool latestMonthHasError;
+  /// 最も過去側の月の取得が失敗した場合のエラー（成功時はnull）。
+  /// [ErrorRetryCard] のメッセージへ [describeApiErrorDetail] で詳細を
+  /// 付与するために、真偽値ではなく実際のエラーを保持する。
+  final Object? earliestMonthError;
+
+  /// 最も未来側の月の取得が失敗した場合のエラー（成功時はnull）。
+  final Object? latestMonthError;
 }
 
 /// [loadedMonthsProvider] の各月の取得結果を統合・日時順にソートしたレース一覧。
@@ -153,8 +158,8 @@ final allTimelineRacesProvider = Provider<AllTimelineData>((ref) {
     races: filtered,
     isLoadingEarlier: earliest.isLoading,
     isLoadingLater: latest.isLoading,
-    earliestMonthHasError: earliest.hasError,
-    latestMonthHasError: latest.hasError,
+    earliestMonthError: earliest.error,
+    latestMonthError: latest.error,
   );
 });
 

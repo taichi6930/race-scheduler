@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import '../../../core/jst_time.dart';
+import '../../../data/datasources/dio_call_handler.dart';
 import '../../../design/breakpoints.dart';
 import '../../../design/tokens.dart';
 import '../../../design/typography.dart';
@@ -447,7 +448,9 @@ class TimelineScreen extends ConsumerWidget {
                                 ),
                                 loading: () => const LoadingSkeletonList(),
                                 error: (error, stack) => ErrorRetryCard(
-                                  message: 'レースの取得に失敗しました',
+                                  message:
+                                      'レースの取得に失敗しました'
+                                      '${describeApiErrorDetail(error)}',
                                   onRetry: () =>
                                       ref.invalidate(timelineProvider(date)),
                                 ),

@@ -10,6 +10,17 @@
 // | T-06 | DioExceptionType.badResponse (statusCode=429)     | ApiErrorKind.badResponse に分類され、statusCodeが保持される             |
 // | T-07 | DioExceptionType.cancel                           | ApiErrorKind.cancel に分類される                                        |
 // | T-08 | DioExceptionType.unknown/badCertificate           | ApiErrorKind.other に分類される                                         |
+//
+// describeApiErrorDetail のデシジョンテーブル
+//
+// | ID   | 対象                                                        | 期待                        |
+// | ---- | ------------------------------------------------------------ | ---------------------------- |
+// | T-09 | ApiCallException(badResponse, statusCode: 401)               | '（HTTP 401）'               |
+// | T-10 | ApiCallException(badResponse, statusCode: null)               | ''                          |
+// | T-11 | ApiCallException(connection)                                  | '（通信エラー）'             |
+// | T-12 | ApiCallException(timeout)                                     | '（タイムアウト）'           |
+// | T-13 | ApiCallException(cancel) / ApiCallException(other)            | ''                          |
+// | T-14 | ApiCallException以外（素のException）                         | ''                          |
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -145,5 +156,71 @@ void main() {
         expect(caught.statusCode, statusCode);
       });
     }
+  });
+
+  group('describeApiErrorDetail', () {
+    test('[T-09] badResponse(401)_（HTTP 401）を返す', () {
+      final error = ApiCallException(
+        kind: ApiErrorKind.badResponse,
+        statusCode: 401,
+        message: 'Unauthorized',
+      );
+
+      expect(describeApiErrorDetail(error), '（HTTP 401）');
+    });
+
+    test('[T-10] badResponseだがstatusCode無し_空文字を返す', () {
+      final error = ApiCallException(
+        kind: ApiErrorKind.badResponse,
+        statusCode: null,
+        message: 'error',
+      );
+
+      expect(describeApiErrorDetail(error), '');
+    });
+
+    test('[T-11] connection_（通信エラー）を返す', () {
+      final error = ApiCallException(
+        kind: ApiErrorKind.connection,
+        statusCode: null,
+        message: 'error',
+      );
+
+      expect(describeApiErrorDetail(error), '（通信エラー）');
+    });
+
+    test('[T-12] timeout_（タイムアウト）を返す', () {
+      final error = ApiCallException(
+        kind: ApiErrorKind.timeout,
+        statusCode: null,
+        message: 'error',
+      );
+
+      expect(describeApiErrorDetail(error), '（タイムアウト）');
+    });
+
+    test('[T-13a] cancel_空文字を返す', () {
+      final error = ApiCallException(
+        kind: ApiErrorKind.cancel,
+        statusCode: null,
+        message: 'error',
+      );
+
+      expect(describeApiErrorDetail(error), '');
+    });
+
+    test('[T-13b] other_空文字を返す', () {
+      final error = ApiCallException(
+        kind: ApiErrorKind.other,
+        statusCode: null,
+        message: 'error',
+      );
+
+      expect(describeApiErrorDetail(error), '');
+    });
+
+    test('[T-14] ApiCallException以外_空文字を返す', () {
+      expect(describeApiErrorDetail(Exception('Failed to load races')), '');
+    });
   });
 }
