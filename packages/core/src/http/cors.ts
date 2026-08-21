@@ -72,6 +72,17 @@ const rejectWildcardInProduction = (envOrigins: string[]): string[] => {
 };
 
 /**
+ * 末尾のスラッシュを取り除く。ブラウザが送る `Origin` ヘッダーには末尾スラッシュが
+ * 付かないため、`CORS_ALLOWED_ORIGINS` に末尾スラッシュ付きで設定してしまうと
+ * 完全一致比較（`getAllowedOrigin`）が常に失敗し、「設定したのにCORSエラーのまま」
+ * という気づきにくい設定ミスになる。GitHub Actionsのrepository variableのような
+ * UI入力は目視でスラッシュの有無を見落としやすいため、両側で正規化して吸収する。
+ * @param value - 正規化対象のオリジン文字列
+ * @returns 末尾スラッシュを除いた文字列
+ */
+const stripTrailingSlash = (value: string): string => value.replace(/\/+$/, '');
+
+/**
  * envOriginsRaw（CORS_ALLOWED_ORIGINS の生値）から許可オリジンの配列を解決する。
  * `getAllowedOrigins` のキャッシュ判定から解決ロジックだけを切り出したもの。
  * @param envOriginsRaw - `process.env.CORS_ALLOWED_ORIGINS` の値（未設定なら undefined）
@@ -84,7 +95,9 @@ const resolveAllowedOrigins = (envOriginsRaw: string | undefined): string[] => {
 
     // `split(',')` は空文字列でも `['']` を返すため、この時点で envOrigins は
     // 必ず1件以上になる（`!envOriginsRaw` の早期リターンで空文字/undefinedは除外済み）。
-    const envOrigins = envOriginsRaw.split(',').map((s) => s.trim());
+    const envOrigins = envOriginsRaw
+        .split(',')
+        .map((s) => stripTrailingSlash(s.trim()));
 
     // デフォルトで localhost を許可（開発環境用）
     return isProductionEnv()
@@ -168,8 +181,10 @@ const getAllowedOrigin = (origin: string | null): string | null => {
 
     if (!origin) return null;
 
-    // 完全一致チェック
-    if (allowedOrigins.includes(origin)) {
+    // 完全一致チェック（許可リスト側は末尾スラッシュ正規化済みのため、
+    // 比較対象のoriginも同様に正規化する。レスポンスヘッダーには
+    // リクエストの生origin値をそのまま返す）。
+    if (allowedOrigins.includes(stripTrailingSlash(origin))) {
         return origin;
     }
 

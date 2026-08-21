@@ -22,6 +22,8 @@
  * | T-15 | withCorsHeaders | production環境 + `CORS_ALLOWED_ORIGINS='*,https://a.com'`（SEC-014） | ワイルドカードのみ無視され、他の明示オリジンは有効なまま | Branch |
  * | T-15a | withCorsHeaders | production環境 + ワイルドカードを含まない明示オリジン（SEC-014） | 変更されずそのまま許可判定される | Branch |
  * | T-16 | withCorsHeaders | 非production環境 + `CORS_ALLOWED_ORIGINS='*'` | 従来通りワイルドカード許可される（T-07と同じ、回帰確認） | Branch |
+ * | T-17 | withCorsHeaders | `CORS_ALLOWED_ORIGINS`に末尾スラッシュ付きで設定 + 末尾スラッシュ無しorigin | Allow-Originが該当オリジンになる（許可される） | Branch |
+ * | T-18 | withCorsHeaders | `CORS_ALLOWED_ORIGINS`は末尾スラッシュ無し + 末尾スラッシュ付きorigin | Allow-Originが該当origin（生値）になる（許可される） | Branch |
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
@@ -234,6 +236,36 @@ describe('CORS Utilities', () => {
                 );
 
                 expect(result['Access-Control-Allow-Origin']).toBe('*');
+            });
+        });
+
+        describe('CORS_ALLOWED_ORIGINSまたはrequest originの末尾スラッシュを正規化する', () => {
+            it('[T-17] withCorsHeaders_許可リスト側が末尾スラッシュ付き設定_末尾スラッシュ無しoriginでも許可される', () => {
+                process.env.CORS_ALLOWED_ORIGINS =
+                    'https://race-schedule-front-prod.pages.dev/';
+
+                const result = withCorsHeaders(
+                    {},
+                    'https://race-schedule-front-prod.pages.dev',
+                );
+
+                expect(result['Access-Control-Allow-Origin']).toBe(
+                    'https://race-schedule-front-prod.pages.dev',
+                );
+            });
+
+            it('[T-18] withCorsHeaders_request origin側が末尾スラッシュ付き_許可リストと一致し生値のoriginがそのまま返る', () => {
+                process.env.CORS_ALLOWED_ORIGINS =
+                    'https://race-schedule-front-prod.pages.dev';
+
+                const result = withCorsHeaders(
+                    {},
+                    'https://race-schedule-front-prod.pages.dev/',
+                );
+
+                expect(result['Access-Control-Allow-Origin']).toBe(
+                    'https://race-schedule-front-prod.pages.dev/',
+                );
             });
         });
 
