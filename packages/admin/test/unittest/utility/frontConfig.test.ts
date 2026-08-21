@@ -5,8 +5,8 @@
  *
  * | # | 条件 | Input | Expected | Coverage |
  * |----|------|-------|----------|----------|
- * | 1  | 正常系 | process.env.FRONT_BASE_URL 設定済み | その値を基準にした絶対URLを返す | Line |
- * | 2  | フォールバック | 未設定 | 相対パス `/invite/<token>` を返す | Branch |
+ * | 1  | 正常系 | process.env.FRONT_BASE_URL 設定済み | ハッシュフラグメント形式の絶対URLを返す | Line |
+ * | 2  | フォールバック | 未設定 | 相対パス `/#/invite/<token>` を返す | Branch |
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
@@ -28,15 +28,15 @@ describe('buildInviteUrl', () => {
         }
     });
 
-    it('#1: process.env.FRONT_BASE_URLが設定されている場合その値を基準にした絶対URLを返す', () => {
+    it('#1: process.env.FRONT_BASE_URLが設定されている場合ハッシュフラグメント形式の絶対URLを返す', () => {
         process.env.FRONT_BASE_URL = 'https://race-schedule-front.pages.dev';
 
         expect(buildInviteUrl('invite-token')).toBe(
-            'https://race-schedule-front.pages.dev/invite/invite-token',
+            'https://race-schedule-front.pages.dev/#/invite/invite-token',
         );
     });
 
-    it('#2: 未設定の場合は相対パスを返す', () => {
-        expect(buildInviteUrl('invite-token')).toBe('/invite/invite-token');
+    it('#2: 未設定の場合はハッシュフラグメント形式の相対パスを返す', () => {
+        expect(buildInviteUrl('invite-token')).toBe('/#/invite/invite-token');
     });
 });
