@@ -91,3 +91,132 @@ jobs:
                       mutation-report.log
                   retention-days: 30
                   if-no-files-found: warn
+
+    # 週次・無人実行のため、mutation-core ジョブ自体が失敗（Strykerのクラッシュ・
+    # タイムアウト等）してもActionsのRun一覧を人が見に行かない限り気づけない。
+    # scheduled-tests.yml の report-test-failures ジョブと同じ作法（GitHub App token +
+    # タイトルでdedupしたIssueを作成、復旧したら自動Close）で可視化する。
+    # 対象はジョブの失敗のみ（ミューテーションスコアの高低はthresholds.breakがnullのため
+    # ここでは検知しない。スコアの傾向は別途 docs/tasks/test-quality-audit.md への
+    # 手動トリアージで扱う）。
+    report-mutation-failure:
+        needs: mutation-core
+        if: always()
+        runs-on: ubuntu-24.04
+        timeout-minutes: 5
+        permissions:
+            contents: read
+            issues: write
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v7
+
+            # mutation-core が失敗した場合、原因（どのファイルの instrumentation/dry-run で
+            # こけたか）をIssue本文に直接埋め込むため、ログを含むartifactを取得する。
+            # mutation-core がartifactアップロード（`if: always()`）まで到達せずに落ちた
+            # 場合はartifact自体が存在しないため、continue-on-errorで握り潰す
+            # （後段でファイルが無ければ「ログ取得不可」として扱う）。
+            - name: Download mutation report log
+              if: needs.mutation-core.result == 'failure'
+              continue-on-error: true
+              uses: actions/download-artifact@v8
+              with:
+                  name: mutation-report
+                  path: mutation-report-artifact
+
+            - name: Create GitHub App Token
+              uses: ./.github/actions/create-github-app-token
+              id: app-token
+              with:
+                  app-id: ${{ secrets.BOT_APP_ID }}
+                  private-key: ${{ secrets.BOT_PRIVATE_KEY }}
+
+            - name: Sync GitHub Issue for mutation-core job failure
+              env:
+                  GH_TOKEN: ${{ steps.app-token.outputs.token }}
+                  GH_REPO: ${{ github.repository }}
+                  RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+                  RESULT_MUTATION_CORE: ${{ needs.mutation-core.result }}
+              run: |
+                  set -euo pipefail
+
+                  result="$RESULT_MUTATION_CORE"
+
+                  # skipped/cancelledはテスト失敗ではないため、既存Issueの状態も変えず何もしない
+                  # （scheduled-tests.ymlのreport_targetと同じ判断基準）。
+                  if [ "$result" = "skipped" ] || [ "$result" = "cancelled" ]; then
+                    echo "mutation-core: $result（対象外のため何もしません）"
+                    exit 0
+                  fi
+
+                  title="[Test Failure] mutation-core（Mutation Testing）が失敗"
+                  label="test-failure:mutation-core"
+
+                  gh label create "test-failure" --color "B60205" \
+                    --description "テスト失敗の自動起票" >/dev/null 2>&1 || true
+                  gh label create "$label" --color "B60205" \
+                    --description "テスト失敗 (mutation-core)" >/dev/null 2>&1 || true
+
+                  existing=$(gh issue list --state open --json number,title \
+                    | jq --arg t "$title" '[.[] | select(.title == $t)] | .[0].number // empty')
+
+                  if [ "$result" = "success" ]; then
+                    if [ -n "$existing" ]; then
+                      gh issue comment "$existing" --body "直近の実行（${RUN_URL}）でmutation-coreジョブが成功したため、自動的にCloseします。再発した場合は新しいIssueが作成されます。"
+                      gh issue close "$existing"
+                      echo "復旧を確認し、Issue #$existing をCloseしました"
+                    else
+                      echo "成功。対象Issueもなし（何もしません）"
+                    fi
+                    exit 0
+                  fi
+
+                  # どのファイル（instrumentation対象のsrcファイル・dry-runで落ちたテストファイル等）が
+                  # 原因かをIssue本文に直接埋め込む。「ERROR」等を含む行を前後の文脈込みで抜き出し、
+                  # 見つからなければ末尾を、artifact自体が無ければその旨を表示する（Actionsログへの
+                  # クリック遷移なしで一次切り分けできるようにするため）。
+                  log_file="mutation-report-artifact/mutation-report.log"
+                  if [ -f "$log_file" ]; then
+                    # grepが無マッチだと終了コード1を返し、pipefail経由でset -eがスクリプトごと
+                    # 落としてしまうため`|| true`で無マッチを正常系として扱う（snippetは空文字になり、
+                    # 直後のフォールバックへ回る）。
+                    snippet=$(grep -inE "error|fail|cannot|enoent" "$log_file" -A3 -B1 | tail -c 4000) || true
+                    if [ -z "$snippet" ]; then
+                      snippet=$(tail -n 60 "$log_file")
+                    fi
+                  else
+                    snippet="(ログartifactを取得できませんでした。Actionsの実行ログを直接確認してください)"
+                  fi
+
+                  body="## mutation-core ジョブが失敗しました
+
+                  - ワークフロー: \`mutation-testing.yml\` / ジョブ: \`mutation-core\`
+                  - 実行結果: ${result}
+                  - 実行ログ: ${RUN_URL}
+
+                  Stryker自体のクラッシュ・タイムアウト・設定エラー等、ミューテーションテストの
+                  実行基盤側の問題が疑われます（ミューテーションスコアの高低ではありません。
+                  \`thresholds.break\` は null のためスコアではこのジョブは失敗しません）。
+                  次回のスケジュール実行またはこのIssueを見た人による \`workflow_dispatch\` 手動実行で
+                  成功すれば自動でCloseされます。
+
+                  ### ログ抜粋（原因ファイルの特定用）
+
+                  \`\`\`
+                  ${snippet}
+                  \`\`\`
+
+                  _このIssueは \`.github/workflows/mutation-testing.yml\` により自動作成されました。_"
+
+                  if [ -n "$existing" ]; then
+                    gh issue comment "$existing" --body "$body"
+                    target="$existing"
+                    echo "既存Issue #$existing にコメントを追加しました"
+                  else
+                    issue_url=$(gh issue create --title "$title" --body "$body")
+                    target="${issue_url##*/}"
+                    echo "新規Issue #$target を作成しました"
+                  fi
+
+                  gh issue edit "$target" --add-label "$label" --add-label "test-failure" \
+                    || echo "::warning::Issue #$target へのラベル付与に失敗しました"
