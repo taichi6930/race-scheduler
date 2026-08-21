@@ -7,6 +7,7 @@
  * |----|----------|-------|----------|----------|
  * | 1  | setEnv | CloudFlareEnv | 環境変数を設定 | Line |
  * | 2  | get env | 設定済み | CloudFlareEnv を返す | Branch |
+ * | 7  | setEnv | requiredKeysが必須だが値が空文字 | validateEnv経由でErrorをスロー | Line |
  *
  * ## デシジョンテーブル（requireEnvVar）
  *
@@ -16,6 +17,8 @@
  * | 2  | 異常系 | 未設定 | Errorをスロー | Branch |
  * | 3  | 正常系 | EnvStore初期化済み・対象キー未設定 | process.envにフォールバック | Branch |
  * | 4  | 正常系 | EnvStore初期化済み・対象キー設定済み | EnvStoreの値を返す | Line |
+ * | 5  | 異常系 | 未設定 | エラーメッセージ全文を検証 | Line |
+ * | 6  | 異常系 | EnvStore初期化済み・対象キーが空文字列 | process.envへフォールバックせずErrorをスロー | Branch |
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
@@ -94,6 +97,14 @@ describe('EnvStore', () => {
                 'service@project.iam.gserviceaccount.com',
             );
             expect(EnvStore.env.JRA_CALENDAR_ID).toBe('jra-calendar');
+        });
+
+        it('#7: requiredKeysに指定したキーが空文字の場合validateEnv経由でErrorをスローする', () => {
+            const mockEnv = createMockEnv({ JRA_CALENDAR_ID: '' });
+
+            expect(() => EnvStore.setEnv(mockEnv, ['JRA_CALENDAR_ID'])).toThrow(
+                Error,
+            );
         });
 
         it('setEnv は何度でも呼び出し可能', () => {
@@ -296,5 +307,22 @@ describe('requireEnvVar', () => {
         );
 
         expect(requireEnvVar('MAIN_API_URL')).toBe('https://store.example.com');
+    });
+
+    it('#5: 未設定の場合のエラーメッセージ全文を検証する', () => {
+        expect(() => requireEnvVar('MAIN_API_URL')).toThrow(
+            'MAIN_API_URL environment variable is required. ' +
+                'Set it in your .env file or via environment variables.',
+        );
+    });
+
+    it('#6: EnvStore初期化済みで対象キーが空文字列の場合process.envへフォールバックせずErrorをスローする', () => {
+        process.env.MAIN_API_URL = 'https://fallback.example.com';
+        EnvStore.setEnv(createMockEnv({ MAIN_API_URL: '' }));
+
+        expect(() => requireEnvVar('MAIN_API_URL')).toThrow(
+            'MAIN_API_URL environment variable is required. ' +
+                'Set it in your .env file or via environment variables.',
+        );
     });
 });
