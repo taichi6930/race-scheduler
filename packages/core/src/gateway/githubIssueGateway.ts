@@ -38,9 +38,12 @@ const IssueCommentListSchema = z.array(
 );
 
 // フォーク運用に備え環境変数で上書き可能にする。
-// 未設定時は従来のハードコード値にフォールバックし、デフォルト挙動を維持する。
+// 未設定時は本リポジトリ（race-scheduler）へフォールバックする。
+// 2026-08-16のapi/batch/db/front/admin移行前は 'race-schedule' がデフォルトだったが、
+// 移行後もこの値が残っていたため、batch Workflow失敗通知等が移行元リポジトリ
+// （race-schedule）へ誤ってIssueを作成し続けていた（Issue #2549）。
 const GITHUB_OWNER = process.env.GITHUB_OWNER ?? 'taichi6930';
-const GITHUB_REPO = process.env.GITHUB_REPO ?? 'race-schedule';
+const GITHUB_REPO = process.env.GITHUB_REPO ?? 'race-scheduler';
 
 /**
  * fetch レスポンスのエラーボディを安全に読み取る。

@@ -14,6 +14,7 @@
  * | T-07 | '1R ＭＡＸ鈴木ＯＰ枠番抽選 500m'（list省略・実マスタStageAliasList使用、Issue #2513） | '一般戦' |
  * | T-08 | '8R ＧＰオープン　枠番抽選 500m'（list省略・実マスタStageAliasList使用、Issue #2522） | '一般戦' |
  * | T-09 | '1R ＧＰ　飯塚バトル 500m'（list省略・実マスタStageAliasList使用、Issue #2523） | '一般戦' |
+ * | T-10 | '12R ダイヤモンドドリーム 3100m'（list省略・実マスタStageAliasList使用、飯塚GⅠ「ダイヤモンドレース」初日メイン） | 'ダイヤモンドドリーム' |
  */
 
 import { describe, expect, it } from 'bun:test';
@@ -122,5 +123,15 @@ describe('extractAutoraceRaceStage', () => {
 
         // Assert
         expect(result).toBe('一般戦');
+    });
+
+    it('T-10_list省略時は実マスタ(StageAliasList)を使用_ダイヤモンドドリームは独立ステージと判定する', () => {
+        // Arrange & Act: list を省略し、実際のマスタデータで判定させる（飯塚GⅠ「ダイヤモンドレース」初日メイン）
+        const result = extractAutoraceRaceStage(
+            '12R ダイヤモンドドリーム 3100m',
+        );
+
+        // Assert
+        expect(result).toBe('ダイヤモンドドリーム');
     });
 });
