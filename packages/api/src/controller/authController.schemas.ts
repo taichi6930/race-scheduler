@@ -34,10 +34,16 @@ export const RegistrationOptionsRequestSchema = z.object({
     inviteToken: z.string().min(1),
 });
 
+// deviceLabelはクライアントから受け取らない: 実際の値は
+// authUsecase.verifyRegistration内でcredentialのaaguidとUser-Agentヘッダーから
+// buildSuggestedDeviceLabelがサーバー側で自動生成する（persistNewAccount参照）。
+// front（auth_repository_impl.dart）もこのフィールドを送っておらず、かつて
+// このスキーマがdeviceLabelを必須にしていたことで、招待登録の最終ステップ
+// （/auth/register/verify）が本番で常に「リクエストボディが不正です」400を
+// 返し続けていた（新規登録が全滅していた不具合の修正）。
 export const RegistrationVerifyRequestSchema = z.object({
     challengeId: z.string().min(1),
     nickname: z.string().min(1).max(NICKNAME_MAX_LENGTH),
-    deviceLabel: z.string().min(1).max(DEVICE_LABEL_MAX_LENGTH),
     credentialResponse: WebauthnResponseSchema,
 });
 

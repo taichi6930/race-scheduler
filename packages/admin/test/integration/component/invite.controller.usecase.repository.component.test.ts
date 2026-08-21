@@ -109,7 +109,7 @@ describe('コンポーネントテスト: Invite/Participants Router → Control
         expect(response.status).toBe(201);
         expect(mainApiGateway.issueInvite).toHaveBeenCalledWith('テストメモ');
         expect(body.token).toBe('invite-token');
-        expect(body.inviteUrl).toBe('/invite/invite-token');
+        expect(body.inviteUrl).toBe('/#/invite/invite-token');
     });
 
     it('INVITE-ADMIN-2: GET /participants/apiは200・メインAPIから取得した参加者一覧を返すこと', async () => {
