@@ -183,10 +183,23 @@ jobs:
         if: always()
         run: |
           mkdir -p test-report/allure-results/history
+          # Cloudflare Pagesは1ファイル25MiBまでという上限があり、Allureの履歴
+          # （history.json等）は実行のたびにトレンドデータを追記して際限なく肥大化する。
+          # 25MiBを超えた状態でデプロイし続けると、後段の「Deploy to Cloudflare Pages」が
+          # 恒久的に失敗し続ける（Issue #54で実際に発生）。新しい実行分の追記で25MiBへ
+          # 到達する余地を残すため、20MiB（20971520バイト）を安全マージンとして超過分は
+          # 取得を破棄し、トレンド履歴をリセットする（初回取得失敗時と同じgraceful
+          # degradation）。
+          HISTORY_SIZE_CAP_BYTES=20971520
           for f in history.json history-trend.json categories-trend.json duration-trend.json retry-trend.json; do
-            curl -sf -o "test-report/allure-results/history/$f" \
+            dest="test-report/allure-results/history/$f"
+            curl -sf -o "$dest" \
               "https://race-schedule-ci-report.pages.dev/allure/history/$f" \
-              || rm -f "test-report/allure-results/history/$f"
+              || rm -f "$dest"
+            if [ -f "$dest" ] && [ "$(stat -c%s "$dest")" -gt "$HISTORY_SIZE_CAP_BYTES" ]; then
+              echo "::warning::$f が ${HISTORY_SIZE_CAP_BYTES} バイトを超過したためトレンド履歴をリセットします"
+              rm -f "$dest"
+            fi
           done
 
       - name: Generate Allure report

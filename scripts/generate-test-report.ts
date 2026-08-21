@@ -501,6 +501,26 @@ const runFrontLayer = (): void => {
         console.log('  → flutter pub get に失敗したためスキップします');
         return;
     }
+    // *.freezed.dart/*.g.dart は .gitignore 対象（coding-conventions.md）で
+    // 手元にコミットされていないため、build_runner でのコード生成が必須。
+    // これを省略すると全テストが「getter isn't defined」で連鎖的に失敗する
+    // （.github/actions/setup-flutter-workspace/action.yml と同じコマンド）。
+    const buildRunner = Bun.spawnSync({
+        cmd: [
+            'dart',
+            'run',
+            'build_runner',
+            'build',
+            '--delete-conflicting-outputs',
+        ],
+        cwd: frontDir,
+        stdout: 'inherit',
+        stderr: 'inherit',
+    });
+    if (buildRunner.exitCode !== 0) {
+        console.log('  → build_runner build に失敗したためスキップします');
+        return;
+    }
     const proc = Bun.spawnSync({
         cmd: ['flutter', 'test', '--reporter=json'],
         cwd: frontDir,
