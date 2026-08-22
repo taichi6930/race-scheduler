@@ -18,8 +18,8 @@
  * | # | 検証項目                          | 期待値                                    |
  * |---|-------------------------------------|--------------------------------------------|
  * | J1 | Authorization ヘッダーの形式        | `vapid t=<jwt>, k=<publicKey>`             |
- * | J2 | JWT の header/claim                 | alg=ES256, typ=JWT, aud=endpoint origin, sub=VAPID_SUBJECT |
- * | J3 | JWT の署名                          | VAPID公開鍵で検証（crypto.subtle.verify）が true |
+ * | J2 | JWT の header/claim                 | alg=ES256, typ=JWT, aud=endpoint origin, sub=VAPID_SUBJECT, exp=now+12時間（TTL値そのもの） |
+ * | J3 | JWT の署名                          | VAPID公開鍵で検証（crypto.subtle.verify）が true、Base64URLパディング文字'='を含まない |
  * | J4 | VAPID秘密鍵のCryptoKeyインポート     | extractable引数がfalse（秘密鍵をexportKeyできない） |
  *
  * ## デシジョンテーブル（RFC 8291 暗号化）
@@ -466,7 +466,17 @@ describe('WebPushGateway', () => {
             expect(header).toEqual({ alg: 'ES256', typ: 'JWT' });
             expect(claim.aud).toBe(new URL(endpoint).origin);
             expect(claim.sub).toBe(subject);
-            expect(claim.exp).toBeGreaterThan(Math.floor(Date.now() / 1000));
+            // VAPID_JWT_TTL_SECONDS（12時間=43200秒）ぶん先の有効期限になっていること。
+            // 「未来であること」だけでなく実際のTTL値も検証する（テスト実行時間分の
+            // 誤差を許容するため60秒の範囲チェックにする）。
+            const now = Math.floor(Date.now() / 1000);
+            expect(claim.exp).toBeGreaterThan(now + 12 * 60 * 60 - 60);
+            expect(claim.exp).toBeLessThanOrEqual(now + 12 * 60 * 60);
+
+            // JWT署名（ECDSA P-256の生署名、常に64バイト=3の倍数でないためBase64URL化すると
+            // パディングが必要になる）にBase64URLのパディング文字'='が含まれないこと
+            // （toBase64UrlのomitPadding:trueが効いていることの検証）。
+            expect(encodedSignature).not.toContain('=');
 
             const signatureValid = await crypto.subtle.verify(
                 { name: 'ECDSA', hash: 'SHA-256' },
