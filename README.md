@@ -23,7 +23,11 @@ CIに任せてください（詳細方針は [`.claude/docs/ci-conventions.md`](
 - `bun run lint:fix` — フォーマット・大半のlintルールの自動修正（Biome + ESLint）
 - `bun run type-check` — TypeScriptの型チェック
 - `bun run verify` — 上記に加えて全パッケージのテストを実行（CIと同等のフル検証。手元では
-  時間がかかるため通常は不要、CIに任せてよい）
+  時間がかかるため通常は不要、CIに任せてよい）。**`packages/front`（Flutter）は対象外**
+  （TypeScriptパッケージのみをループするため）。front の検証は別途
+  `cd packages/front && flutter test` を実行すること（CIでは `test-packages-front` ジョブが
+  別途走るため取りこぼしは無いが、ローカルで `verify` green だけを見て front も含めて
+  「全部通った」と誤解しないよう注意）
 - その他の `check:*` スクリプト（循環依存・未使用コード・デザインレイヤー違反等）は
   `package.json` の `scripts` を参照
 
@@ -38,6 +42,8 @@ CIに任せてください（詳細方針は [`.claude/docs/ci-conventions.md`](
 | 各パッケージ（admin/api/batch/calendar/core/db/front）固有の詳細 | `packages/<pkg>/README.md`（例: [`packages/admin/README.md`](packages/admin/README.md)） |
 | プロダクト仕様のうちテストと紐づけて検証したいもの | [`docs/specs/`](docs/specs/README.md) |
 | セキュリティポリシー・脆弱性報告 | [`SECURITY.md`](SECURITY.md) |
+| 収集する情報・利用目的・削除方法（プライバシーポリシー） | [`docs/privacy-policy.md`](docs/privacy-policy.md) |
+| 障害時にまず何を確認し、どう切り戻すか（runbook） | [`docs/runbook.md`](docs/runbook.md) |
 | 貢献方法・PR運用のルール | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
 
 ## テスト・品質レポート

@@ -80,6 +80,14 @@ flutter run -d web-server
 
 ブラウザが自動で起動し、`http://localhost:????` でアプリにアクセスできます。
 
+**ルート `package.json` のショートカットを使う場合**: `bun run front:dev` は
+deploy済みのtest環境API（`https://race-schedule-test.tn-product.workers.dev`）を
+既定で参照する。test環境のCORS許可オリジンに `localhost:8080` が含まれていないため、
+`--web-browser-flag "--disable-web-security"`（ブラウザのCORS検証を丸ごと無効化する
+フラグ）を付けて回避している（QDEV-03）。ローカルAPI（上記手順4）へ向ける場合は、
+CORS検証を無効化しない `bun run front:dev:local` を使うこと（ローカルAPIの既定CORS許可
+オリジンに `localhost:8080` が含まれているため、フラグ無しで動作する）。
+
 ## ビルド
 
 ### Web ビルド（Cloudflare Pages 用）

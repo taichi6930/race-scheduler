@@ -146,8 +146,12 @@ export {
 } from './entity';
 
 // gateway
-export type { GithubIssueSummary, IGithubIssueGateway } from './gateway';
-export { GithubIssueGateway } from './gateway';
+export type {
+    GithubIssueSummary,
+    GithubIssueSyncHandlers,
+    IGithubIssueGateway,
+} from './gateway';
+export { GithubIssueGateway, syncGithubIssueByCondition } from './gateway';
 
 // http
 export type {

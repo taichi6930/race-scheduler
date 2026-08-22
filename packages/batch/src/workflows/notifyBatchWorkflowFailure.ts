@@ -7,15 +7,25 @@
  * （docs/tasks/cicd-73-batch-cron-migration.md §11-4の既知のトレードオフ）。
  * そのため、Workflow自身がこの通知の役割を引き継ぐ。
  *
- * api（データ鮮度チェック、`dataFreshnessNotifier.ts`）と同じ「固定タイトルの
- * Issueを検索→無ければ作成、あればコメント追加」パターンを踏襲する。
+ * api（データ鮮度チェック等）と同じ「固定タイトルのIssueを検索→異常なら無ければ
+ * 作成・あればコメント追加、復旧なら既存Issueにコメント追加後Close」パターンを
+ * `@race-schedule/core`の`syncGithubIssueByCondition`経由で踏襲する。
+ *
+ * @remarks QRUN-01: 以前は失敗が0件（＝成功）の場合に即returnし、既存の失敗Issueが
+ *   残っていても自動Closeされなかった（他の監視系4系統との唯一の非対称点だった）。
+ *   `syncGithubIssueByCondition`を使うことで、成功時にも同じタイトルの既存Issueを
+ *   検索してCloseする経路が入り、非対称が解消された。
  *
  * `GITHUB_TOKEN`が未設定の場合は何もせずスキップする（graceful degradation、
  * `dataFreshnessNotifier.ts`と同じ方針）。
  */
 
 import type { IGithubIssueGateway, RaceType } from '@race-schedule/core';
-import { appLogger, EnvStore, toErrorMessage } from '@race-schedule/core';
+import {
+    EnvStore,
+    syncGithubIssueByCondition,
+    toErrorMessage,
+} from '@race-schedule/core';
 
 import type { BatchExecTarget } from '../types';
 
@@ -70,7 +80,7 @@ function buildWorkersLogsUrl(): string {
 }
 
 /**
- * 通知Issue/コメントの本文を組み立てる。
+ * 異常検知時のIssue本文を組み立てる。
  * @param failures - 失敗一覧（空でない前提、呼び出し側で保証）
  * @param instanceId - このWorkflowインスタンスのID（Workers Logsでの追跡用）
  */
@@ -91,15 +101,26 @@ ${lines.join('\n')}
 
 [Cloudflare Workers Logsを開く](${logsUrl})し、インスタンス ID \`${instanceId}\` でログを検索してください。
 
-_このIssueは packages/batch のWorkflow（\`runBatchAllWorkflow\`）により自動作成されました。次回の成功実行時は自動でCloseされません（手動で解消を確認しCloseしてください）。_`;
+_このIssueは packages/batch のWorkflow（\`runBatchAllWorkflow\`）により自動作成されました。次回の成功実行時は自動でCloseされます。_`;
+}
+
+/** 復旧確認時のコメント本文を組み立てる。 */
+function buildRecoveryComment(): string {
+    return 'batch Workflow が失敗なしで完了したため、自動的にCloseします。再発した場合は新しいIssueが作成されます。';
+}
+
+/** `syncGithubIssueByCondition` に渡す1回分の同期対象（失敗一覧＋このWorkflowインスタンスID）。 */
+interface BatchWorkflowSyncTarget {
+    failures: readonly BatchStepFailure[];
+    instanceId: string;
 }
 
 /**
- * Workflowで発生した失敗をGitHub Issueへ同期する（新規作成、または既存へコメント追加）。
- * 失敗しても例外を投げず警告ログのみ出力する（通知処理はベストエフォート、
- * `dataFreshnessNotifier.ts`の`syncDataFreshnessIssue`と同じ方針・シグネチャ形状）。
- * 空配列の場合は何もしない。
- * @param failures - 失敗一覧
+ * Workflowの実行結果（失敗一覧）をGitHub Issueへ同期する。
+ * 失敗が1件以上あれば新規作成またはコメント追加、0件（＝成功）なら既存Issueが
+ * あればコメント追加後にCloseする（QRUN-01）。
+ * 失敗しても例外を投げず警告ログのみ出力する（通知処理はベストエフォート）。
+ * @param failures - 失敗一覧（空配列＝成功）
  * @param instanceId - このWorkflowインスタンスのID
  * @param gateway - GitHub Issues ゲートウェイ
  * @param token - GitHub APIトークン
@@ -110,36 +131,20 @@ export async function syncBatchWorkflowFailureIssue(
     gateway: IGithubIssueGateway,
     token: string,
 ): Promise<void> {
-    if (failures.length === 0) {
-        return;
-    }
-
-    try {
-        const issues = await gateway.fetchAllOpenIssues(token);
-        const existing = issues.find(
-            (issue) => issue.title === BATCH_WORKFLOW_FAILURE_ISSUE_TITLE,
-        );
-        const body = buildFailureBody(failures, instanceId);
-
-        if (existing) {
-            await gateway.addComment(token, existing.number, body);
-            appLogger.info(
-                `[notifyBatchWorkflowFailure] 既存Issue #${existing.number} にコメントを追加しました`,
-            );
-            return;
-        }
-        const issueNumber = await gateway.createIssue(
-            token,
-            BATCH_WORKFLOW_FAILURE_ISSUE_TITLE,
-            body,
-        );
-        appLogger.info(
-            `[notifyBatchWorkflowFailure] 新規Issueを作成しました: #${issueNumber}`,
-        );
-    } catch (error) {
-        appLogger.warn(
-            '[notifyBatchWorkflowFailure] 通知処理に失敗しました',
-            error,
-        );
-    }
+    await syncGithubIssueByCondition<BatchWorkflowSyncTarget>(
+        { failures, instanceId },
+        gateway,
+        token,
+        {
+            logPrefix: '[notifyBatchWorkflowFailure]',
+            title: () => BATCH_WORKFLOW_FAILURE_ISSUE_TITLE,
+            isRecovered: (target) => target.failures.length === 0,
+            keyPrefix: () => '',
+            noOpReason: () => '失敗なしで完了',
+            recoveredReason: () => '失敗なしで完了し',
+            buildAlertBody: (target) =>
+                buildFailureBody(target.failures, target.instanceId),
+            buildRecoveryComment: () => buildRecoveryComment(),
+        },
+    );
 }

@@ -7,13 +7,15 @@
  * Closeする。
  *
  * Issue検索→復旧/異常分岐→addComment/createIssue/closeIssueという制御フロー自体は
- * `errorMonitorNotifier.ts`と同型のため`githubIssueSync.ts`に共通化している。
+ * `errorMonitorNotifier.ts`と同型のため`@race-schedule/core`の`syncGithubIssueByCondition`に
+ * 共通化している（QRUN-01: batchからも使えるよう core へ移設済み）。
  */
 
 import type { IGithubIssueGateway } from '@race-schedule/core';
-import { toJstISOString } from '@race-schedule/core';
-
-import { syncGithubIssueByCondition } from './githubIssueSync';
+import {
+    syncGithubIssueByCondition,
+    toJstISOString,
+} from '@race-schedule/core';
 
 /**
  * UTC ISO8601文字列をJST併記の表示用文字列に変換する（QJST-13）。

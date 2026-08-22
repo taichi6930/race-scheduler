@@ -182,7 +182,7 @@ describe('runBatchAllWorkflow', () => {
         EnvStore.reset();
     });
 
-    it('T-01_全raceType×targetの組み合わせ_ロック取得解放を含めstep.doが19回呼ばれる', async () => {
+    it('T-01_全raceType×targetの組み合わせ_ロック取得解放と成功時通知を含めstep.doが20回呼ばれる', async () => {
         // Arrange
         const fetchSpy = installSuccessFetchSpy();
         const { step, calledNames } = createRecordingStep();
@@ -192,10 +192,11 @@ describe('runBatchAllWorkflow', () => {
             await runBatchAllWorkflow(mockEnv, mockEvent, step);
 
             // Assert: BOATRACEのraceは暫定スキップのため6raceType×3target-1件=19件
-            expect(calledNames).toHaveLength(19);
-            expect(new Set(calledNames).size).toBe(19);
+            // ＋ QRUN-01により成功時も呼ばれるnotify-batch-failuresの1件=20件
+            expect(calledNames).toHaveLength(20);
+            expect(new Set(calledNames).size).toBe(20);
             expect(calledNames.at(0)).toBe('acquire-batch-lock');
-            expect(calledNames.at(-1)).toBe('release-batch-lock');
+            expect(calledNames.at(-1)).toBe('notify-batch-failures');
         } finally {
             fetchSpy.mockRestore();
         }
@@ -243,6 +244,7 @@ describe('runBatchAllWorkflow', () => {
                 `${RaceType.NAR}-race`,
                 `${RaceType.NAR}-calendar`,
                 'release-batch-lock',
+                'notify-batch-failures',
             ]);
         } finally {
             fetchSpy.mockRestore();
@@ -263,14 +265,15 @@ describe('runBatchAllWorkflow', () => {
             await runBatchAllWorkflow(mockEnv, event, step);
 
             // Assert: BOATRACEのraceは暫定スキップのため対象外
-            expect(calledNames).toHaveLength(7);
+            // ＋ QRUN-01により成功時も呼ばれるnotify-batch-failuresの1件を含め8件
+            expect(calledNames).toHaveLength(8);
             const raceStepNames = calledNames.filter((name) =>
                 name.endsWith('-race'),
             );
             expect(raceStepNames).toHaveLength(5);
             expect(raceStepNames).not.toContain(`${RaceType.BOATRACE}-race`);
             expect(calledNames.at(0)).toBe('acquire-batch-lock');
-            expect(calledNames.at(-1)).toBe('release-batch-lock');
+            expect(calledNames.at(-1)).toBe('notify-batch-failures');
         } finally {
             fetchSpy.mockRestore();
         }
@@ -447,6 +450,7 @@ describe('runBatchAllWorkflow', () => {
                 `${RaceType.BOATRACE}-place`,
                 `${RaceType.BOATRACE}-calendar`,
                 'release-batch-lock',
+                'notify-batch-failures',
             ]);
         } finally {
             fetchSpy.mockRestore();
