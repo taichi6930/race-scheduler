@@ -12,26 +12,44 @@
  * DI「劇場」テスト（何が解決されても通ってしまう検証）だったため、`toBeInstanceOf(具象クラス)`へ
  * 強化した。また、個別named testとデシジョンテーブル（DT-1〜4）がRepository 4種について
  * 完全に重複していたため、DTはUsecase側（named testで未検証だった対象）のみに絞って統合した。
+ *
+ * API-8: BatchLock・FeatureFlag・ReleaseNote・UiLayout・Auth・Favorite各domainのUsecase・Repositoryテストを追加。
  */
 import 'reflect-metadata';
 
 import { beforeEach, describe, expect, it } from 'bun:test';
+import { DI_TOKENS } from '@race-schedule/core';
 import { container } from 'tsyringe';
 
 import { registerApplication } from '../../../src/di/application';
 import { registerInfrastructureForInMemory } from '../../../src/di/infrastructure';
+import { BatchLockRepository } from '../../../src/repository/implement/batchLockRepository';
 import { CalendarRepository } from '../../../src/repository/implement/calendarRepository';
+import { FavoriteRepository } from '../../../src/repository/implement/favoriteRepository';
+import { FeatureFlagRepository } from '../../../src/repository/implement/featureFlagRepository';
 import { PlaceRepository } from '../../../src/repository/implement/placeRepository';
 import { PlayerRepository } from '../../../src/repository/implement/playerRepository';
 import { RaceRepository } from '../../../src/repository/implement/raceRepository';
+import { ReleaseNoteRepository } from '../../../src/repository/implement/releaseNoteRepository';
+import type { IBatchLockRepository } from '../../../src/repository/interface/IBatchLockRepository';
 import type { ICalendarRepository } from '../../../src/repository/interface/ICalendarRepository';
+import type { IFavoriteRepository } from '../../../src/repository/interface/IFavoriteRepository';
+import type { IFeatureFlagRepository } from '../../../src/repository/interface/IFeatureFlagRepository';
 import type { IPlaceRepository } from '../../../src/repository/interface/IPlaceRepository';
 import type { IPlayerRepository } from '../../../src/repository/interface/IPlayerRepository';
 import type { IRaceRepository } from '../../../src/repository/interface/IRaceRepository';
+import type { IReleaseNoteRepository } from '../../../src/repository/interface/IReleaseNoteRepository';
+import { AnnouncementUsecase } from '../../../src/usecase/implement/announcementUsecase';
+import { AuthUsecase } from '../../../src/usecase/implement/authUsecase';
+import { BatchLockUsecase } from '../../../src/usecase/implement/batchLockUsecase';
 import { CalendarUsecase } from '../../../src/usecase/implement/calendarUsecase';
+import { FavoriteUsecase } from '../../../src/usecase/implement/favoriteUsecase';
+import { FeatureFlagUsecase } from '../../../src/usecase/implement/featureFlagUsecase';
 import { PlaceUsecase } from '../../../src/usecase/implement/placeUsecase';
 import { PlayerUsecase } from '../../../src/usecase/implement/playerUsecase';
 import { RaceUsecase } from '../../../src/usecase/implement/raceUsecase';
+import { ReleaseNoteUsecase } from '../../../src/usecase/implement/releaseNoteUsecase';
+import { UiLayoutUsecase } from '../../../src/usecase/implement/uiLayoutUsecase';
 
 describe('DI Application層', () => {
     beforeEach(() => {
@@ -136,6 +154,82 @@ describe('DI Application層', () => {
             registerApplication();
             const usecase = container.resolve('RaceUsecase');
             expect(usecase).toBeInstanceOf(RaceUsecase);
+        });
+    });
+
+    describe('API-8: 追加Domain（FeatureFlag・ReleaseNote・UiLayout・Auth・BatchLock・Favorite）', () => {
+        it('FeatureFlagRepositoryが登録されること', () => {
+            registerApplication();
+            const repo = container.resolve<IFeatureFlagRepository>(
+                DI_TOKENS.FeatureFlagRepository,
+            );
+            expect(repo).toBeInstanceOf(FeatureFlagRepository);
+        });
+
+        it('FeatureFlagUsecaseが登録されること', () => {
+            registerApplication();
+            const usecase = container.resolve(DI_TOKENS.FeatureFlagUsecase);
+            expect(usecase).toBeInstanceOf(FeatureFlagUsecase);
+        });
+
+        it('AnnouncementUsecaseが登録されること', () => {
+            registerApplication();
+            const usecase = container.resolve(DI_TOKENS.AnnouncementUsecase);
+            expect(usecase).toBeInstanceOf(AnnouncementUsecase);
+        });
+
+        it('ReleaseNoteRepositoryが登録されること', () => {
+            registerApplication();
+            const repo = container.resolve<IReleaseNoteRepository>(
+                DI_TOKENS.ReleaseNoteRepository,
+            );
+            expect(repo).toBeInstanceOf(ReleaseNoteRepository);
+        });
+
+        it('ReleaseNoteUsecaseが登録されること', () => {
+            registerApplication();
+            const usecase = container.resolve(DI_TOKENS.ReleaseNoteUsecase);
+            expect(usecase).toBeInstanceOf(ReleaseNoteUsecase);
+        });
+
+        it('UiLayoutUsecaseが登録されること', () => {
+            registerApplication();
+            const usecase = container.resolve(DI_TOKENS.UiLayoutUsecase);
+            expect(usecase).toBeInstanceOf(UiLayoutUsecase);
+        });
+
+        it('BatchLockRepositoryが登録されること', () => {
+            registerApplication();
+            const repo = container.resolve<IBatchLockRepository>(
+                DI_TOKENS.BatchLockRepository,
+            );
+            expect(repo).toBeInstanceOf(BatchLockRepository);
+        });
+
+        it('BatchLockUsecaseが登録されること', () => {
+            registerApplication();
+            const usecase = container.resolve(DI_TOKENS.BatchLockUsecase);
+            expect(usecase).toBeInstanceOf(BatchLockUsecase);
+        });
+
+        it('AuthUsecaseが登録されること', () => {
+            registerApplication();
+            const usecase = container.resolve(DI_TOKENS.AuthUsecase);
+            expect(usecase).toBeInstanceOf(AuthUsecase);
+        });
+
+        it('FavoriteRepositoryが登録されること', () => {
+            registerApplication();
+            const repo = container.resolve<IFavoriteRepository>(
+                DI_TOKENS.FavoriteRepository,
+            );
+            expect(repo).toBeInstanceOf(FavoriteRepository);
+        });
+
+        it('FavoriteUsecaseが登録されること', () => {
+            registerApplication();
+            const usecase = container.resolve(DI_TOKENS.FavoriteUsecase);
+            expect(usecase).toBeInstanceOf(FavoriteUsecase);
         });
     });
 });
