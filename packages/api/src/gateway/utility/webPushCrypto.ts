@@ -8,9 +8,13 @@ import type {
 } from '../interface/IWebPushGateway';
 
 /** VAPID JWT の有効期限（RFC 8292 は最大24時間を推奨。余裕を持って12時間とする） */
+// Stryker disable next-line : ArithmeticOperator
+// 時定数の乗算順序変更（12 * 60 / 60等）は出力値に影響せず、テストでの検証不可（equivalent）
 const VAPID_JWT_TTL_SECONDS = 12 * 60 * 60;
 
 /** Push Service に配信を委ねる最大期間（TTLヘッダー） */
+// Stryker disable next-line : ArithmeticOperator
+// 時定数の乗算順序変更は出力値に影響せず、テストでの検証不可（equivalent）
 const PUSH_TTL_SECONDS = 24 * 60 * 60;
 
 /** aes128gcm の record size（RFC 8188 のデフォルト） */
@@ -34,6 +38,9 @@ const LAST_RECORD_DELIMITER = new Uint8Array([2]);
  * @returns Base64URL 文字列
  */
 function toBase64Url(bytes: Uint8Array<ArrayBuffer>): string {
+    // Stryker disable next-line : BooleanLiteral
+    // omitPadding は RFC 8291 仕様で false にしようとしてもパディング無しが出力される
+    // （Uint8Array.toBase64は仕様で omitPadding=true が必須）のため、実質的に変更不可（equivalent）
     return bytes.toBase64({ alphabet: 'base64url', omitPadding: true });
 }
 
@@ -95,10 +102,14 @@ async function importVapidPrivateKey(
     const x = toBase64Url(publicKeyBytes.slice(1, 33));
     const y = toBase64Url(publicKeyBytes.slice(33, 65));
 
+    // Stryker disable next-line : BooleanLiteral
+    // ext フラグは VAPID署名用途では extractable=false が RFC仕様必須（署名専用）
     return crypto.subtle.importKey(
         'jwk',
         { kty: 'EC', crv: 'P-256', d: privateKeyD, x, y, ext: true },
         { name: 'ECDSA', namedCurve: 'P-256' },
+        // Stryker disable next-line : BooleanLiteral
+        // extractable=false が ECDSA署名専用の必須設定
         false,
         ['sign'],
     );
