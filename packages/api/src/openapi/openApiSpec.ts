@@ -13,7 +13,22 @@
  * 各エンドポイントの実際の挙動（クエリの効き方・エラー形状等）はcontroller/core
  * スキーマを実地調査した上で記述している。実装が変わった場合はこのファイルも
  * 追従が必要（自動生成ではなく手書きのため、drift防止のレビューを推奨）。
+ *
+ * 各operationの`security`は`router.ts`の`APP_AUTH_ROUTES`（招待制ログイン導入時に
+ * 追加された認可方針）と一致させている。ここがずれると「ドキュメント上は叩けそうだが
+ * 実際は401になる」状態に戻ってしまうため、`APP_AUTH_ROUTES`の方針を変更したら
+ * このファイルも追従すること（`test/unittest/openapi/openApiSpec.test.ts`が
+ * 両者の不一致を検知する）。
  */
+
+/** `service-or-session`（他Workerからのサービス間呼び出し + frontのセッション閲覧の両方を許容）向け。 */
+const serviceOrSessionSecurity = [
+    { ServiceAuthToken: [] },
+    { SessionBearer: [] },
+];
+
+/** `session-only`（frontのログイン済みセッションのみ許容、他Workerは呼ばない）向け。 */
+const sessionOnlySecurity = [{ SessionBearer: [] }];
 
 const errorResponseSchema = {
     type: 'object',
@@ -413,8 +428,11 @@ export const openApiSpec = {
         version: '1.0.0',
         description:
             '公営競技（競馬・競輪・オートレース・競艇）のレーススケジュールを扱うAPI。' +
-            'ここに掲載しているのは front 等から認証なしで呼び出せる公開エンドポイントのみ' +
-            '（`/calendar/flag`・`/internal/*`・`/debug/*` 等のサービス間認証必須エンドポイントは対象外）。' +
+            'ここに掲載しているのは front から呼び出される主なエンドポイントのみ' +
+            '（`/calendar/flag`・`/internal/*`・`/debug/*` 等のサービス間認証専用エンドポイントは対象外）。' +
+            '`GET /health` を除く全エンドポイントは認証が必要（各operationの`security`と' +
+            '`components.securitySchemes` を参照）。招待制ログインのため、招待を受けていない' +
+            '第三者が自分でセッショントークンを取得する経路は無い。' +
             'すべての成功レスポンスに加え、429（レート制限）・413（POST/DELETE系、ボディ1MB超過）が' +
             '共通で発生しうる。',
     },
@@ -439,6 +457,7 @@ export const openApiSpec = {
                 tags: ['health'],
                 summary: 'ヘルスチェック',
                 description: 'D1への疎通確認（`SELECT 1`）を行う。',
+                security: [],
                 responses: {
                     '200': {
                         description: '正常',
@@ -491,6 +510,7 @@ export const openApiSpec = {
             get: {
                 tags: ['ui'],
                 summary: '起動時お知らせバナーのUIスキーマ取得（SDUI PoC）',
+                security: serviceOrSessionSecurity,
                 description:
                     'front起動時に一度だけ呼ばれ、`enabled: true` の場合にお知らせバナーを表示する。' +
                     '`enabled` の判定軸は環境ごとに異なる。test/development環境では' +
@@ -531,6 +551,7 @@ export const openApiSpec = {
                 tags: ['ui'],
                 summary:
                     'レース詳細のセクション型UIスキーマ取得（Server-Driven UI）',
+                security: serviceOrSessionSecurity,
                 description:
                     'front のレース詳細画面（レースをタップした際のボトムシート／常駐パネル）が' +
                     '描画するセクション構成を返す。front を再デプロイせずAPI側の実装変更のみで' +
@@ -567,6 +588,7 @@ export const openApiSpec = {
             get: {
                 tags: ['release-notes'],
                 summary: '更新履歴一覧取得',
+                security: serviceOrSessionSecurity,
                 description:
                     "front の更新履歴（What's New）画面が表示するリリースノート一覧を、" +
                     '公開日時の新しい順で返す。GitHub Releases APIと同じフィールド名（snake_case）。',
@@ -593,6 +615,7 @@ export const openApiSpec = {
             get: {
                 tags: ['calendar'],
                 summary: 'カレンダー掲載対象レース一覧',
+                security: serviceOrSessionSecurity,
                 description:
                     '掲載フラグON・重賞相当・注目選手出走のいずれかを満たすレースのみを返す。' +
                     '`/place`・`/race` とはクエリ解析の実装が別（`locationList`/`gradeList`/' +
@@ -633,6 +656,7 @@ export const openApiSpec = {
             get: {
                 tags: ['place'],
                 summary: '開催場一覧取得',
+                security: serviceOrSessionSecurity,
                 description:
                     '`isDisplayPlaceHeldDays`・`isDisplayPlaceGrade` は受け付けるが、' +
                     '現状の実装では参照されず挙動に影響しない（no-op）。' +
@@ -685,6 +709,7 @@ export const openApiSpec = {
             get: {
                 tags: ['race'],
                 summary: 'レース一覧取得',
+                security: serviceOrSessionSecurity,
                 description:
                     '各レースに `isCalendarSpecified`（グレード・ステージによりカレンダー登録対象か）・`isWatched`（注目選手が出走するか）' +
                     'が付与される。出走選手一覧はここには含まれず `GET /race/players` で別途取得する。',
@@ -743,6 +768,7 @@ export const openApiSpec = {
             get: {
                 tags: ['race'],
                 summary: '指定レースのカレンダー登録イベントプレビュー取得',
+                security: serviceOrSessionSecurity,
                 parameters: [raceIdParam],
                 responses: {
                     '200': {
@@ -808,6 +834,7 @@ export const openApiSpec = {
             get: {
                 tags: ['race'],
                 summary: '指定レースの出走選手一覧取得',
+                security: serviceOrSessionSecurity,
                 description:
                     'レース自体の存在確認は行わない。該当データが無ければ空配列を返す（404にはならない）。',
                 parameters: [raceIdParam],
@@ -842,6 +869,7 @@ export const openApiSpec = {
             get: {
                 tags: ['player'],
                 summary: '選手/騎手一覧取得',
+                security: sessionOnlySecurity,
                 description:
                     '`/place`・`/race` と異なり `startDate`/`finishDate`/`locationList`/' +
                     '`gradeList` は存在しない（渡すと400）。',
@@ -884,6 +912,7 @@ export const openApiSpec = {
             post: {
                 tags: ['player'],
                 summary: '選手/騎手の登録・更新（Upsert）',
+                security: sessionOnlySecurity,
                 description:
                     '単一オブジェクトまたは配列のどちらも受け付ける。`term`/`branch` は' +
                     'この経路からは設定できない（常にundefinedのまま）。',
@@ -950,6 +979,7 @@ export const openApiSpec = {
             post: {
                 tags: ['push'],
                 summary: 'Web Push購読の登録',
+                security: sessionOnlySecurity,
                 description:
                     'ブラウザの `PushSubscription.toJSON()` の形をそのまま受け取る。',
                 requestBody: {
@@ -993,6 +1023,7 @@ export const openApiSpec = {
             delete: {
                 tags: ['push'],
                 summary: 'Web Push購読の解除',
+                security: sessionOnlySecurity,
                 description:
                     '紐づく発火予約（push/request）もあわせて削除される。',
                 requestBody: {
@@ -1039,6 +1070,7 @@ export const openApiSpec = {
             post: {
                 tags: ['push'],
                 summary: 'レース発火予約の登録',
+                security: sessionOnlySecurity,
                 requestBody: {
                     required: true,
                     content: {
@@ -1114,6 +1146,7 @@ export const openApiSpec = {
             delete: {
                 tags: ['push'],
                 summary: 'レース発火予約の取消',
+                security: sessionOnlySecurity,
                 requestBody: {
                     required: true,
                     content: {
@@ -1159,6 +1192,7 @@ export const openApiSpec = {
             post: {
                 tags: ['push'],
                 summary: '指定した購読へテスト通知を即時送信',
+                security: sessionOnlySecurity,
                 description:
                     '購読が失効している等の送信失敗はHTTPエラーにせず、200 + `ok:false` で表現する。',
                 requestBody: {
@@ -1247,6 +1281,26 @@ export const openApiSpec = {
                     },
                 },
                 required: ['endpoint', 'keys'],
+            },
+        },
+        securitySchemes: {
+            ServiceAuthToken: {
+                type: 'apiKey',
+                in: 'header',
+                name: 'X-Service-Auth-Token',
+                description:
+                    'calendar/scraping Worker等、他Workerからのサービス間呼び出し専用の' +
+                    '共有シークレット。front（ブラウザ）や外部の第三者へは配布されない。',
+            },
+            SessionBearer: {
+                type: 'http',
+                scheme: 'bearer',
+                description:
+                    '招待制パスキー認証で発行されるセッショントークン。' +
+                    '`POST /auth/login/verify` のレスポンスで取得し、' +
+                    '`Authorization: Bearer <token>` ヘッダーで送信する。ログイン自体に' +
+                    '招待コード（`POST /auth/invite/verify`）が必要なため、招待を受けていない' +
+                    '第三者はこの方式でも呼び出せない。',
             },
         },
     },
