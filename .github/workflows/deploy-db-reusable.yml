@@ -70,7 +70,7 @@ jobs:
         with:
           name: d1-backup-${{ inputs.environment }}-${{ github.run_id }}
           path: packages/db/db-backup-${{ inputs.environment }}.sql
-          retention-days: 30
+          retention-days: 14
 
       - name: Deploy migrations to ${{ inputs.environment }}
         working-directory: packages/db
