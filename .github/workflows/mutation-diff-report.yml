@@ -1,0 +1,163 @@
+name: Mutation Testing (PR diff, informational)
+
+# PRで変更されたsrcファイルだけを対象に、その場でミューテーションテストを実行し、
+# 結果をPRコメントとして表示する。**非ブロッキング**（マージの可否には影響しない）。
+#
+# 背景: .github/workflows/mutation-testing.yml が週次でパッケージ全体を実行し、
+# 見つかったギャップは docs/tasks/test-quality-audit.md のバックログで継続的に
+# 消化している。「PR単位でブロッキングゲート化してはどうか」という案も検討したが、
+# 以下の理由から見送った（ユーザー確認済み、2026-08-22）:
+#   1. コスト: command runner（bun test統合）はミュータント1件ごとに対象パッケージの
+#      テストスイート全体を再実行する構造のため、diffスコープに絞っても通常の
+#      lint/型チェックより重く、全PRの待ち時間が伸びる。
+#   2. ノイズ: equivalent mutant（原理的に殺せないミュータント）が一定数存在し、
+#      リファクタでミュータントの構成自体が変わるとスコアが変動しやすい。
+#      ブロッキングゲートはこの手の誤検知に弱く、形骸化・信頼低下を招きやすい。
+#   3. データ不足: 週次実行を数回試した程度ではノイズの実態を判断する材料が
+#      まだ足りない。
+# そのため、当面は「PRの差分に何があるかをその場で見える化する」情報提供のみに
+# 留め、直すかどうかはPR作成者の判断に委ねる（バックログ運用と同じ思想）。
+# ブロッキング化するかどうかは、この情報提供運用をしばらく回してノイズの傾向が
+# 見えてから改めて判断する。
+#
+# 対象ファイルの絞り込みは scripts/mutation-diff-targets.ts が行う。
+# `stryker run --mutate <files>` はCLIの `--mutate` がconfig側の `mutate` 配列を
+# 丸ごと上書きするため（.github/workflows/mutation-testing.yml の mutation-api
+# matrixで踏んだ制約と同じ）、config側の除外パターン（index.ts・constants/・
+# types/、api限定でopenapi/）をスクリプト側で手動再現している。
+#
+# `paths:` フィルタを on.pull_request に付けない理由は coverage-pr.yml と同じ
+# （ブランチ保護で必須指定した場合に対象外PRでステータス報告が止まり続けるのを
+# 避けるため）。本ワークフローは現時点でブランチ保護の必須チェックには
+# 登録していない（非ブロッキングのため）。
+
+on:
+    pull_request:
+        types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+    contents: read
+    pull-requests: write
+
+concurrency:
+    group: mutation-diff-report-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    detect-changes:
+        # draft中はCIを起動せずGitHub Actionsの消費を抑える（task-workflow.md参照）。
+        if: github.event.pull_request.draft == false
+        runs-on: ubuntu-24.04
+        timeout-minutes: 5
+        permissions:
+            contents: read
+        outputs:
+            relevant: ${{ steps.filter.outputs.relevant }}
+        steps:
+            - name: Detect relevant changes
+              id: filter
+              uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+              with:
+                  filters: |
+                      relevant:
+                          - "packages/core/src/**"
+                          - "packages/admin/src/**"
+                          - "packages/batch/src/**"
+                          - "packages/api/src/**"
+                          - "stryker.*.config.json"
+                          - "scripts/mutation-diff-targets.ts"
+                          - "scripts/build-mutation-diff-comment.ts"
+                          - ".github/workflows/mutation-diff-report.yml"
+
+    mutation-diff:
+        needs: [detect-changes]
+        if: needs.detect-changes.outputs.relevant == 'true'
+        runs-on: ubuntu-24.04
+        # diffスコープのため通常は数分〜十数分程度で終わる想定（1ファイル数十
+        # ミュータント規模の実測で10秒台）。複数パッケージ・大規模ファイル書き換えの
+        # 稀なケースを見込んでも十分な余裕として30分を確保する。非ブロッキングの
+        # ためタイムアウトしてもPRはブロックされない（この場合単にコメントが
+        # 付かないだけ）。
+        timeout-minutes: 30
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v7
+              with:
+                  # coverage-pr.ymlと同じ理由（CICD-106参照）: git diffのrange取得を
+                  # shallow clone起因の異常から守るため全履歴を取得する。
+                  fetch-depth: 0
+
+            - name: Setup workspace
+              uses: ./.github/actions/setup-workspace
+              with:
+                  setup-node: "false"
+
+            - name: Get changed files
+              run: |
+                  git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" > changed-files.txt
+                  cat changed-files.txt
+
+            - name: Run mutation testing (diff scope) and build PR comment
+              id: mutation-diff
+              run: |
+                  set -uo pipefail
+
+                  bun scripts/mutation-diff-targets.ts changed-files.txt > targets.json
+                  cat targets.json
+
+                  if [ "$(jq -r 'keys | length' targets.json)" = "0" ]; then
+                    echo "対象パッケージなし（変更ファイルにミューテーション対象のsrcファイルが含まれない）"
+                    echo "has-comment=false" >> "$GITHUB_OUTPUT"
+                    exit 0
+                  fi
+
+                  mkdir -p reports/mutation-diff
+                  comment_args=""
+                  # jqの出力はファイル名にのみ由来するpkg名（core/admin/batch/api固定）と
+                  # 我々自身が生成したパス（reports/mutation-diff/<pkg>.json）のみで
+                  # 構成されるため、後段で comment_args をシェル展開してもインジェクション
+                  # リスクは無い（PRの差分ファイルパス自体は $files 経由でのみ使用し、
+                  # GITHUB_OUTPUT/式展開を経由させない）。
+                  for pkg in core admin batch api; do
+                    files=$(jq -r --arg pkg "$pkg" '.[$pkg] // empty | join(",")' targets.json)
+                    if [ -z "$files" ]; then
+                      continue
+                    fi
+
+                    echo "::group::mutation-diff: $pkg ($files)"
+                    rm -rf .stryker-tmp reports/mutation
+                    if NODE_ENV=ci_github_actions TZ=jst HTML_FETCH_DELAY_MS=0 bunx stryker run "stryker.${pkg}.config.json" --mutate "$files" --reporters json; then
+                      cp reports/mutation/mutation.json "reports/mutation-diff/${pkg}.json"
+                      comment_args="$comment_args ${pkg}:reports/mutation-diff/${pkg}.json"
+                    else
+                      echo "::warning::mutation-diff: ${pkg}のStryker実行が失敗しました（情報提供のみのチェックのためPRはブロックしません。手元で bunx stryker run stryker.${pkg}.config.json --mutate \"$files\" --reporters json を実行して原因を確認してください）"
+                    fi
+                    echo "::endgroup::"
+                  done
+
+                  if [ -z "$comment_args" ]; then
+                    echo "全パッケージでStryker実行に失敗、または対象ミュータント0件のためコメントなし"
+                    echo "has-comment=false" >> "$GITHUB_OUTPUT"
+                    exit 0
+                  fi
+
+                  # SEC-048対応: 固定の"EOF"区切り子は出力内容に同名の行が混入すると
+                  # 途中で終端しGITHUB_OUTPUTへの任意キー注入を許しうるため、ランダムな
+                  # 区切り子を使う（coverage-pr.ymlと同じ手法）。
+                  DELIMITER="$(openssl rand -hex 16)"
+                  {
+                    echo "comment<<$DELIMITER"
+                    # shellcheck disable=SC2086 -- comment_argsは複数の"pkg:path"引数を
+                    # 空白区切りで渡すためあえてunquoted展開する（上記コメント参照）。
+                    bun scripts/build-mutation-diff-comment.ts $comment_args
+                    echo "$DELIMITER"
+                  } >> "$GITHUB_OUTPUT"
+                  echo "has-comment=true" >> "$GITHUB_OUTPUT"
+
+            - name: Comment on PR
+              if: steps.mutation-diff.outputs.has-comment == 'true'
+              uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+              with:
+                  header: mutation-diff-report
+                  message: ${{ steps.mutation-diff.outputs.comment }}
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
