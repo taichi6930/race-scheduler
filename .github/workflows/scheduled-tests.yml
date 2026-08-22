@@ -226,13 +226,21 @@ jobs:
 
   # SEC-034対応: 依存関係の全体像を機械可読な形で持てていない問題への対応。
   # 外部SBOM専用ツールの新規導入は避け、license-check済みの`license-checker`出力を
-  # 流用した簡易SBOM（名前・バージョン・ライセンスのJSON一覧）をartifact化する。
+  # 流用した簡易SBOM（名前・バージョン・ライセンスのJSON一覧）をCloudflare R2へ保存する。
   # audit/audit-frontと同じ思想でaudit/監査目的のため週次（月曜）のみ実行する。
+  #
+  # CFCOST-10対応（2026-08-22）: 以前はactions/upload-artifactで14日間保持していたが、
+  # 人が閲覧するページではなく監査用の生データのため、GitHub Actions storageではなく
+  # Cloudflare R2（race-schedule-ci-artifacts、race-schedule側のinfra/terraform/r2.tfが
+  # 管理）へ移した（判断基準は.claude/docs/ci-conventions.md「成果物の永続化先」参照、
+  # race-schedule側のsubmodule経由で共有）。オブジェクトキーに日付＋run_idを含め世代を
+  # 残し、バケット側のライフサイクルルールで古いオブジェクトを自動失効させる。
   sbom:
     needs: check-day
     if: (github.event_name == 'schedule' && needs.check-day.outputs.is-monday == 'true') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    environment: production
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -249,12 +257,21 @@ jobs:
       - name: Generate SBOM
         run: bun run sbom:generate > sbom.json
 
-      - name: Upload SBOM artifact
-        uses: actions/upload-artifact@v7
+      - name: "🔍 Validate Cloudflare Secrets"
+        uses: ./.github/actions/validate-cf-secrets
         with:
-          name: sbom
-          path: sbom.json
-          retention-days: 14
+          cloudflare-api-token: ${{ secrets.CLOUDFLARE_R2_CI_TOKEN }}
+          cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Upload SBOM to Cloudflare R2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_R2_CI_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          bunx wrangler r2 object put \
+            "race-schedule-ci-artifacts/sbom/race-scheduler/$(date -u +%Y-%m-%d)-${{ github.run_id }}.json" \
+            --file=sbom.json \
+            --remote
 
   license-check:
     # CICD-100対応: web-push-web-platform用に追加したpushトリガーでは実行不要。

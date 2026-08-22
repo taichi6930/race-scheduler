@@ -14,6 +14,12 @@ on:
         required: true
       DB_ID:
         required: true
+      # CFCOST-10対応（2026-08-22）: D1バックアップをR2へアップロードするための
+      # R2書き込み専用トークン。未設定でも本番デプロイ自体は止めたくないため
+      # required: falseにし、アップロードステップ側をcontinue-on-errorにする
+      # （graceful degradation、他の未設定シークレットと同じ方針）。
+      CLOUDFLARE_R2_CI_TOKEN:
+        required: false
 
 permissions:
   contents: read
@@ -52,7 +58,14 @@ jobs:
       # 自動的なdown-migration（ロールバック）機構自体が存在しない（TEST_PLAN.mdが計画していた
       # 「ロールバック安全性テスト」はD1の実際の仕組みと前提が合っていなかった）。実運用での
       # 障害復旧手段は「マイグレーション適用直前のバックアップから復元する」ことになるため、
-      # 適用前に必ずエクスポートを取得しartifactとして保持する。
+      # 適用前に必ずエクスポートを取得しCloudflare R2へ保存する。
+      #
+      # CFCOST-10対応（2026-08-22）: 以前はactions/upload-artifactで14日間保持していたが、
+      # 人が閲覧するページではなく監査用の生データのため、GitHub Actions storageではなく
+      # Cloudflare R2（race-schedule-ci-artifacts、race-schedule側のinfra/terraform/r2.tfが
+      # 管理）へ移した（判断基準は.claude/docs/ci-conventions.md「成果物の永続化先」参照、
+      # race-schedule側のsubmodule経由で共有）。DBが育つとPagesの1ファイル25MiB上限に
+      # 将来抵触しうる点もPagesを選ばなかった理由。
       - name: Backup D1 database before migration
         working-directory: packages/db
         env:
@@ -65,12 +78,25 @@ jobs:
           bunx wrangler d1 export DB --remote --env ${{ inputs.environment }} --output db-backup-${{ inputs.environment }}.sql
           echo "✅ Backup completed"
 
-      - name: Upload D1 backup
-        uses: actions/upload-artifact@v7
+      - name: "🔍 Validate Cloudflare R2 Secrets"
+        uses: ./.github/actions/validate-cf-secrets
         with:
-          name: d1-backup-${{ inputs.environment }}-${{ github.run_id }}
-          path: packages/db/db-backup-${{ inputs.environment }}.sql
-          retention-days: 14
+          cloudflare-api-token: ${{ secrets.CLOUDFLARE_R2_CI_TOKEN }}
+          cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      # CLOUDFLARE_R2_CI_TOKEN未設定の間はバックアップのR2保存だけをスキップし、
+      # 本番マイグレーション自体は止めない（graceful degradation）。
+      - name: Upload D1 backup to Cloudflare R2
+        working-directory: packages/db
+        continue-on-error: true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_R2_CI_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          bunx wrangler r2 object put \
+            "race-schedule-ci-artifacts/d1-backup/${{ inputs.environment }}/${{ github.run_id }}.sql" \
+            --file=db-backup-${{ inputs.environment }}.sql \
+            --remote
 
       - name: Deploy migrations to ${{ inputs.environment }}
         working-directory: packages/db
