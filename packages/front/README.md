@@ -113,7 +113,7 @@ Repository/UseCase/Provider/UI は本番と同じコードパスを通るため�
 生成）。個別ウィジェットの見た目だけを確認したい場合は
 [`lib/widgetbook.dart`](lib/widgetbook.dart)（ウィジェットカタログ）も使える。
 ローカル起動せずブラウザで見たい場合は、デプロイ済みの
-[Widgetbook（https://race-schedule-widgetbook.pages.dev）](https://race-schedule-widgetbook.pages.dev)も利用できる。
+[Widgetbook（https://race-scheduler-widgetbook.pages.dev）](https://race-scheduler-widgetbook.pages.dev)も利用できる。
 
 ## 環境変数
 

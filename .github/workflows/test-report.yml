@@ -16,7 +16,7 @@ name: Test Report
 #
 # 公開先はCloudflare Pages（CICD-71対応、2026-08-01）。GitHub PagesはpublicリポジトリでのみFree/
 # 無制限で、private化すると個人アカウントのGitHub Freeプランでは利用できなくなる制約があった
-# ため移行した。プロジェクト名は `race-schedule-ci-report`（初回のみ`wrangler pages project
+# ため移行した。プロジェクト名は `race-scheduler-ci-report`（初回のみ`wrangler pages project
 # create`で自動作成、2回目以降は`|| true`で既存作成エラーを無視する）。`deploy-front-reusable.yml`
 # と同じ`bunx wrangler pages deploy`パターンを踏襲している。「test-report」という名前だと
 # Worker環境の`test` env（race-schedule-test等）と紛らわしいため、あえて「test」を含まない
@@ -194,7 +194,7 @@ jobs:
           for f in history.json history-trend.json categories-trend.json duration-trend.json retry-trend.json; do
             dest="test-report/allure-results/history/$f"
             curl -sf -o "$dest" \
-              "https://race-schedule-ci-report.pages.dev/allure/history/$f" \
+              "https://race-scheduler-ci-report.pages.dev/allure/history/$f" \
               || rm -f "$dest"
             if [ -f "$dest" ] && [ "$(stat -c%s "$dest")" -gt "$HISTORY_SIZE_CAP_BYTES" ]; then
               echo "::warning::$f が ${HISTORY_SIZE_CAP_BYTES} バイトを超過したためトレンド履歴をリセットします"
@@ -234,7 +234,7 @@ jobs:
         # 「already exists」エラーになるため `|| true` で無視する
         # （`gh label create ... || true` と同じ冪等化パターン）。
         run: |
-          bunx wrangler pages project create race-schedule-ci-report \
+          bunx wrangler pages project create race-scheduler-ci-report \
             --production-branch main \
             || true
 
@@ -245,7 +245,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           bunx wrangler pages deploy test-report/ \
-            --project-name race-schedule-ci-report \
+            --project-name race-scheduler-ci-report \
             --branch main
 
   # generate-test-reportの失敗（=いずれかのテストレイヤーの失敗）をGitHub Issue化する
@@ -331,7 +331,7 @@ jobs:
           - 実行ログ: ${RUN_URL}
 
           全パッケージ・全レイヤー（UT/コンポーネント/front等）のうちいずれかが失敗しています。
-          詳細は上記の実行ログ、または [Allure Report](https://race-schedule-ci-report.pages.dev/allure/#timeline) を確認してください。
+          詳細は上記の実行ログ、または [Allure Report](https://race-scheduler-ci-report.pages.dev/allure/#timeline) を確認してください。
           テストが成功すれば次回チェック時に自動でCloseされます。
 
           _このIssueは \`.github/workflows/test-report.yml\` により自動作成されました。_"
