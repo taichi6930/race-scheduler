@@ -78,7 +78,7 @@ const NAV_ITEMS = [
  */
 const EXTERNAL_LINKS = [
     {
-        href: 'https://race-schedule-widgetbook.pages.dev',
+        href: 'https://race-scheduler-widgetbook.pages.dev',
         label: 'Widgetbook（デザインカタログ）',
     },
 ] as const;

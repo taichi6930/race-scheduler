@@ -2,7 +2,7 @@ name: Deploy Widgetbook
 
 # Widgetbook（デザインシステムのウィジェットカタログ、packages/front/lib/widgetbook.dart）を
 # mainマージ時にCloudflare Pagesのproductionブランチへデプロイし、常時アクセス可能な
-# race-schedule-widgetbook.pages.dev を最新化する（ユーザー依頼、2026-08-09）。
+# race-scheduler-widgetbook.pages.dev を最新化する（ユーザー依頼、2026-08-09）。
 #
 # pull_request.ymlのwidgetbook-previewジョブ（PRブランチごとのプレビュー）とは別に、
 # deploy.yml（db/api/batch/admin/front Workerのデプロイ）とも
@@ -75,7 +75,7 @@ jobs:
         # 初回のみプロジェクトが存在しないため作成する。2回目以降は
         # 「already exists」エラーになるため `|| true` で無視する（widgetbook-previewジョブと同じ）。
         run: |
-          bunx wrangler pages project create race-schedule-widgetbook \
+          bunx wrangler pages project create race-scheduler-widgetbook \
             --production-branch main \
             || true
 
@@ -88,11 +88,11 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        # productionブランチ（"main"）へデプロイすることで race-schedule-widgetbook.pages.dev
+        # productionブランチ（"main"）へデプロイすることで race-scheduler-widgetbook.pages.dev
         # のルートURLに反映される（wrangler pages projectの--production-branchと一致させる必要がある）。
         run: |
           bunx wrangler pages deploy build/web \
-            --project-name race-schedule-widgetbook \
+            --project-name race-scheduler-widgetbook \
             --branch main | tee /tmp/wrangler-deploy-output.txt
 
           DEPLOY_URL=$(grep -oE 'https://[a-zA-Z0-9.-]+\.pages\.dev[^[:space:]]*' /tmp/wrangler-deploy-output.txt | tail -1)
@@ -101,6 +101,6 @@ jobs:
       - name: "✅ Deployment Summary"
         run: |
           echo "=== Widgetbook Deployment Complete ==="
-          echo "Project : race-schedule-widgetbook"
-          echo "URL     : https://race-schedule-widgetbook.pages.dev"
+          echo "Project : race-scheduler-widgetbook"
+          echo "URL     : https://race-scheduler-widgetbook.pages.dev"
           echo "Preview : ${{ steps.deploy.outputs.deploy-url }}"
