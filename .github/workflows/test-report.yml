@@ -171,6 +171,19 @@ jobs:
           mkdir -p test-report/raw
           bun run test:gap:json > test-report/raw/coverage.json
 
+      # 行単位ハイライト付きのHTMLレポートをgenhtml（lcov純正、coverage-pr.ymlのPRプレビューと
+      # 同じツール）で生成し、同じPages上に常設で公開する。以前はPRのタイミングでしか
+      # 見られなかった行単位の詳細を、main最新の状態でいつでも見られるようにする
+      # （ユーザー依頼、2026-08-22）。「カバレッジ100%達成ファイル比率」の集計表
+      # （test:gap:jsonの自家製集計）とは別の切り口として併存させる。
+      - name: Setup LCOV
+        if: always()
+        uses: hrishikesh-kadam/setup-lcov@6c1aa0cc9e1c02f9f58f01ac599f1064ccc83470 # v1.1.0
+
+      - name: Generate line-level HTML coverage report
+        if: always()
+        run: genhtml coverage/lcov.info -o test-report/coverage-html
+
       - name: Run spec coverage analysis
         if: always()
         run: |
