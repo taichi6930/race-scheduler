@@ -123,7 +123,7 @@ describe('AuthController', () => {
     });
 
     describe('verifyInvite', () => {
-        it('[T-04] 正常なbodyの場合200を返すこと', async () => {
+        it('[T-04] 正常なbodyの場合200を返しtokenをusecaseへ渡すこと', async () => {
             const usecase = buildUsecase();
             const controller = new AuthController(usecase);
 
@@ -132,6 +132,7 @@ describe('AuthController', () => {
             );
 
             expect(res.status).toBe(200);
+            expect(usecase.verifyInvite).toHaveBeenCalledWith('t');
         });
 
         it('[T-05] bodyが不正な場合400を返すこと', async () => {
@@ -147,7 +148,7 @@ describe('AuthController', () => {
     });
 
     describe('registrationOptions', () => {
-        it('[T-06] 正常なbodyの場合200を返すこと', async () => {
+        it('[T-06] 正常なbodyの場合200を返しinviteTokenをusecaseへ渡すこと', async () => {
             const usecase = buildUsecase();
             const controller = new AuthController(usecase);
 
@@ -158,6 +159,9 @@ describe('AuthController', () => {
             );
 
             expect(res.status).toBe(200);
+            expect(usecase.getRegistrationOptions).toHaveBeenCalledWith(
+                'invite-token',
+            );
         });
 
         it('[T-07] bodyが不正な場合400を返すこと', async () => {
@@ -201,7 +205,7 @@ describe('AuthController', () => {
             },
         };
 
-        it('[T-09] 正常なbodyの場合201を返しUser-Agentを渡すこと', async () => {
+        it('[T-09] 正常なbodyの場合201を返しchallengeId・nickname・User-Agent・credentialResponseをusecaseへ渡すこと', async () => {
             const usecase = buildUsecase();
             const controller = new AuthController(usecase);
             const request = jsonRequest('/auth/register/verify', validBody);
@@ -210,9 +214,12 @@ describe('AuthController', () => {
             const res = await controller.registrationVerify(request);
 
             expect(res.status).toBe(201);
-            expect(usecase.verifyRegistration).toHaveBeenCalledWith(
-                expect.objectContaining({ userAgent: 'TestAgent/1.0' }),
-            );
+            expect(usecase.verifyRegistration).toHaveBeenCalledWith({
+                challengeId: validBody.challengeId,
+                nickname: validBody.nickname,
+                userAgent: 'TestAgent/1.0',
+                credentialResponse: validBody.credentialResponse,
+            });
         });
 
         it('[T-10] bodyが不正な場合400を返すこと', async () => {
@@ -275,7 +282,7 @@ describe('AuthController', () => {
             },
         };
 
-        it('[T-14] 正常なbodyの場合200を返すこと', async () => {
+        it('[T-14] 正常なbodyの場合200を返しchallengeId・credentialResponseをusecaseへ渡すこと', async () => {
             const usecase = buildUsecase();
             const controller = new AuthController(usecase);
 
@@ -284,6 +291,10 @@ describe('AuthController', () => {
             );
 
             expect(res.status).toBe(200);
+            expect(usecase.verifyLogin).toHaveBeenCalledWith({
+                challengeId: validBody.challengeId,
+                credentialResponse: validBody.credentialResponse,
+            });
         });
 
         it('[T-15] bodyが不正な場合400を返すこと', async () => {

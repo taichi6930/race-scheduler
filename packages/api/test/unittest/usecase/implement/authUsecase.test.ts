@@ -3,17 +3,18 @@
  *
  * | #    | メソッド                 | 状況                                     | 期待                          |
  * | ---- | -------------------------- | ------------------------------------------- | -------------------------------- |
- * | T-01 | issueInvite                | 正常系                                     | tokenを含む結果を返しrepositoryへ委譲 |
+ * | T-01 | issueInvite                | 正常系                                     | tokenを含む結果を返しrepositoryへ委譲（expiresAtは発行から24時間後） |
  * | T-02 | verifyInvite                | 有効な招待                                 | { valid: true }               |
  * | T-03 | verifyInvite                | 無効な招待                                 | { valid: false }               |
  * | T-04 | getRegistrationOptions      | WEBAUTHN_RP_ID未設定                       | null                          |
  * | T-05 | getRegistrationOptions      | 招待が無効                                 | null                          |
- * | T-06 | getRegistrationOptions      | 正常系                                     | challengeId・optionsを返す      |
+ * | T-06 | getRegistrationOptions      | 正常系                                     | challengeId・optionsを返しcreateChallengeへpurpose='register'・inviteToken・5分後のexpiresAtを渡す |
  * | T-07 | verifyRegistration          | WEBAUTHN_RP_ID未設定                       | null                          |
  * | T-08 | verifyRegistration          | challengeが存在しない                       | null                          |
  * | T-09 | verifyRegistration          | challengeのpurposeがregister以外            | null                          |
  * | T-10 | verifyRegistration          | 招待が既に無効化されている（TOCTOU対策）    | null                          |
  * | T-11 | verifyRegistration          | credentialResponseの検証に失敗              | null                          |
+ * | T-26 | verifyRegistration          | purposeはregisterだがinviteTokenがnull      | null                          |
  * | T-12 | getLoginOptions             | WEBAUTHN_RP_ID未設定                       | 例外を投げる                   |
  * | T-13 | getLoginOptions             | 正常系                                     | challengeId・optionsを返す      |
  * | T-14 | verifyLogin                  | challengeが存在しない                       | null                          |
@@ -28,6 +29,12 @@
  * | T-23 | approveJoinRequest            | pending状態                                | issueInviteを呼びrepository.approveJoinRequestへ委譲 |
  * | T-24 | approveJoinRequest            | 存在しない/pending以外                      | false・issueInviteは呼ばれない  |
  * | T-25 | rejectJoinRequest             | 正常系                                     | repository.rejectJoinRequestへ委譲 |
+ *
+ * expiresAtの検証について: TTL定数（INVITE_TTL_MS=24h/CHALLENGE_TTL_MS=5min/
+ * SESSION_TTL_MS=7day）はauthUsecase.ts内のprivate定数でexportされていないため、
+ * テスト側では「発行時刻から期待される期間だけ後」であることを許容誤差
+ * （TOLERANCE_MS）付きで検証する。`expect.any(String)`だけでは算術ミューテーション
+ * （TTL定数の演算子破壊等）を検知できないため。
  */
 
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
@@ -66,6 +73,27 @@ const buildRepository = (
         ...overrides,
     }) as IAuthRepository;
 
+/** authUsecase.ts内のTTL定数（非export）に対応する期待値。 */
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const FIVE_MINUTES_MS = 5 * 60 * 1000;
+/** Date.now()呼び出しのタイミングずれを許容する誤差。 */
+const TOLERANCE_MS = 2000;
+
+/**
+ * ISO文字列の日時が期待するタイムスタンプ（ms）に近いことを検証する。
+ * TTL算出の演算子が壊れる（例: `*`が`/`になる）ミューテーションは、
+ * 結果の桁が大きくずれるため許容誤差を超えて検知できる。
+ * @param actual - 検証対象のISO文字列
+ * @param expectedMs - 期待するタイムスタンプ（エポックミリ秒）
+ */
+const expectIsoCloseTo = (actual: unknown, expectedMs: number): void => {
+    if (typeof actual !== 'string') {
+        throw new TypeError('expected an ISO date string');
+    }
+    const diff = Math.abs(new Date(actual).getTime() - expectedMs);
+    expect(diff).toBeLessThanOrEqual(TOLERANCE_MS);
+};
+
 const GARBAGE_CREDENTIAL_RESPONSE = {
     id: 'broken',
     rawId: 'broken',
@@ -80,17 +108,26 @@ describe('AuthUsecase', () => {
     });
 
     describe('issueInvite', () => {
-        it('[T-01] tokenを生成しrepository.createInviteへ委譲すること', async () => {
-            const repository = buildRepository();
+        it('[T-01] tokenを生成しrepository.createInviteへ委譲すること（expiresAtは24時間後）', async () => {
+            const createInvite = mock(
+                (_token: string, _memo: string | null, _expiresAt: string) =>
+                    Promise.resolve(),
+            );
+            const repository = buildRepository({ createInvite });
             const usecase = new AuthUsecase(repository);
 
+            const before = Date.now();
             const result = await usecase.issueInvite('メモ');
 
             expect(result.token).toBeTruthy();
-            expect(repository.createInvite).toHaveBeenCalledWith(
+            expect(createInvite).toHaveBeenCalledWith(
                 result.token,
                 'メモ',
                 expect.any(String),
+            );
+            expectIsoCloseTo(
+                createInvite.mock.calls[0]?.[2],
+                before + ONE_DAY_MS,
             );
         });
     });
@@ -136,19 +173,40 @@ describe('AuthUsecase', () => {
             expect(await usecase.getRegistrationOptions('t')).toBeNull();
         });
 
-        it('[T-06] 正常系でchallengeId・optionsを返すこと', async () => {
+        it('[T-06] 正常系でchallengeId・optionsを返しcreateChallengeへpurpose=register・inviteToken・5分後のexpiresAtを渡すこと', async () => {
             EnvStore.setEnv(RP_ENV);
+            const createChallenge = mock(
+                (
+                    _id: string,
+                    _challenge: string,
+                    _purpose: 'register' | 'login',
+                    _inviteToken: string | null,
+                    _expiresAt: string,
+                ) => Promise.resolve(),
+            );
             const repository = buildRepository({
                 findValidInvite: mock(() =>
                     Promise.resolve({ token: 't', memo: 'メモ' }),
                 ),
+                createChallenge,
             });
             const usecase = new AuthUsecase(repository);
 
+            const before = Date.now();
             const result = await usecase.getRegistrationOptions('t');
 
             expect(result?.challengeId).toBeTruthy();
-            expect(repository.createChallenge).toHaveBeenCalled();
+            expect(createChallenge).toHaveBeenCalledWith(
+                result?.challengeId,
+                expect.any(String),
+                'register',
+                't',
+                expect.any(String),
+            );
+            expectIsoCloseTo(
+                createChallenge.mock.calls[0]?.[4],
+                before + FIVE_MINUTES_MS,
+            );
         });
     });
 
@@ -209,6 +267,23 @@ describe('AuthUsecase', () => {
             expect(await usecase.verifyRegistration(baseInput)).toBeNull();
         });
 
+        it('[T-26] purposeはregisterだがinviteTokenがnullの場合nullを返すこと', async () => {
+            EnvStore.setEnv(RP_ENV);
+            const repository = buildRepository({
+                consumeChallenge: mock(() =>
+                    Promise.resolve({
+                        challenge: 'raw',
+                        purpose: 'register' as const,
+                        inviteToken: null,
+                    }),
+                ),
+            });
+            const usecase = new AuthUsecase(repository);
+
+            expect(await usecase.verifyRegistration(baseInput)).toBeNull();
+            expect(repository.findValidInvite).not.toHaveBeenCalled();
+        });
+
         it('[T-11] credentialResponseの検証に失敗した場合nullを返すこと', async () => {
             EnvStore.setEnv(RP_ENV);
             const repository = buildRepository({
@@ -239,15 +314,35 @@ describe('AuthUsecase', () => {
             await expect(usecase.getLoginOptions()).rejects.toThrow();
         });
 
-        it('[T-13] 正常系でchallengeId・optionsを返すこと', async () => {
+        it('[T-13] 正常系でchallengeId・optionsを返しcreateChallengeへpurpose=login・inviteToken=null・5分後のexpiresAtを渡すこと', async () => {
             EnvStore.setEnv(RP_ENV);
-            const repository = buildRepository();
+            const createChallenge = mock(
+                (
+                    _id: string,
+                    _challenge: string,
+                    _purpose: 'register' | 'login',
+                    _inviteToken: string | null,
+                    _expiresAt: string,
+                ) => Promise.resolve(),
+            );
+            const repository = buildRepository({ createChallenge });
             const usecase = new AuthUsecase(repository);
 
+            const before = Date.now();
             const result = await usecase.getLoginOptions();
 
             expect(result.challengeId).toBeTruthy();
-            expect(repository.createChallenge).toHaveBeenCalled();
+            expect(createChallenge).toHaveBeenCalledWith(
+                result.challengeId,
+                expect.any(String),
+                'login',
+                null,
+                expect.any(String),
+            );
+            expectIsoCloseTo(
+                createChallenge.mock.calls[0]?.[4],
+                before + FIVE_MINUTES_MS,
+            );
         });
     });
 
