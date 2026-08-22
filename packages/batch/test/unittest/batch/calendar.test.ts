@@ -7,9 +7,11 @@
  * | C-02 | API エラー          | Error がバブルアップ                                    |
  * | C-03 | 部分失敗            | failureCount>0 の場合、成功件数を握り潰さず Error を投げる |
  * | C-04 | 年またぎ（PERF-185） | finishDate=12/31 の場合、syncCalendarへ翌年1/1が渡される |
+ * | C-05 | 件数フィールドが全て欠落 | insertedCount/updatedCount/deletedCount/failureCount が全て未定義の場合、`?? 0` の既定値が使われ成功扱いになる |
  */
 
 import { afterEach, beforeEach, describe, expect, it, spyOn } from 'bun:test';
+import type { CalendarUpsertResult } from '@race-schedule/core';
 import { RaceType } from '@race-schedule/core';
 
 import { runCalendarBatch } from '../../../src/batch/calendar';
@@ -108,5 +110,24 @@ describe('runCalendarBatch', () => {
                 finishDate: '2026-01-31',
             }),
         ).rejects.toThrow(/Invalid or empty calendarId for raceType: jra/);
+    });
+
+    it('C-05_件数フィールドが全て欠落したレスポンス_すべて既定値0として扱い成功として合計0を返す', async () => {
+        // Arrange: zodスキーマ検証（syncCalendar内部）を経由しない直接モックのため、
+        // 型上は必須のinsertedCount/updatedCount/deletedCount/failureCountを実際に
+        // 欠落させることができる。`response.xxx ?? 0` のフォールバックが機能するかを検証する。
+        const partialResponse: Partial<CalendarUpsertResult> = {
+            successCount: 0,
+            failures: [],
+        };
+        syncSpy.mockResolvedValue(partialResponse as CalendarUpsertResult);
+
+        const result = await runCalendarBatch({
+            raceType: RaceType.JRA,
+            startDate: '2026-01-01',
+            finishDate: '2026-01-31',
+        });
+
+        expect(result).toBe(0);
     });
 });

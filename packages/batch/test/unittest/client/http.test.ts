@@ -19,6 +19,7 @@
  * | H-12 | fetchWithTimeout | 500エラーが上限まで継続 | maxRetries=2（既定） | リトライ上限到達後に失敗する（fetch 3回） | Branch (PERF-055) |
  * | H-13 | fetchWithTimeout | 200 OK               | runWithRequestIdのスコープ内 | X-Request-Idヘッダが付与される（CFARCH-09） | Branch |
  * | H-14 | fetchWithTimeout | 200 OK               | runWithRequestIdのスコープ外 | X-Request-Idヘッダが付かない（CFARCH-09）   | Branch |
+ * | H-15 | fetchWithTimeout | fetchがError以外の値をthrow（連続） | なし | String()でラップしたErrorとしてリトライ後スロー | Branch |
  */
 
 import { afterEach, beforeEach, describe, expect, it, spyOn } from 'bun:test';
@@ -323,6 +324,18 @@ describe('fetchWithTimeout', () => {
         await expect(
             fetchWithTimeout('https://example.com/api', anySchema),
         ).rejects.toThrow(/returned 500: Internal Server Error/);
+        expect(fetchSpy).toHaveBeenCalledTimes(3);
+    });
+
+    it('H-15_fetchがError以外の値をthrowし続ける_StringでラップしたErrorとしてリトライ後スローする', async () => {
+        // Arrange: Errorインスタンスではない値（文字列）をfetchがthrowするケース
+        // （instanceof Errorがfalseとなる分岐を通し、String(error)でラップされることを確認）
+        fetchSpy.mockRejectedValue('network failure string');
+
+        // Act / Assert: デフォルトの maxRetries=2 のため計3回試行して失敗する
+        await expect(
+            fetchWithTimeout('https://example.com/api', anySchema),
+        ).rejects.toThrow('network failure string');
         expect(fetchSpy).toHaveBeenCalledTimes(3);
     });
 });
