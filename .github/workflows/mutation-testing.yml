@@ -31,6 +31,15 @@ name: Mutation Testing
 # スコアの高低に関わらずジョブは常に成功する。まずは結果を可視化して傾向を把握する
 # ことを優先し、PRのブロッキング化（CIゲート）は別途判断する
 # （audit/license-check等の既存の「まずは可視化」ジョブと同じ思想）。
+#
+# CFCOST-10対応（2026-08-22）: 各mutation-<pkg>ジョブがHTMLレポートをactions/upload-artifact
+# で7日間保持していたが、人が閲覧するレポートを毎週artifactとして積み上げるのは
+# GitHub Actions storageの無駄（判断基準は.claude/docs/ci-conventions.md「成果物の
+# 永続化先」参照、race-schedule側のsubmodule経由で共有）。HTMLレポートの恒久的な
+# 公開先はCloudflare Pages（race-schedule-mutation-report、新設のdeploy-mutation-report
+# ジョブ）に一本化し、各mutation-<pkg>ジョブのartifactはreport-mutation-failure・
+# deploy-mutation-reportの2ジョブへ同一実行内で受け渡すためだけの一時的なものとして
+# retention-daysを1日に短縮した（Pagesへのデプロイ後は不要になる）。
 
 on:
     schedule:
@@ -93,7 +102,7 @@ jobs:
                     grep -B2 "^All files" mutation-report.log || echo "(結果テーブルを取得できませんでした。詳細はログを参照してください)"
                     echo '```'
                     echo ""
-                    echo "詳細は本ジョブの \`mutation-report-core\` artifact（HTMLレポート）を参照してください。"
+                    echo "詳細は https://race-schedule-mutation-report.pages.dev/core/ を参照してください。"
                   } >> "$GITHUB_STEP_SUMMARY"
 
             - name: Upload mutation report
@@ -104,7 +113,7 @@ jobs:
                   path: |
                       reports/mutation/core/
                       mutation-report.log
-                  retention-days: 7
+                  retention-days: 1
                   if-no-files-found: warn
 
     mutation-admin:
@@ -141,7 +150,7 @@ jobs:
                     grep -B2 "^All files" mutation-report.log || echo "(結果テーブルを取得できませんでした。詳細はログを参照してください)"
                     echo '```'
                     echo ""
-                    echo "詳細は本ジョブの \`mutation-report-admin\` artifact（HTMLレポート）を参照してください。"
+                    echo "詳細は https://race-schedule-mutation-report.pages.dev/admin/ を参照してください。"
                   } >> "$GITHUB_STEP_SUMMARY"
 
             - name: Upload mutation report
@@ -152,7 +161,7 @@ jobs:
                   path: |
                       reports/mutation/admin/
                       mutation-report.log
-                  retention-days: 7
+                  retention-days: 1
                   if-no-files-found: warn
 
     mutation-batch:
@@ -190,7 +199,7 @@ jobs:
                     grep -B2 "^All files" mutation-report.log || echo "(結果テーブルを取得できませんでした。詳細はログを参照してください)"
                     echo '```'
                     echo ""
-                    echo "詳細は本ジョブの \`mutation-report-batch\` artifact（HTMLレポート）を参照してください。"
+                    echo "詳細は https://race-schedule-mutation-report.pages.dev/batch/ を参照してください。"
                   } >> "$GITHUB_STEP_SUMMARY"
 
             - name: Upload mutation report
@@ -201,7 +210,7 @@ jobs:
                   path: |
                       reports/mutation/batch/
                       mutation-report.log
-                  retention-days: 7
+                  retention-days: 1
                   if-no-files-found: warn
 
     # packages/api は他パッケージと桁違いにミュータント数が多く（全体で約4,950。うち
@@ -295,7 +304,7 @@ jobs:
                     grep -B2 "^All files" mutation-report.log || echo "(結果テーブルを取得できませんでした。詳細はログを参照してください)"
                     echo '```'
                     echo ""
-                    echo "詳細は本ジョブの \`mutation-report-api-${{ matrix.name }}\` artifact（HTMLレポート）を参照してください。"
+                    echo "詳細は https://race-schedule-mutation-report.pages.dev/api/${{ matrix.name }}/ を参照してください。"
                   } >> "$GITHUB_STEP_SUMMARY"
 
             - name: Upload mutation report
@@ -306,8 +315,133 @@ jobs:
                   path: |
                       reports/mutation/api/
                       mutation-report.log
-                  retention-days: 7
+                  retention-days: 1
                   if-no-files-found: warn
+
+    # CFCOST-10対応（2026-08-22）: 各mutation-<pkg>ジョブが出力したHTMLレポートを
+    # 1つのCloudflare Pages（race-schedule-mutation-report）へ集約デプロイする。
+    #
+    # 14個のジョブ（core/admin/batch + apiの10シャード）がそれぞれ`wrangler pages deploy`を
+    # 個別に呼ぶと、Cloudflare Pagesのデプロイは「ディレクトリ丸ごとの1回のスナップショット」
+    # であり差分アップロードではないため、後から実行が終わったジョブが先行ジョブの内容を
+    # 上書きしてしまう（race-schedule/race-schedulerが同じPagesプロジェクト名を取り合って
+    # いた既知の衝突と同型の問題）。そのため、全ジョブ完了後にこのジョブ1つだけが
+    # 各ジョブのartifactをダウンロードして1つのディレクトリツリーへ組み立て、
+    # `wrangler pages deploy`を1回だけ呼ぶ設計にした。
+    deploy-mutation-report:
+        needs: [mutation-core, mutation-admin, mutation-batch, mutation-api]
+        if: always()
+        runs-on: ubuntu-24.04
+        timeout-minutes: 10
+        environment: production
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v7
+
+            # bunx wranglerはルートpackage.jsonでバージョン固定されたdevDependencyを
+            # 使うため、ルートでのbun installが必要（deploy-dashboard.yml等と同じ理由）。
+            - name: Setup workspace
+              uses: ./.github/actions/setup-workspace
+              with:
+                  setup-node: 'false'
+
+            # 各mutation-<pkg>ジョブが1日保持のartifactとしてアップロードした
+            # HTMLレポート一式をまとめてダウンロードする。retention-days: 1のため、
+            # 本ジョブ（同一実行内）でのダウンロードが唯一の消費経路。
+            # 該当ジョブがartifactアップロードまで到達せずに落ちた場合はそのartifactが
+            # 存在しないため、continue-on-errorで握り潰す（後段のcpでファイルが無ければ
+            # そのパッケージ/シャードのみ欠けた状態でデプロイを継続する）。
+            - name: Download mutation report artifacts
+              continue-on-error: true
+              uses: actions/download-artifact@v8
+              with:
+                  pattern: mutation-report-*
+                  path: mutation-reports
+
+            # 各ジョブのHTML出力（reports/mutation/<pkg>/）をPages公開用のディレクトリ
+            # ツリーへ組み立てる。core/admin/batchはそのままサブディレクトリへ、
+            # apiは10シャード分をapi/<shard>/へ展開する（マトリクス名はmutation-apiジョブの
+            # strategy.matrix.includeと完全に一致させること）。
+            - name: Assemble Pages site
+              run: |
+                  set -uo pipefail
+                  mkdir -p site
+
+                  for pkg in core admin batch; do
+                    src="mutation-reports/mutation-report-${pkg}/reports/mutation/${pkg}"
+                    if [ -d "$src" ]; then
+                      mkdir -p "site/${pkg}"
+                      cp -r "$src"/. "site/${pkg}/"
+                    else
+                      echo "::warning::${pkg} のレポートが見つかりませんでした（ジョブ失敗の可能性）"
+                    fi
+                  done
+
+                  for shard in controller usecase repository-a repository-b repository-c repository-shared gateway utility platform router; do
+                    src="mutation-reports/mutation-report-api-${shard}/reports/mutation/api"
+                    if [ -d "$src" ]; then
+                      mkdir -p "site/api/${shard}"
+                      cp -r "$src"/. "site/api/${shard}/"
+                    else
+                      echo "::warning::api/${shard} のレポートが見つかりませんでした（ジョブ失敗の可能性）"
+                    fi
+                  done
+
+                  cat > site/index.html <<'HTML'
+                  <!doctype html>
+                  <html lang="ja">
+                  <head>
+                  <meta charset="utf-8" />
+                  <title>Mutation Testing Report</title>
+                  </head>
+                  <body>
+                  <h1>Mutation Testing Report</h1>
+                  <ul>
+                    <li><a href="core/">core</a></li>
+                    <li><a href="admin/">admin</a></li>
+                    <li><a href="batch/">batch</a></li>
+                    <li>api
+                      <ul>
+                        <li><a href="api/controller/">controller</a></li>
+                        <li><a href="api/usecase/">usecase</a></li>
+                        <li><a href="api/repository-a/">repository-a</a></li>
+                        <li><a href="api/repository-b/">repository-b</a></li>
+                        <li><a href="api/repository-c/">repository-c</a></li>
+                        <li><a href="api/repository-shared/">repository-shared</a></li>
+                        <li><a href="api/gateway/">gateway</a></li>
+                        <li><a href="api/utility/">utility</a></li>
+                        <li><a href="api/platform/">platform</a></li>
+                        <li><a href="api/router/">router</a></li>
+                      </ul>
+                    </li>
+                  </ul>
+                  </body>
+                  </html>
+                  HTML
+
+            - name: "🔍 Validate Cloudflare Secrets"
+              uses: ./.github/actions/validate-cf-secrets
+              with:
+                  cloudflare-api-token: ${{ secrets.CLOUDFLARE_PAGES_API_TOKEN }}
+                  cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+            - name: Ensure Cloudflare Pages project exists
+              env:
+                  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_API_TOKEN }}
+                  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+              run: |
+                  bunx wrangler pages project create race-schedule-mutation-report \
+                    --production-branch main \
+                    || true
+
+            - name: Deploy to Cloudflare Pages
+              env:
+                  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_API_TOKEN }}
+                  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+              run: |
+                  bunx wrangler pages deploy site/ \
+                    --project-name race-schedule-mutation-report \
+                    --branch main
 
     # 週次・無人実行のため、各mutation-<pkg>ジョブ自体が失敗（Strykerのクラッシュ・
     # タイムアウト等）してもActionsのRun一覧を人が見に行かない限り気づけない。
