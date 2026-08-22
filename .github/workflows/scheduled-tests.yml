@@ -435,7 +435,7 @@ jobs:
           - 実行結果: ${result}
           - 実行ログ: ${RUN_URL}
 
-          詳細は上記の実行ログ、または [Allure Report](https://race-schedule-ci-report.pages.dev/allure/#timeline) を確認してください。
+          詳細は上記の実行ログ、または [Allure Report](https://race-scheduler-ci-report.pages.dev/allure/#timeline) を確認してください。
           テストが成功すれば次回チェック時に自動でCloseされます。
 
           _このIssueは \`.github/workflows/scheduled-tests.yml\` により自動作成されました。_"
