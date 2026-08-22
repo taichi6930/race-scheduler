@@ -236,6 +236,15 @@ describe('formatStageForCalendar', () => {
         const entity = { ...KEIRIN_ENTITY, raceStage: undefined };
         expect(formatStageForCalendar(entity)).toBeNull();
     });
+
+    // S8: JRA/NAR/OVERSEAS は raceStage が(型上不正に)設定されていても無視してnullを返す
+    // switch文で JRA/NAR/OVERSEAS が同一ブロックにフォールスルーする実装のため、
+    // raceStage が undefined の場合だけでなく、値が入っていても無視される（決してその
+    // 値を返さない）ことを明示的に検証する。
+    it('S8: JRAでraceStageが設定されていても無視してnullを返す', () => {
+        const entity = { ...JRA_ENTITY, raceStage: '誤って設定されたstage' };
+        expect(formatStageForCalendar(entity)).toBeNull();
+    });
 });
 
 describe('formatSummaryForCalendar', () => {
@@ -298,6 +307,62 @@ describe('getGoogleCalendarColor', () => {
     it('C6: NAR GⅠでBLUEBERRYを返す', () => {
         expect(getGoogleCalendarColor(RaceType.NAR, 'GⅠ')).toEqual(
             GoogleCalendarColor.BLUEBERRY,
+        );
+    });
+
+    // C7: GoogleCalendarColorKeyMap の全エントリを網羅
+    // grade→色の対応表は raceType ごとに多数のグレードを持つが、C1〜C6 では代表的な
+    // 数グレードしか検証していなかったため、表引きの値がそれぞれ独立して正しいことを
+    // 全件で固定する（1件でも値を誤って書き換えるとテストが落ちるようにする）。
+    it.each<[RaceType, string, keyof typeof GoogleCalendarColor]>([
+        [RaceType.JRA, 'GⅠ', 'BLUEBERRY'],
+        [RaceType.JRA, 'GⅡ', 'TOMATO'],
+        [RaceType.JRA, 'GⅢ', 'BASIL'],
+        [RaceType.JRA, 'J.GⅠ', 'BLUEBERRY'],
+        [RaceType.JRA, 'J.GⅡ', 'TOMATO'],
+        [RaceType.JRA, 'J.GⅢ', 'BASIL'],
+        [RaceType.JRA, 'JpnⅠ', 'LAVENDER'],
+        [RaceType.JRA, 'JpnⅡ', 'FLAMINGO'],
+        [RaceType.JRA, 'JpnⅢ', 'SAGE'],
+        [RaceType.JRA, '重賞', 'BANANA'],
+        [RaceType.JRA, 'Listed', 'BANANA'],
+        [RaceType.JRA, 'オープン', 'TANGERINE'],
+        [RaceType.JRA, 'オープン特別', 'TANGERINE'],
+        [RaceType.NAR, 'GⅠ', 'BLUEBERRY'],
+        [RaceType.NAR, 'GⅡ', 'TOMATO'],
+        [RaceType.NAR, 'GⅢ', 'BASIL'],
+        [RaceType.NAR, 'JpnⅠ', 'LAVENDER'],
+        [RaceType.NAR, 'JpnⅡ', 'FLAMINGO'],
+        [RaceType.NAR, 'JpnⅢ', 'SAGE'],
+        [RaceType.NAR, '重賞', 'BANANA'],
+        [RaceType.NAR, 'Listed', 'BANANA'],
+        [RaceType.NAR, 'オープン', 'TANGERINE'],
+        [RaceType.NAR, 'オープン特別', 'TANGERINE'],
+        [RaceType.NAR, '地方重賞', 'GRAPE'],
+        [RaceType.OVERSEAS, 'GⅠ', 'BLUEBERRY'],
+        [RaceType.OVERSEAS, 'GⅡ', 'TOMATO'],
+        [RaceType.OVERSEAS, 'GⅢ', 'BASIL'],
+        [RaceType.OVERSEAS, 'Listed', 'BANANA'],
+        [RaceType.OVERSEAS, '格付けなし', 'GRAPHITE'],
+        [RaceType.KEIRIN, 'GP', 'BLUEBERRY'],
+        [RaceType.KEIRIN, 'GⅠ', 'BLUEBERRY'],
+        [RaceType.KEIRIN, 'GⅡ', 'TOMATO'],
+        [RaceType.KEIRIN, 'GⅢ', 'BASIL'],
+        [RaceType.KEIRIN, 'FⅠ', 'GRAPHITE'],
+        [RaceType.KEIRIN, 'FⅡ', 'GRAPHITE'],
+        [RaceType.BOATRACE, 'SG', 'BLUEBERRY'],
+        [RaceType.BOATRACE, 'GⅠ', 'BLUEBERRY'],
+        [RaceType.BOATRACE, 'GⅡ', 'TOMATO'],
+        [RaceType.BOATRACE, 'GⅢ', 'BASIL'],
+        [RaceType.BOATRACE, '一般', 'GRAPHITE'],
+        [RaceType.AUTORACE, 'SG', 'BLUEBERRY'],
+        [RaceType.AUTORACE, '特GⅠ', 'BLUEBERRY'],
+        [RaceType.AUTORACE, 'GⅠ', 'BLUEBERRY'],
+        [RaceType.AUTORACE, 'GⅡ', 'TOMATO'],
+        [RaceType.AUTORACE, '開催', 'GRAPHITE'],
+    ])('C7: %s %s は %s を返す', (raceType, grade, expectedColorKey) => {
+        expect(getGoogleCalendarColor(raceType, grade)).toEqual(
+            GoogleCalendarColor[expectedColorKey],
         );
     });
 });

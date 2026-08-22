@@ -68,6 +68,11 @@ const getStagePriorityInfo = (
 ): StagePriorityInfo => {
     const cacheKey = buildStagePriorityCacheKey(raceType, raceGrade, stage);
     const cached = stagePriorityInfoCache.get(cacheKey);
+    // Stryker disable next-line BlockStatement,ConditionalExpression : 純粋なメモ化の早期returnのため戻り値は変わらない。
+    // StagePriorityList は不変の定数配列で本関数は決定的なため、キャッシュヒット時に
+    // 早期returnせず後段の再計算にフォールスルーしても同じ info が算出され、
+    // 外部から観測可能な戻り値の差は生じない（手動でこの分岐を除去してテストスイートを
+    // 実行し、全テストがgreenのまま変化しないことを確認済み）。パフォーマンス最適化のみ。
     if (cached !== undefined) {
         return cached;
     }
@@ -84,6 +89,9 @@ const getStagePriorityInfo = (
               specifiedOverride: match.specifiedOverride ?? false,
           }
         : DEFAULT_STAGE_PRIORITY_INFO;
+    // Stryker disable next-line CallExpression : キャッシュへの書き込みを省いても、
+    // 次回呼び出しは同じ決定的計算で同じ info を再算出するだけで戻り値に差は出ない
+    // （上記と同じ理由でパフォーマンス最適化のみ。手動検証済み）。
     stagePriorityInfoCache.set(cacheKey, info);
     return info;
 };
@@ -97,6 +105,12 @@ export const getPriority = (raceEntity: RaceEntity): number => {
     const { raceGrade, raceStage: stage, raceType } = raceEntity;
 
     // stage は省略可能なフィールドのため、未設定なら対象外
+    // Stryker disable next-line BlockStatement,ConditionalExpression : 早期returnを外して
+    // フォールスルーさせても、StagePriorityList の stage は型上常に string であり
+    // `item.stage === undefined` が真になることは無いため match は必ず undefined になり、
+    // DEFAULT_STAGE_PRIORITY_INFO（priority: 0）に自然にフォールバックする。結果は
+    // 早期return時と同じ 0 になり外部から観測可能な差は無い（手動で分岐を除去してテスト
+    // スイートを実行し、全テストがgreenのまま変化しないことを確認済み）。
     if (stage === undefined) {
         return 0;
     }
@@ -122,6 +136,10 @@ const isSpecifiedOverrideStage = (raceEntity: RaceEntity): boolean => {
     const { raceGrade, raceStage: stage, raceType } = raceEntity;
 
     // stage は省略可能なフィールドのため、未設定なら対象外
+    // Stryker disable next-line BlockStatement,ConditionalExpression : 上の getPriority と同じ理由。
+    // stage が string 型の StagePriorityList.stage と一致することは無いため、早期returnを
+    // 外してもフォールスルーで DEFAULT_STAGE_PRIORITY_INFO.specifiedOverride（false）に
+    // 自然にフォールバックし、結果は変わらない（手動検証済み）。
     if (stage === undefined) {
         return false;
     }

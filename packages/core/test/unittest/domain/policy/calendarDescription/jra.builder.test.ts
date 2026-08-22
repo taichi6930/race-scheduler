@@ -6,7 +6,10 @@ import {
     validatePlaceId,
     validateRaceId,
 } from '@race-schedule/core';
-import { getJraDescription } from '../../../../../src/domain/policy/calendarDescription/jra.builder';
+import {
+    buildJraRaceLinks,
+    getJraDescription,
+} from '../../../../../src/domain/policy/calendarDescription/jra.builder';
 
 const JRA_ENTITY: RaceEntity = {
     raceId: validateRaceId('jra202501010501'),
@@ -69,5 +72,23 @@ describe('getJraDescription', () => {
 
         expect(result).toContain('更新日時:');
         expect(result).toContain('12:30');
+    });
+});
+
+describe('buildJraRaceLinks', () => {
+    // placeHeldDays は省略可能なフィールドのため、未設定時は
+    // heldTimes/heldDayTimes ともに 1 にフォールバックしてURLを組み立てる
+    // （optional chaining + ?? 1 のフォールバック挙動を直接検証する）。
+    it('placeHeldDaysが未設定の場合、heldTimes/heldDayTimesを1にフォールバックしてURLを組み立てる', () => {
+        const entityWithoutPlaceHeldDays: RaceEntity = {
+            ...JRA_ENTITY,
+            placeHeldDays: undefined,
+        };
+
+        const links = buildJraRaceLinks(entityWithoutPlaceHeldDays);
+
+        // raceIdForNetkeiba = year(2025) + placeCode(05) + heldTimes(01,フォールバック)
+        // + heldDayTimes(01,フォールバック) + raceNumber(01) = 202505010101
+        expect(links[0]?.url).toContain('race_id%3D202505010101');
     });
 });
