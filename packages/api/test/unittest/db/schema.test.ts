@@ -22,6 +22,20 @@
  * 単一カラムPK（`col.primary === true`）を対象外とする（複合PKの各カラムは
  * `.notNull()` が別途明示されており実際に notnull:1 を返すため対象に含める）。
  *
+ * @remarks 検証済みの等価ミュータント（Stryker実行で確認、対処不要）
+ * 1. カラム名の第1引数（例: `text('nickname')`）を空文字列に変える StringLiteral
+ *    ミュータント。drizzleは第1引数が空文字列（falsy）だとJSプロパティ名へ
+ *    フォールバックする仕様があり、プロパティ名とDBカラム名が一致している
+ *    箇所（user/credential/invite/session/webauthnChallenge/joinRequest等）では
+ *    ミュータント適用後も実DBとの比較結果が変わらない（本テストの比較方法では
+ *    原理的に検知不能）。
+ * 2. `integer('id').primaryKey({ autoIncrement: true })` の `autoIncrement` を
+ *    `false`/省略に変える ObjectLiteral/BooleanLiteral ミュータント。
+ *    `PRAGMA table_info` はAUTOINCREMENT有無を一切報告しないため、この
+ *    比較方法では原理的に検知不能。
+ * 3. `.default(値)` の値そのものを別の値に変える StringLiteral ミュータント
+ *    （T3-cはデフォルト値の有無のみ比較し内容は比較しない設計のため、意図的に対象外）。
+ *
  * ## デシジョンテーブル
  *
  * | ケース | 検証対象 | 期待値 |
@@ -238,4 +252,19 @@ describe('src/db/schema.ts と packages/db/migrations の整合性', () => {
             );
         },
     );
+
+    // T4の上記2つのit.eachは `getTableConfig(table).indexes`/`.primaryKeys` を
+    // テストケース自体の生成（it.eachの引数）に使っている。そのため
+    // `(table) => [uniqueIndex(...)]` が丸ごと `(table) => []` に書き換えられると、
+    // 検証すべきテストケース自体が生成されなくなり、ミュータントを検知できない
+    // （Stryker実行で実際にArrayDeclarationミュータントの生存を確認済み）。
+    // 複合PRIMARY KEYの丸ごと削除はT1/T2/T3側（it.eachの生成元がschemaTables固定で
+    // 影響を受けない）で検知できるため対象外だが、明示的uniqueIndexには同種の
+    // 独立した検証が無いため、既知のテーブル名を直接指定して配列が空でないことを検証する。
+    it('T4: 明示的インデックスを持つテーブルで配列が空でないこと', () => {
+        expect(getTableConfig(schema.place).indexes.length).toBeGreaterThan(0);
+        expect(
+            getTableConfig(schema.releaseNote).indexes.length,
+        ).toBeGreaterThan(0);
+    });
 });
