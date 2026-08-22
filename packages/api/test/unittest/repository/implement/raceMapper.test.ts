@@ -18,6 +18,7 @@
  * | R11 | race_stage が無い行（JRA） | raceStageConfirmed: undefined | 非機械式は対象外 |
  * | R12 | race_stage ありでrace_stage_confirmedが欠如した行 | raceStageConfirmed: true | 既存行との後方互換 |
  * | R13 | race_stage ありでrace_stage_confirmedが0の行 | raceStageConfirmed: false | マスタ未一致の仮登録 |
+ * | R14 | placeName・raceName・gradeが全て欠如し、findPlaceNameByCodeも該当なしの行 | Error | raceCourse/raceName/raceGradeが空文字にフォールバックした後、後続のスキーマ検証で失敗 |
  *
  * ## カバレッジ目標: 行・分岐カバレッジ 100%
  */
@@ -341,5 +342,23 @@ describe('RaceMapper.toEntity', () => {
         const entity = RaceMapper.toEntity(row);
 
         expect(entity.raceStageConfirmed).toBe(false);
+    });
+
+    // R14: placeName・raceName・gradeが全て欠如し、locationCodeもマスタに存在しないため
+    // findPlaceNameByCodeもnullを返す行 → raceCourse/raceName/raceGradeが全て空文字へ
+    // フォールバックする（resolveRaceCourse・raceName/raceGradeの`??`分岐を通す）。
+    // raceNameは空文字だと後続のRaceEntitySchema検証で失敗するため、最終的にErrorになる。
+    it('R14: placeName・raceName・gradeが全て欠如し該当開催場も見つからない行は空文字にフォールバックしバリデーションエラーになる', () => {
+        const row = {
+            raceId: 'jra202501010501',
+            placeId: 'jra2025010199',
+            raceType: 'jra',
+            dateTime: '2025-01-01T09:00:00+09:00',
+            locationCode: '99', // マスタに存在しないコード
+            raceNumber: 1,
+            // placeName / raceName / grade は省略（欠如）
+        };
+
+        expect(() => RaceMapper.toEntity(row)).toThrow();
     });
 });

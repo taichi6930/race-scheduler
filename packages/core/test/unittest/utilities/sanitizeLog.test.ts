@@ -24,6 +24,7 @@
  * | T-16 | `auth`/`token` を部分文字列として含むだけの通常の英単語（authenticate/unauthorized） | 単語境界一致のため誤マスクしない（SEC-020） |
  * | T-17 | ネストしたオブジェクトの文字列値に埋め込まれたトークン | 値のみマスク（SEC-020） |
  * | T-18 | Error でないプリミティブ文字列に埋め込まれたトークン | 値のみマスク（SEC-020） |
+ * | T-19 | オブジェクトのプロパティ値がnull/undefined（ネスト内） | isNullish分岐でそのまま透過する |
  */
 
 import { afterEach, describe, expect, it } from 'bun:test';
@@ -308,6 +309,26 @@ describe('sanitizeError', () => {
 
             // Assert
             expect(result).toEqual({ count: 3, flag: false, note: 'ok' });
+        });
+
+        it('[T-19] sanitizeError_ネストしたプロパティ値がnull_そのまま透過すること', () => {
+            // Arrange
+            // トップレベルのnull/undefinedはsanitizeError側で先に処理される
+            // （T-09）ため、ここではmaskSensitiveFields内部のisNullish分岐
+            // （line160）を直接通すためネストしたプロパティ値をnull/undefinedにする。
+            const obj = { nested: { value: null, other: undefined } };
+
+            // Act
+            const result = sanitizeError(obj);
+
+            // Assert
+            interface Nested {
+                value: null;
+                other: undefined;
+            }
+            const nested = result.nested as Nested;
+            expect(nested.value).toBeNull();
+            expect(nested.other).toBeUndefined();
         });
     });
 

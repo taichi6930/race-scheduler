@@ -18,10 +18,13 @@
  * | 11 | processJraRaceName | (フォールバック)3歳上900万下 | 正規化対象外・そのまま | Lines |
  * | 12 | processJraRaceName | (フォールバック)2019年5月31日開催・4歳上1000万下 | 施行日前のため正規化対象外・そのまま | Lines |
  * | 13 | processJraRaceName | (フォールバック)2019年6月1日開催・4歳上1000万下 | 施行日当日は正規化対象 → 4歳上2勝クラス | Lines |
+ * | 14 | isMatchingPattern | keywordPatternList未指定のパターン（他条件は一致） | true（キーワード判定なしで無条件マッチ） | Branch |
  */
 
 import { describe, expect, it } from 'bun:test';
 import { processJraRaceName } from '@race-schedule/core';
+
+import { isMatchingPattern } from '../../../../../src/domain/service/raceNaming/processJraRaceName';
 
 describe('processJraRaceName', () => {
     describe('パターンマッチング - 優先度判定', () => {
@@ -546,6 +549,36 @@ describe('processJraRaceName', () => {
             });
 
             expect(result).toBe('4歳上2勝クラス');
+        });
+    });
+
+    describe('isMatchingPattern', () => {
+        it('T-14: keywordPatternListが未指定のパターンでは他条件のみでマッチする', () => {
+            // Arrange
+            // RACE_PATTERNS の全エントリはkeywordPatternListを持つため、
+            // `if (pattern.keywordPatternList)` の暗黙else（未指定側）は
+            // processJraRaceName経由では到達できない。isMatchingPatternへ
+            // 直接keywordPatternListを持たないパターンを渡して検証する。
+            const date = new Date('2024-11-15T12:00:00Z');
+            const pattern = {
+                shortName: 'キーワード条件なしパターン',
+                placeList: ['阪神'],
+                gradeList: ['GⅠ'],
+            };
+
+            // Act
+            const result = isMatchingPattern(
+                {
+                    name: '任意のレース名',
+                    place: '阪神',
+                    grade: 'GⅠ',
+                    date,
+                },
+                pattern,
+            );
+
+            // Assert
+            expect(result).toBe(true);
         });
     });
 });

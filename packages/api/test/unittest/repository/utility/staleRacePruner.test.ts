@@ -7,6 +7,16 @@
  * |------|-----------------------------------------------|-----------------------------|----------------------------------------------|
  * | S-01 | 同一placeIdにfresh/stale各1行ずつ            | freshのみ                   | staleのみ削除される                        |
  * | S-02 | 101件のplaceIdごとにfresh/stale各1行ずつ     | 101件（各placeIdのfreshのみ）| チャンク分割されても全placeId分stale削除される（Issue #2378） |
+ *
+ * ## デシジョンテーブル: buildFreshRaceIdsByPlace
+ * | #    | succeededEntities        | failedPlaceIds        | 期待結果                          |
+ * |------|---------------------------|-------------------------|--------------------------------------|
+ * | S-03 | 2件（placeId A/B）        | Aのみ                    | Aは集約結果から除外されBのみ残る    |
+ *
+ * ## デシジョンテーブル: findStaleRaceIds
+ * | #    | dateRangeByPlace                          | 期待結果                          |
+ * |------|---------------------------------------------|--------------------------------------|
+ * | S-04 | 対象placeIdのキーが無い（防御的分岐、通常はbuildFetchedDateTimeRangeByPlaceが必ず同じキー集合を作るため到達しない） | 範囲不明として除外され空配列を返す |
  */
 import { describe, expect, it } from 'bun:test';
 import {
@@ -20,7 +30,11 @@ import { eq } from 'drizzle-orm';
 import { type DrizzleD1Database, drizzle } from 'drizzle-orm/d1';
 
 import * as schema from '../../../../src/db/schema';
-import { pruneStaleRaces } from '../../../../src/repository/utility/staleRacePruner';
+import {
+    buildFreshRaceIdsByPlace,
+    findStaleRaceIds,
+    pruneStaleRaces,
+} from '../../../../src/repository/utility/staleRacePruner';
 import { createInMemoryD1Database } from '../../../common/inMemoryD1';
 
 /** placeId/raceId 用の連番から、jraのplaceId（jra + yyyymmdd + locationCode）を組み立てる */
@@ -115,5 +129,51 @@ describe('pruneStaleRaces', () => {
         const rows = await db.select().from(schema.race);
         expect(rows).toHaveLength(placeCount);
         expect(rows.every((row) => row.raceId.endsWith('01'))).toBe(true);
+    });
+});
+
+describe('buildFreshRaceIdsByPlace', () => {
+    // S-03: failedPlaceIdsに含まれるplaceIdのエンティティは集約結果から除外される
+    it('S-03: failedPlaceIdsに含まれるplaceIdは集約結果から除外される', () => {
+        const placeIdA = buildPlaceIdString(0);
+        const placeIdB = buildPlaceIdString(1);
+        const entityA = buildRaceEntity('01', placeIdA);
+        const entityB = buildRaceEntity('01', placeIdB);
+
+        const result = buildFreshRaceIdsByPlace(
+            [entityA, entityB],
+            new Set([entityA.placeId]),
+        );
+
+        expect(result.has(entityA.placeId)).toBe(false);
+        expect(result.get(entityB.placeId)).toEqual(new Set([entityB.raceId]));
+    });
+});
+
+describe('findStaleRaceIds', () => {
+    // S-04: dateRangeByPlaceに対象placeIdの範囲情報が無い場合（本来
+    // buildFetchedDateTimeRangeByPlaceが必ず同じキー集合を作るため通常到達しない
+    // 防御的分岐）は、範囲不明として stale 判定から除外する。
+    it('S-04: dateRangeByPlaceに該当開催場の範囲情報が無い行はstale判定から除外される', async () => {
+        const db: DrizzleD1Database<typeof schema> = drizzle(
+            createInMemoryD1Database(),
+            { schema },
+        );
+        const placeIdString = buildPlaceIdString(0);
+        // freshRaceIdsに含まれないraceIdを1件だけ登録する（stale候補にする）
+        const staleEntity = buildRaceEntity('01', placeIdString);
+        await seedRaceRow(db, staleEntity);
+        const placeIdToFreshRaceIds = new Map([
+            [staleEntity.placeId, new Set<string>()],
+        ]);
+        const dateRangeByPlace = new Map(); // 意図的に範囲情報を空にする
+
+        const staleRaceIds = await findStaleRaceIds(
+            db,
+            placeIdToFreshRaceIds,
+            dateRangeByPlace,
+        );
+
+        expect(staleRaceIds).toEqual([]);
     });
 });

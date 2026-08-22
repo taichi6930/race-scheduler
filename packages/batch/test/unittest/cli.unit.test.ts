@@ -28,6 +28,7 @@
  * | M-10 | 複数raceType（jra,nar）・全件成功      | 両方のexecuteMultipleBatchesが呼ばれ、結果が全て集約される（PERF-068） |
  * | M-11 | 複数raceType・1件がreject              | 他のraceTypeの結果は反映されつつexit(1)（Promise.allSettledの効果） |
  * | M-12 | 複数raceType・並列実行                 | 直列合計より短時間で完了する（実際に並列化されていること） |
+ * | M-13 | dependencies 引数を省略                | 既定値（defaultMainDependencies）が使われる（default-arg分岐） |
  *
  * ## デシジョンテーブル: run()
  *
@@ -35,6 +36,7 @@
  * |------|----------------------------|----------------------------------------|
  * | R-01 | main が成功                | run が正常終了する                    |
  * | R-02 | main が例外を throw        | error 出力し exit(1)                  |
+ * | R-03 | dependencies 引数を省略    | 既定値（defaultMainDependencies）が使われる（default-arg分岐） |
  */
 
 import { afterEach, beforeEach, describe, expect, it, spyOn } from 'bun:test';
@@ -291,6 +293,16 @@ describe('cli', () => {
             // 直列なら 3 * delayMs 以上かかるが、並列であれば delayMs 程度で完了する
             expect(elapsedMs).toBeLessThan(delayMs * 3);
         });
+
+        it('[M-13] dependencies引数を省略_既定値が使われ引数不足のUsageエラーとなる', async () => {
+            // Arrange: 引数不足（parseAndValidateArgs内）でprocess.exit(1)がdependencies利用前に
+            // 発生するため、defaultMainDependencies（実際のexecuteMultipleBatches/getApiConfig）が
+            // 実際に呼ばれることなく、default-arg分岐（dependencies省略時に既定値が使われること）を検証できる
+            process.argv = ['bun', 'cli.ts', 'JRA'];
+
+            await expect(main()).rejects.toThrow(ProcessExitSignal);
+            expect(exitSpy).toHaveBeenCalledWith(1);
+        });
     });
 
     describe('run', () => {
@@ -326,6 +338,16 @@ describe('cli', () => {
 
             await expect(run(deps)).rejects.toThrow(ProcessExitSignal);
 
+            expect(exitSpy).toHaveBeenCalledWith(1);
+        });
+
+        it('[R-03] dependencies引数を省略_既定値が使われ引数不足のUsageエラーとなる', async () => {
+            // Arrange: main() 内の引数不足チェックで process.exit(1) が投げられ、
+            // run() の catch 節が再度 process.exit(1) を呼ぶため、default-arg分岐を
+            // defaultMainDependencies が実際にネットワーク呼び出しされることなく検証できる
+            process.argv = ['bun', 'cli.ts', 'JRA'];
+
+            await expect(run()).rejects.toThrow(ProcessExitSignal);
             expect(exitSpy).toHaveBeenCalledWith(1);
         });
     });

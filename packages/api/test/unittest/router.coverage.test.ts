@@ -29,12 +29,18 @@
  * | T-21 | POST /auth/join-requests/:id/approve | controller.approveJoinRequest が throw | 500・handleApiError で返る |
  * | T-22 | POST /auth/join-requests/:id/reject | controller.rejectJoinRequest が throw | 500・handleApiError で返る |
  * | T-23 | OPTIONS /race（プリフライト） | Access-Control-Request-Headers: Authorization | Access-Control-Allow-HeadersにAuthorizationが含まれる（回帰） |
+ * | T-24 | POST /auth/join-requests/:id/approve | Honoのparam('id')がundefined | 400（idガードのフェイルクローズ） |
+ * | T-25 | POST /auth/join-requests/:id/reject | Honoのparam('id')がundefined | 400（idガードのフェイルクローズ） |
+ * | T-26 | GET /auth/join-request/:id | Honoのparam('id')がundefined | 400（idガードのフェイルクローズ） |
+ * | T-27 | PATCH /auth/credential/:id | Honoのparam('id')がundefined | 400（idガードのフェイルクローズ） |
+ * | T-28 | ensureDIInitialized | isUseInMemoryDB(env)がfalse | containerの再初期化（clearInstances/initializeDIForInMemory）をスキップする |
  */
 import 'reflect-metadata';
 
-import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it, spyOn } from 'bun:test';
 import { DI_TOKENS, SERVICE_AUTH_HEADER } from '@race-schedule/core';
 import { type DrizzleD1Database, drizzle } from 'drizzle-orm/d1';
+import { HonoRequest } from 'hono/request';
 import { container } from 'tsyringe';
 
 import { AuthController } from '../../src/controller/authController';
@@ -43,7 +49,11 @@ import { DebugController } from '../../src/controller/debugController';
 import { PlaceController } from '../../src/controller/placeController';
 import * as schema from '../../src/db/schema';
 import type { IDrizzleGateway } from '../../src/gateway/interface/IDrizzleGateway';
-import { router } from '../../src/router';
+import {
+    ensureDIInitialized,
+    resetDIInitializedStateForTests,
+    router,
+} from '../../src/router';
 import { createInMemoryD1Database } from '../common/inMemoryD1';
 import {
     buildMockHonoEnv as buildMockEnv,
@@ -82,6 +92,19 @@ const warmUpDI = async (): Promise<void> => {
 const registerGateway = (gateway: IDrizzleGateway): void => {
     container.register(DI_TOKENS.DrizzleGateway, { useValue: gateway });
 };
+
+/**
+ * `HonoRequest.prototype.param`を1回だけundefinedに差し替える。
+ * `param`はHonoのルート文字列リテラル型に依存した複雑なオーバーロード型を持ち、
+ * `ReturnType`抽出は最後のオーバーロード（引数無し版、`{}`相当）にしか効かないため、
+ * `mockReturnValueOnce`へ直接`undefined`を渡すと型エラーになる。ここで一度だけ
+ * `unknown`経由の変換に閉じ込め、呼び出し側では素の`spyOn`を書かないようにする。
+ * @returns スタブを解除するための`mockRestore`を持つスパイ
+ */
+const stubHonoParamUndefinedOnce = (): { mockRestore: () => void } =>
+    spyOn(HonoRequest.prototype, 'param').mockReturnValueOnce(
+        undefined as unknown as ReturnType<HonoRequest['param']>,
+    );
 
 /** select チェーンが必ず reject する DrizzleD1Database の最小フェイク（T-06用） */
 const buildFailingSelectDb = (
@@ -797,6 +820,121 @@ describe('API Router (追加カバレッジ)', () => {
 
             // Assert
             expect(response.status).toBe(500);
+        });
+    });
+
+    /**
+     * Honoの`:id`ルーティングは仕組み上、空セグメントには最初からマッチしない
+     * （例: `/auth/join-requests//approve`は404）ため、実際のHTTPリクエストだけでは
+     * `if (!id) return badRequest(...)`のtrue側（ガード発火）を再現できない。
+     * `c.req.param()`の型（`string | undefined`）が示すとおりの防御的分岐であり、
+     * `HonoRequest.prototype.param`を一時的にスタブしてハンドラ内の戻り値だけを
+     * undefinedに差し替えることで、フェイルクローズ動作を直接検証する
+     * （ルーティング自体は正常なパスで通過させるため、`mockReturnValueOnce`で
+     * ハンドラ内の最初の`param('id')`呼び出し1回分だけを差し替える）。
+     */
+    describe('idパスパラメータガード（Honoが空セグメントを渡さないため通常到達しない防御的分岐）', () => {
+        it('T-24: POST /auth/join-requests/:id/approveはparamがundefinedのとき400を返す', async () => {
+            const paramSpy = stubHonoParamUndefinedOnce();
+            const request = new Request(
+                'http://localhost/auth/join-requests/placeholder/approve',
+                { method: 'POST', headers: authHeaders() },
+            );
+
+            const response = await router.fetch(request, mockEnv);
+            paramSpy.mockRestore();
+
+            expect(response.status).toBe(400);
+        });
+
+        it('T-25: POST /auth/join-requests/:id/rejectはparamがundefinedのとき400を返す', async () => {
+            const paramSpy = stubHonoParamUndefinedOnce();
+            const request = new Request(
+                'http://localhost/auth/join-requests/placeholder/reject',
+                { method: 'POST', headers: authHeaders() },
+            );
+
+            const response = await router.fetch(request, mockEnv);
+            paramSpy.mockRestore();
+
+            expect(response.status).toBe(400);
+        });
+
+        it('T-26: GET /auth/join-request/:idはparamがundefinedのとき400を返す', async () => {
+            const paramSpy = stubHonoParamUndefinedOnce();
+            const request = new Request(
+                'http://localhost/auth/join-request/placeholder',
+            );
+
+            const response = await router.fetch(request, mockEnv);
+            paramSpy.mockRestore();
+
+            expect(response.status).toBe(400);
+        });
+
+        it('T-27: PATCH /auth/credential/:idはparamがundefinedのとき400を返す', async () => {
+            const db = drizzle(mockEnv.DB, { schema });
+            const sessionHeaders = await insertTestSession(db);
+            const paramSpy = stubHonoParamUndefinedOnce();
+            const request = new Request(
+                'http://localhost/auth/credential/placeholder',
+                {
+                    method: 'PATCH',
+                    headers: {
+                        ...sessionHeaders,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ deviceLabel: '新ラベル' }),
+                },
+            );
+
+            const response = await router.fetch(request, mockEnv);
+            paramSpy.mockRestore();
+
+            expect(response.status).toBe(400);
+        });
+    });
+
+    /**
+     * `ensureDIInitialized`はモジュールスコープの初期化済みフラグ（プロセス全体で共有）を
+     * 持つため、他のテストが既に初期化を終えた後では`isUseInMemoryDB(env)`がfalse側の
+     * 分岐（本番D1相当の初期化パス、container再初期化をスキップする）を再現できない。
+     * `resetDIInitializedStateForTests`でフラグを一時的にリセットし検証するが、
+     * `_state`・`EnvStore`・`container`はいずれもプロセス全体で共有される状態のため、
+     * 本テストは`await`を一切挟まない同期処理としてまとめている（JSのシングルスレッド・
+     * run-to-completion特性により、他ファイルの並行実行中のテストがこの間に割り込む
+     * 余地を無くすため）。終了時に必ず元の「DI初期化済み・in-memoryモード」の状態へ戻す。
+     */
+    describe('ensureDIInitialized（isUseInMemoryDBがfalseの分岐）', () => {
+        it('T-28: isUseInMemoryDBがfalseのときcontainerの再初期化をスキップすること', () => {
+            const marker: IDrizzleGateway = {
+                db: drizzle(createInMemoryD1Database(), { schema }),
+            };
+            // isEnvFlagTrueはenv側とprocess.env側のOR判定のため、setupGlobalMocksが
+            // 設定したprocess.env.USE_IN_MEMORY_DB='true'も一時的に外す必要がある
+            const originalProcessEnvFlag = process.env.USE_IN_MEMORY_DB;
+            delete process.env.USE_IN_MEMORY_DB;
+
+            resetDIInitializedStateForTests();
+            container.register<IDrizzleGateway>(DI_TOKENS.DrizzleGateway, {
+                useValue: marker,
+            });
+
+            const prodEnv = { ...mockEnv, USE_IN_MEMORY_DB: 'false' };
+            ensureDIInitialized(prodEnv);
+
+            expect(
+                container.resolve<IDrizzleGateway>(DI_TOKENS.DrizzleGateway),
+            ).toBe(marker);
+
+            // 他のテストが前提とする「DI初期化済み・in-memoryモード」の状態へ確実に戻す
+            if (originalProcessEnvFlag === undefined) {
+                delete process.env.USE_IN_MEMORY_DB;
+            } else {
+                process.env.USE_IN_MEMORY_DB = originalProcessEnvFlag;
+            }
+            resetDIInitializedStateForTests();
+            ensureDIInitialized(mockEnv);
         });
     });
 });

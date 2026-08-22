@@ -28,6 +28,10 @@
  * | T-11 | POST raceTypes/targets/日付を指定して成功                 | 202・Workflow.createにそのままparamsとして渡される       |
  * | T-12 | POST bodyがJSONとして妥当だがオブジェクトでない（null）    | 400 'Bad Request' / 'Invalid JSON body'                 |
  * | T-13 | GET /health（連続2回、CORS_ALLOWED_ORIGINSを変更）        | 2回目のリクエストにも変更後のOriginが反映される（PERF-048）|
+ * | T-14 | POST startDate/finishDateのみ指定（raceTypes/targets省略） | 202・raceTypes/targetsの `?? 既定値` フォールバックが使われる |
+ * | T-15 | GET /health（CORS_ALLOWED_ORIGINS未設定）                  | 200・`process.env.CORS_ALLOWED_ORIGINS ?? ''` のフォールバックが使われる |
+ * | T-16 | GET /health（許可リストに無いOrigin）                       | Access-Control-Allow-Originヘッダが付与されない（拒否分岐） |
+ * | T-17 | GET /health（CORS_ALLOWED_ORIGINS='*'）                    | Access-Control-Allow-Origin: '*'（全許可分岐、テスト用途） |
  */
 
 import { afterEach, beforeEach, describe, expect, it, spyOn } from 'bun:test';
@@ -168,6 +172,105 @@ describe('router', () => {
         } finally {
             // Cleanup: 他テストへ影響しないようCORS_ALLOWED_ORIGINSを復元する
             process.env.CORS_ALLOWED_ORIGINS = originalCorsEnv;
+        }
+    });
+
+    it('T-14_startDateとfinishDateのみ指定_raceTypesとtargetsのフォールバック既定値で成功する', async () => {
+        // Arrange: raceTypes/targets を省略しつつ startDate/finishDate は指定することで、
+        // validateRangeIfDatesProvided 経由で `raceTypes ?? ALL_RACE_TYPES_FOR_BATCH` /
+        // `targets ?? ALL_EXEC_TARGETS` のフォールバック分岐（未指定側）を通す。
+        // 全raceType×全target中の最小上限（race×keirin等=10日）に収まる短い期間にする。
+        fetchSpy = installLockFetchSpy({ acquired: true });
+
+        // Act
+        const res = await postTrigger(
+            { startDate: '2026-01-01', finishDate: '2026-01-03' },
+            {
+                ...TEST_ENV,
+                BATCH_ALL_WORKFLOW: createSucceedingWorkflowBinding(),
+            },
+        );
+
+        // Assert
+        expect(res.status).toBe(202);
+        const json = (await res.json()) as { success: boolean };
+        expect(json.success).toBe(true);
+    });
+
+    it('T-15_CORSALLOWEDORIGINS未設定でリクエスト_200を返す', async () => {
+        // Arrange: process.env.CORS_ALLOWED_ORIGINS を明示的に未設定にし、
+        // `process.env.CORS_ALLOWED_ORIGINS ?? ''` のフォールバック分岐を通す。
+        const originalCorsEnv = process.env.CORS_ALLOWED_ORIGINS;
+        delete process.env.CORS_ALLOWED_ORIGINS;
+
+        try {
+            // Act
+            const res = await router.request('/health');
+
+            // Assert
+            expect(res.status).toBe(200);
+        } finally {
+            // Cleanup: 他テストへ影響しないよう復元する
+            if (originalCorsEnv === undefined) {
+                delete process.env.CORS_ALLOWED_ORIGINS;
+            } else {
+                process.env.CORS_ALLOWED_ORIGINS = originalCorsEnv;
+            }
+        }
+    });
+
+    it('T-16_許可リストに無いOriginでリクエスト_AccessControlAllowOriginヘッダが付与されない', async () => {
+        // Arrange: CORS_ALLOWED_ORIGINS を特定オリジンに限定し、それ以外のOriginで
+        // リクエストすることで cors コールバックの拒否分岐（`: ''`）を通す。
+        const originalCorsEnv = process.env.CORS_ALLOWED_ORIGINS;
+        process.env.CORS_ALLOWED_ORIGINS = 'http://allowed.example';
+
+        try {
+            // Act
+            const res = await router.fetch(
+                new Request('http://localhost/health', {
+                    headers: { Origin: 'http://not-allowed.example' },
+                }),
+            );
+
+            // Assert
+            expect(res.status).toBe(200);
+            expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull();
+        } finally {
+            // Cleanup: 他テストへ影響しないよう復元する
+            if (originalCorsEnv === undefined) {
+                delete process.env.CORS_ALLOWED_ORIGINS;
+            } else {
+                process.env.CORS_ALLOWED_ORIGINS = originalCorsEnv;
+            }
+        }
+    });
+
+    it("T-17_CORSALLOWEDORIGINSがワイルドカード_AccessControlAllowOriginが'*'になる", async () => {
+        // Arrange: CORS_ALLOWED_ORIGINS='*' を明示指定し、
+        // `if (allowedOrigins.includes('*')) return '*';` の全許可分岐を通す
+        // （テスト用途、router.ts のコメント参照）。
+        const originalCorsEnv = process.env.CORS_ALLOWED_ORIGINS;
+        process.env.CORS_ALLOWED_ORIGINS = '*';
+
+        try {
+            // Act
+            const res = await router.fetch(
+                new Request('http://localhost/health', {
+                    headers: { Origin: 'http://anywhere.example' },
+                }),
+            );
+
+            // Assert
+            expect(res.status).toBe(200);
+            expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*');
+        } finally {
+            // Cleanup: 他テストへ影響しないよう復元する
+            if (originalCorsEnv === undefined) {
+                delete process.env.CORS_ALLOWED_ORIGINS;
+            } else {
+                process.env.CORS_ALLOWED_ORIGINS = originalCorsEnv;
+            }
         }
     });
 
