@@ -71,7 +71,7 @@ describe('admin/controller/renderAdminHeader', () => {
         );
         expect(html).toContain('env-badge production">本番環境');
         expect(html).toContain(
-            '<a class="nav-item nav-external" href="https://race-schedule-widgetbook.pages.dev" target="_blank" rel="noopener noreferrer">Widgetbook（デザインカタログ） ↗</a>',
+            '<a class="nav-item nav-external" href="https://race-scheduler-widgetbook.pages.dev" target="_blank" rel="noopener noreferrer">Widgetbook（デザインカタログ） ↗</a>',
         );
     });
 });

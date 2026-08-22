@@ -32,7 +32,7 @@ const OUTPUT_PATH = 'test-report/allure-results/executor.json';
 // CICD-71対応（2026-08-01）: GitHub Pages（publicリポジトリでのみ無料）から
 // Cloudflare Pagesへ公開先を移行した。プロジェクト名は
 // `.github/workflows/test-report.yml`の`wrangler pages deploy`と一致させること。
-const REPORT_URL = 'https://race-schedule-ci-report.pages.dev/allure/';
+const REPORT_URL = 'https://race-scheduler-ci-report.pages.dev/allure/';
 
 /**
  * GitHub Actions 環境変数から executor 情報を組み立てる。

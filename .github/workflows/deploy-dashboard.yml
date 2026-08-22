@@ -1,0 +1,69 @@
+name: Deploy Report Dashboard
+
+# race-schedule / race-scheduler 両リポジトリに散らばったテスト・カバレッジ・品質レポート
+# （race-schedule-ci-report・race-scheduler-ci-report・race-scheduler-widgetbook・
+# GitHub Issues 等）への入口を1枚のページにまとめた dashboard/index.html を
+# Cloudflare Pages（race-schedule-dashboard）へデプロイする（ユーザー依頼、2026-08-22）。
+#
+# 静的HTML1枚のみでビルド不要のため、Flutterセットアップ等は行わずwranglerだけで完結する。
+# 更新頻度が低く内容もこのリポジトリの他ワークフローに影響しないため、deploy-widgetbook.yml
+# と同様に他デプロイとは独立したワークフローとする。
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "dashboard/**"
+      - ".github/workflows/deploy-dashboard.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-dashboard:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: production
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          filter: blob:none
+
+      # bunx wranglerはルートpackage.jsonでバージョン固定されたdevDependencyを使うため、
+      # ルートでのbun installが必要（deploy-widgetbook.ymlと同じ理由）。
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+        with:
+          setup-node: 'false'
+
+      - name: "🔍 Validate Cloudflare Secrets"
+        uses: ./.github/actions/validate-cf-secrets
+        with:
+          cloudflare-api-token: ${{ secrets.CLOUDFLARE_PAGES_API_TOKEN }}
+          cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Ensure Cloudflare Pages project exists
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        # 初回のみプロジェクトが存在しないため作成する。2回目以降は
+        # 「already exists」エラーになるため `|| true` で無視する（他Pagesデプロイと同じ）。
+        run: |
+          bunx wrangler pages project create race-schedule-dashboard \
+            --production-branch main \
+            || true
+
+      - name: Deploy dashboard to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          bunx wrangler pages deploy dashboard/ \
+            --project-name race-schedule-dashboard \
+            --branch main

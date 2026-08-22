@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>race-schedule レポートダッシュボード</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml" />
+<style>
+  :root {
+    --bg: #f7f7f8;
+    --card-bg: #ffffff;
+    --border: #e2e2e6;
+    --text: #1a1a1e;
+    --text-dim: #63636c;
+    --accent: #3457d5;
+    --accent-bg: #eef1fc;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17171a;
+      --card-bg: #202024;
+      --border: #33333a;
+      --text: #e9e9ec;
+      --text-dim: #a1a1aa;
+      --accent: #7c93f2;
+      --accent-bg: #22273f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 2.5rem 1.25rem 4rem;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic UI", "Segoe UI", sans-serif;
+    line-height: 1.6;
+  }
+  main { max-width: 880px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin: 0 0 0.4rem; }
+  .lead { color: var(--text-dim); margin: 0 0 2.2rem; font-size: 0.95rem; }
+  h2 {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-dim);
+    margin: 2.2rem 0 0.8rem;
+  }
+  .repo-group {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--card-bg);
+    overflow: hidden;
+    margin-bottom: 1rem;
+  }
+  .repo-header {
+    padding: 0.9rem 1.1rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+  .repo-header strong { font-size: 1.02rem; }
+  .repo-header span { color: var(--text-dim); font-size: 0.85rem; }
+  ul.links { list-style: none; margin: 0; padding: 0; }
+  ul.links li {
+    border-top: 1px solid var(--border);
+  }
+  ul.links li:first-child { border-top: none; }
+  ul.links a {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 1.1rem;
+    color: var(--text);
+    text-decoration: none;
+  }
+  ul.links a:hover { background: var(--accent-bg); }
+  ul.links a .label { font-weight: 500; }
+  ul.links a .desc { color: var(--text-dim); font-size: 0.82rem; }
+  ul.links a .arrow { color: var(--accent); flex-shrink: 0; }
+  .note {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.9rem 1.1rem;
+    background: var(--card-bg);
+    font-size: 0.88rem;
+    color: var(--text-dim);
+  }
+  .note strong { color: var(--text); }
+  footer {
+    margin-top: 2.5rem;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>race-schedule レポートダッシュボード</h1>
+  <p class="lead">
+    race-schedule / race-scheduler 両リポジトリのテスト・カバレッジ・品質レポートへの入口をまとめたページです。
+    各リポジトリは main への push・PR・定期実行のタイミングでこれらのレポートを自動更新します。
+  </p>
+
+  <h2>本番 / テストサイト</h2>
+  <div class="repo-group">
+    <div class="repo-header">
+      <strong>race-scheduler</strong>
+      <span>実際に利用者が使うアプリ本体</span>
+    </div>
+    <ul class="links">
+      <li>
+        <a href="https://race-schedule-front-prod.pages.dev">
+          <span><span class="label">front（本番）</span><br /><span class="desc">race-schedule-front-prod.pages.dev</span></span>
+          <span class="arrow">↗</span>
+        </a>
+      </li>
+      <li>
+        <a href="https://race-schedule-front-test.pages.dev">
+          <span><span class="label">front（テスト）</span><br /><span class="desc">race-schedule-front-test.pages.dev</span></span>
+          <span class="arrow">↗</span>
+        </a>
+      </li>
+      <li>
+        <a href="https://race-schedule-admin-prod.tn-product.workers.dev">
+          <span><span class="label">admin（本番）</span><br /><span class="desc">race-schedule-admin-prod.tn-product.workers.dev ・ Cloudflare Access保護あり</span></span>
+          <span class="arrow">↗</span>
+        </a>
+      </li>
+      <li>
+        <a href="https://race-schedule-admin-test.tn-product.workers.dev">
+          <span><span class="label">admin（テスト）</span><br /><span class="desc">race-schedule-admin-test.tn-product.workers.dev ・ Cloudflare Access保護あり</span></span>
+          <span class="arrow">↗</span>
+        </a>
+      </li>
+      <li>
+        <a href="https://race-schedule-prod.tn-product.workers.dev">
+          <span><span class="label">api（本番）</span><br /><span class="desc">race-schedule-prod.tn-product.workers.dev ・ 直接ブラウザで見るものではないが疎通確認用</span></span>
+          <span class="arrow">↗</span>
+        </a>
+      </li>
+      <li>
+        <a href="https://race-schedule-test.tn-product.workers.dev">
+          <span><span class="label">api（テスト）</span><br /><span class="desc">race-schedule-test.tn-product.workers.dev</span></span>
+          <span class="arrow">↗</span>
+        </a>
+      </li>
+    </ul>
+  </div>
+
+  <h2>race-scheduler（front / api / batch / admin / db / core）</h2>
+  <div class="repo-group">
+    <div class="repo-header">
+      <strong>race-scheduler-ci-report</strong>
+      <span>main push・月次・手動実行で更新</span>
+    </div>
+    <ul class="links">
+      <li>
+        <a href="https://race-scheduler-ci-report.pages.dev">
+          <span><span class="label">テスト結果・カバレッジ・仕様網羅率</span><br /><span class="desc">UT / コンポーネント / sIT / UAT / front の実行結果一覧</span></span>
+          <span class="arrow">↗</span>
+        </a>
+      </li>
+      <li>
+        <a href="https://race-scheduler-ci-report.pages.dev/allure/">
+          <span><span class="label">Allure Report</span><br /><span class="desc">実行履歴・トレンドグラフ・タイムライン</span></span>
+          <span class="arrow">↗</span>
+        </a>
+      </li>
+      <li>
+        <a href="https://race-scheduler-ci-report.pages.dev#coverage">
+          <span><span class="label">カバレッジ（C0/C1）</span><br /><span class="desc">パッケージ別・100%達成ファイル数/対象ファイル数</span></span>
+          <span class="arrow">↗</span>
+        </a>
+      </li>
+      <li>
+        <a href="https://race-scheduler-ci-report.pages.dev#spec-coverage">
+          <span><span class="label">仕様網羅率（Spec Coverage）</span><br /><span class="desc">docs/specsとテストのトレーサビリティ</span></span>
+          <span class="arrow">↗</span>
+        </a>
+      </li>
+      <li>
+        <a href="https://race-schedule-mutation-report.pages.dev">
+          <span><span class="label">ミューテーションテスト</span><br /><span class="desc">core / admin / batch / api（週次更新）。アサーションの実効性を検証</span></span>
+          <span class="arrow">↗</span>
+        </a>
+      </li>
+      <li>
+        <a href="https://race-scheduler-widgetbook.pages.dev">
+          <span><span class="label">Widgetbook</span><br /><span class="desc">Flutter デザインカタログ（atoms / molecules / organisms）</span></span>
+          <span class="arrow">↗</span>
+        </a>
+      </li>
+      <li>
+        <a href="https://github.com/taichi6930/race-scheduler/issues?q=is%3Aissue+is%3Aopen+label%3Atest-failure">
+          <span><span class="label">テスト失敗Issue</span><br /><span class="desc">main pushでのテスト失敗が自動起票される</span></span>
+          <span class="arrow">↗</span>
+        </a>
+      </li>
+    </ul>
+  </div>
+
+  <h2>race-schedule（calendar / core / scraping）</h2>
+  <div class="repo-group">
+    <div class="repo-header">
+      <strong>race-schedule-ci-report</strong>
+      <span>main push・月次・手動実行で更新</span>
+    </div>
+    <ul class="links">
+      <li>
+        <a href="https://race-schedule-ci-report.pages.dev">
+          <span><span class="label">テスト結果・カバレッジ・仕様網羅率</span><br /><span class="desc">UT / コンポーネント / sIT / UAT の実行結果一覧</span></span>
+          <span class="arrow">↗</span>
+        </a>
+      </li>
+      <li>
+        <a href="https://race-schedule-ci-report.pages.dev/allure/">
+          <span><span class="label">Allure Report</span><br /><span class="desc">実行履歴・トレンドグラフ・タイムライン</span></span>
+          <span class="arrow">↗</span>
+        </a>
+      </li>
+      <li>
+        <a href="https://race-schedule-ci-report.pages.dev#coverage">
+          <span><span class="label">カバレッジ（C0/C1）</span><br /><span class="desc">パッケージ別・100%達成ファイル数/対象ファイル数</span></span>
+          <span class="arrow">↗</span>
+        </a>
+      </li>
+      <li>
+        <a href="https://race-schedule-ci-report.pages.dev#spec-coverage">
+          <span><span class="label">仕様網羅率（Spec Coverage）</span><br /><span class="desc">docs/specsとテストのトレーサビリティ</span></span>
+          <span class="arrow">↗</span>
+        </a>
+      </li>
+      <li>
+        <a href="https://github.com/taichi6930/race-schedule/issues?q=is%3Aissue+is%3Aopen+label%3Atest-failure">
+          <span><span class="label">テスト失敗Issue</span><br /><span class="desc">main pushでのテスト失敗が自動起票される</span></span>
+          <span class="arrow">↗</span>
+        </a>
+      </li>
+    </ul>
+  </div>
+
+  <h2>その他</h2>
+  <p class="note">
+    <strong>PRごとの行単位カバレッジHTML</strong>（<code>race-scheduler-coverage</code> / <code>race-schedule-coverage</code>）と
+    <strong>Widgetbookのプレビュー</strong>（PRブランチ毎）はPR単位で内容が変わる一時的なプレビューのため、
+    ここには載せていません。各PRのコメント（<code>coverage-html-report</code> / <code>widgetbook-preview</code>）から確認してください。
+  </p>
+
+  <footer>
+    このページは <code>dashboard/index.html</code>（race-scheduler リポジトリ）から
+    <code>race-schedule-dashboard.pages.dev</code> へ自動デプロイされています。リンク切れ・追加要望は
+    <a href="https://github.com/taichi6930/race-scheduler/issues">Issues</a> へ。
+  </footer>
+</main>
+</body>
+</html>

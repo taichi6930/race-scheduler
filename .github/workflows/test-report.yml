@@ -1,8 +1,13 @@
 name: Test Report
 
 # 「何がテストされているか」（UT/コンポーネント/sIT/UAT/front）と直近の実行結果を1枚のHTMLに
-# 集約する scripts/generate-test-report.ts を実行し、Cloudflare Pagesとして公開する
-# （Artifactとしても14日間保持する）。
+# 集約する scripts/generate-test-report.ts を実行し、Cloudflare Pagesとして公開する。
+#
+# CFCOST-10対応（2026-08-22）: 以前はCloudflare Pagesへの公開に加えて
+# actions/upload-artifactでも同じ内容を保持しており、GitHub Actions storageを完全に
+# 無駄遣いしていた（Pages側が既に永続的な公開先のため）。artifactアップロードは削除し、
+# Pages公開のみに一本化した（詳細は.claude/docs/ci-conventions.md「成果物の永続化先」
+# 参照。race-schedule側のsubmodule経由で共有）。
 #
 # pull_request.yml のブロッキングジョブ（test-packages-*・call-component-test）とは別に、
 # 全パッケージ・全レイヤーを毎回まとめて再実行するため、PRごとに実行すると
@@ -16,7 +21,7 @@ name: Test Report
 #
 # 公開先はCloudflare Pages（CICD-71対応、2026-08-01）。GitHub PagesはpublicリポジトリでのみFree/
 # 無制限で、private化すると個人アカウントのGitHub Freeプランでは利用できなくなる制約があった
-# ため移行した。プロジェクト名は `race-schedule-ci-report`（初回のみ`wrangler pages project
+# ため移行した。プロジェクト名は `race-scheduler-ci-report`（初回のみ`wrangler pages project
 # create`で自動作成、2回目以降は`|| true`で既存作成エラーを無視する）。`deploy-front-reusable.yml`
 # と同じ`bunx wrangler pages deploy`パターンを踏襲している。「test-report」という名前だと
 # Worker環境の`test` env（race-schedule-test等）と紛らわしいため、あえて「test」を含まない
@@ -194,7 +199,7 @@ jobs:
           for f in history.json history-trend.json categories-trend.json duration-trend.json retry-trend.json; do
             dest="test-report/allure-results/history/$f"
             curl -sf -o "$dest" \
-              "https://race-schedule-ci-report.pages.dev/allure/history/$f" \
+              "https://race-scheduler-ci-report.pages.dev/allure/history/$f" \
               || rm -f "$dest"
             if [ -f "$dest" ] && [ "$(stat -c%s "$dest")" -gt "$HISTORY_SIZE_CAP_BYTES" ]; then
               echo "::warning::$f が ${HISTORY_SIZE_CAP_BYTES} バイトを超過したためトレンド履歴をリセットします"
@@ -209,14 +214,6 @@ jobs:
       - name: Rebuild HTML report (to link the just-generated Allure report)
         if: always()
         run: bun scripts/generate-test-report.ts build
-
-      - name: Upload test report artifact
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: test-report
-          path: test-report/
-          retention-days: 14
 
       - name: "🔍 Validate Cloudflare Secrets"
         if: always()
@@ -234,7 +231,7 @@ jobs:
         # 「already exists」エラーになるため `|| true` で無視する
         # （`gh label create ... || true` と同じ冪等化パターン）。
         run: |
-          bunx wrangler pages project create race-schedule-ci-report \
+          bunx wrangler pages project create race-scheduler-ci-report \
             --production-branch main \
             || true
 
@@ -245,7 +242,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           bunx wrangler pages deploy test-report/ \
-            --project-name race-schedule-ci-report \
+            --project-name race-scheduler-ci-report \
             --branch main
 
   # generate-test-reportの失敗（=いずれかのテストレイヤーの失敗）をGitHub Issue化する
@@ -331,7 +328,7 @@ jobs:
           - 実行ログ: ${RUN_URL}
 
           全パッケージ・全レイヤー（UT/コンポーネント/front等）のうちいずれかが失敗しています。
-          詳細は上記の実行ログ、または [Allure Report](https://race-schedule-ci-report.pages.dev/allure/#timeline) を確認してください。
+          詳細は上記の実行ログ、または [Allure Report](https://race-scheduler-ci-report.pages.dev/allure/#timeline) を確認してください。
           テストが成功すれば次回チェック時に自動でCloseされます。
 
           _このIssueは \`.github/workflows/test-report.yml\` により自動作成されました。_"
