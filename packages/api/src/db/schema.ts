@@ -85,8 +85,11 @@ export const player = sqliteTable(
         playerNo: text('player_no').notNull(),
         playerName: text('player_name').notNull(),
         priority: integer('priority').notNull(),
-        createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
-        updatedAt: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+        // 0005_player.sqlite.sql は created_at/updated_at にNOT NULLを付与していない
+        // （DEFAULT CURRENT_TIMESTAMPのみ）ため、他テーブルと異なりnotNull()を付けない
+        // （schema.test.tsのT3ドリフト検知で発覚。実DBの構造に合わせるのが正）。
+        createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+        updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
     },
     (table) => [primaryKey({ columns: [table.raceType, table.playerNo] })],
 );
