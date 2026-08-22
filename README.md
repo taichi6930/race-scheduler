@@ -23,7 +23,11 @@ CIに任せてください（詳細方針は [`.claude/docs/ci-conventions.md`](
 - `bun run lint:fix` — フォーマット・大半のlintルールの自動修正（Biome + ESLint）
 - `bun run type-check` — TypeScriptの型チェック
 - `bun run verify` — 上記に加えて全パッケージのテストを実行（CIと同等のフル検証。手元では
-  時間がかかるため通常は不要、CIに任せてよい）
+  時間がかかるため通常は不要、CIに任せてよい）。**`packages/front`（Flutter）は対象外**
+  （TypeScriptパッケージのみをループするため）。front の検証は別途
+  `cd packages/front && flutter test` を実行すること（CIでは `test-packages-front` ジョブが
+  別途走るため取りこぼしは無いが、ローカルで `verify` green だけを見て front も含めて
+  「全部通った」と誤解しないよう注意）
 - その他の `check:*` スクリプト（循環依存・未使用コード・デザインレイヤー違反等）は
   `package.json` の `scripts` を参照
 
