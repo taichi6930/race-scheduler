@@ -38,7 +38,16 @@ coveragePathIgnorePatterns = [
   # bun test 実行環境から解決できないため、テスト可能なロジックを別ファイル
   # （batchAllWorkflowLogic.ts）へ分離した上で本ファイル自体を除外している
   # （cli.ts と同じ設計方針）
-  "packages/batch/src/workflows/batchAllWorkflow.ts"
+  "packages/batch/src/workflows/batchAllWorkflow.ts",
+
+  # テストヘルパー（モック・ファクトリ・環境セットアップ等、test/tests 配下）。
+  # src/ のテスト対象コードではなくテストを補助するための共有インフラのため、
+  # 100%カバレッジ（testing-conventions.md §7.5、対象はsrc/のみ）の対象外であると
+  # 同時に、除外しないとlcovに含まれてgenhtmlレポート（常設ページ）にノイズとして
+  # 表示されてしまう。test-gap-analysis.ts 等は packages/*/src/ を独自に走査して
+  # lcovと突き合わせる実装のため、test/tests側を広く除外してもgap判定への影響は無い
+  "packages/*/test/**",
+  "tests/**"
 ]
 
 
