@@ -21,6 +21,8 @@
  * | T-07 | packages/core/test/unittest/foo.test.ts | core | false（test/配下はsrcでない） |
  * | T-08 | packages/admin/src/foo.ts | core | false（他パッケージのファイル） |
  * | T-09 | packages/core/src/foo.md | core | false（.ts以外） |
+ * | T-13 | packages/core/src/domain/master/gradeMaster.ts | core | false（core限定でdomain/master/除外） |
+ * | T-14 | packages/admin/src/domain/master/foo.ts | admin | true（domain/master除外はcore限定） |
  *
  * ### groupMutationTargets
  * | # | 入力 | 期待 |
@@ -100,6 +102,24 @@ describe('mutation-diff-targets', () => {
             expect(isMutationTarget('packages/core/src/foo.md', 'core')).toBe(
                 false,
             );
+        });
+
+        it('T-13: coreのdomain/master/配下はfalseを返す', () => {
+            expect(
+                isMutationTarget(
+                    'packages/core/src/domain/master/gradeMaster.ts',
+                    'core',
+                ),
+            ).toBe(false);
+        });
+
+        it('T-14: domain/master除外はcore限定で他パッケージには適用されない', () => {
+            expect(
+                isMutationTarget(
+                    'packages/admin/src/domain/master/foo.ts',
+                    'admin',
+                ),
+            ).toBe(true);
         });
     });
 

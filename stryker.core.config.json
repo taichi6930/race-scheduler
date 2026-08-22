@@ -5,7 +5,8 @@
         "packages/core/src/**/*.ts",
         "!packages/core/src/**/index.ts",
         "!packages/core/src/**/constants/**",
-        "!packages/core/src/**/types/**"
+        "!packages/core/src/**/types/**",
+        "!packages/core/src/domain/master/**"
     ],
 
     "testRunner": "command",
