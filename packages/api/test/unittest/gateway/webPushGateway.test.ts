@@ -20,6 +20,7 @@
  * | J1 | Authorization ヘッダーの形式        | `vapid t=<jwt>, k=<publicKey>`             |
  * | J2 | JWT の header/claim                 | alg=ES256, typ=JWT, aud=endpoint origin, sub=VAPID_SUBJECT |
  * | J3 | JWT の署名                          | VAPID公開鍵で検証（crypto.subtle.verify）が true |
+ * | J4 | VAPID秘密鍵のCryptoKeyインポート     | extractable引数がfalse（秘密鍵をexportKeyできない） |
  *
  * ## デシジョンテーブル（RFC 8291 暗号化）
  *
@@ -474,6 +475,38 @@ describe('WebPushGateway', () => {
                 new TextEncoder().encode(`${encodedHeader}.${encodedClaim}`),
             );
             expect(signatureValid).toBe(true);
+        });
+
+        it('J4: VAPID秘密鍵のCryptoKeyはextractable:falseでインポートされること', async () => {
+            // extractable:falseは「この秘密鍵をexportKeyで取り出せない」ことを保証する
+            // セキュリティ上重要な設定。trueに変わっても送信結果（JWT署名等）自体は
+            // 変わらず見た目上は観測できないため、importKeyの呼び出し引数を
+            // 直接検証する（C1-C4と同じ isVapidImportKeyCall フィルタで
+            // VAPID用のECDSA importKey呼び出しのみを抽出する）。
+            const vapid = await generateVapidFixture();
+            EnvStore.setEnv({
+                ...MOCK_ENV_BASE,
+                VAPID_PUBLIC_KEY: vapid.publicKeyBase64Url,
+                VAPID_PRIVATE_KEY: vapid.privateKeyD,
+                VAPID_SUBJECT: 'mailto:test@example.com',
+            } as unknown as CloudFlareEnv);
+            const fixture = await generateSubscriberFixture(
+                'https://push.example.com/subscription/13',
+            );
+            mockFetchWithStatus(201, true);
+            const importKeySpy = spyOn(crypto.subtle, 'importKey');
+
+            await gateway.send(fixture.subscription, {
+                title: 'タイトル',
+                body: '本文',
+            });
+
+            const vapidImportCalls =
+                importKeySpy.mock.calls.filter(isVapidImportKeyCall);
+            expect(vapidImportCalls).toHaveLength(1);
+            const [, , , extractable] = vapidImportCalls[0];
+            expect(extractable).toBe(false);
+            importKeySpy.mockRestore();
         });
 
         it('E2: 送信した暗号文をラウンドトリップ復号すると元のペイロードと一致すること', async () => {

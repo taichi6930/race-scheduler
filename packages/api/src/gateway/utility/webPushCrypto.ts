@@ -103,13 +103,16 @@ async function importVapidPrivateKey(
     const y = toBase64Url(publicKeyBytes.slice(33, 65));
 
     // Stryker disable next-line : BooleanLiteral
-    // ext フラグは VAPID署名用途では extractable=false が RFC仕様必須（署名専用）
+    // JWKのext:trueは「extractableになり得る」ことの申告に過ぎず、実際の
+    // extractability は下記の明示的な extractable 引数（false）で決まる
+    // （Web Crypto APIの仕様上、明示引数がJWKのextより厳しい方向には常に安全）。
+    // そのためこのext値の変更は下記extractable引数がfalseである限り観測不可能（equivalent）。
     return crypto.subtle.importKey(
         'jwk',
         { kty: 'EC', crv: 'P-256', d: privateKeyD, x, y, ext: true },
         { name: 'ECDSA', namedCurve: 'P-256' },
-        // Stryker disable next-line : BooleanLiteral
-        // extractable=false が ECDSA署名専用の必須設定
+        // extractable=false: この秘密鍵をexportKeyで取り出せないようにする
+        // （webPushGateway.test.ts の J4 で importKey 呼び出し引数を直接検証している）
         false,
         ['sign'],
     );
