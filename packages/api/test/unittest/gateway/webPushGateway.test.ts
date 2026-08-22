@@ -18,8 +18,9 @@
  * | # | 検証項目                          | 期待値                                    |
  * |---|-------------------------------------|--------------------------------------------|
  * | J1 | Authorization ヘッダーの形式        | `vapid t=<jwt>, k=<publicKey>`             |
- * | J2 | JWT の header/claim                 | alg=ES256, typ=JWT, aud=endpoint origin, sub=VAPID_SUBJECT |
- * | J3 | JWT の署名                          | VAPID公開鍵で検証（crypto.subtle.verify）が true |
+ * | J2 | JWT の header/claim                 | alg=ES256, typ=JWT, aud=endpoint origin, sub=VAPID_SUBJECT, exp=now+12時間（TTL値そのもの） |
+ * | J3 | JWT の署名                          | VAPID公開鍵で検証（crypto.subtle.verify）が true、Base64URLパディング文字'='を含まない |
+ * | J4 | VAPID秘密鍵のCryptoKeyインポート     | extractable引数がfalse（秘密鍵をexportKeyできない） |
  *
  * ## デシジョンテーブル（RFC 8291 暗号化）
  *
@@ -465,7 +466,17 @@ describe('WebPushGateway', () => {
             expect(header).toEqual({ alg: 'ES256', typ: 'JWT' });
             expect(claim.aud).toBe(new URL(endpoint).origin);
             expect(claim.sub).toBe(subject);
-            expect(claim.exp).toBeGreaterThan(Math.floor(Date.now() / 1000));
+            // VAPID_JWT_TTL_SECONDS（12時間=43200秒）ぶん先の有効期限になっていること。
+            // 「未来であること」だけでなく実際のTTL値も検証する（テスト実行時間分の
+            // 誤差を許容するため60秒の範囲チェックにする）。
+            const now = Math.floor(Date.now() / 1000);
+            expect(claim.exp).toBeGreaterThan(now + 12 * 60 * 60 - 60);
+            expect(claim.exp).toBeLessThanOrEqual(now + 12 * 60 * 60);
+
+            // JWT署名（ECDSA P-256の生署名、常に64バイト=3の倍数でないためBase64URL化すると
+            // パディングが必要になる）にBase64URLのパディング文字'='が含まれないこと
+            // （toBase64UrlのomitPadding:trueが効いていることの検証）。
+            expect(encodedSignature).not.toContain('=');
 
             const signatureValid = await crypto.subtle.verify(
                 { name: 'ECDSA', hash: 'SHA-256' },
@@ -474,6 +485,38 @@ describe('WebPushGateway', () => {
                 new TextEncoder().encode(`${encodedHeader}.${encodedClaim}`),
             );
             expect(signatureValid).toBe(true);
+        });
+
+        it('J4: VAPID秘密鍵のCryptoKeyはextractable:falseでインポートされること', async () => {
+            // extractable:falseは「この秘密鍵をexportKeyで取り出せない」ことを保証する
+            // セキュリティ上重要な設定。trueに変わっても送信結果（JWT署名等）自体は
+            // 変わらず見た目上は観測できないため、importKeyの呼び出し引数を
+            // 直接検証する（C1-C4と同じ isVapidImportKeyCall フィルタで
+            // VAPID用のECDSA importKey呼び出しのみを抽出する）。
+            const vapid = await generateVapidFixture();
+            EnvStore.setEnv({
+                ...MOCK_ENV_BASE,
+                VAPID_PUBLIC_KEY: vapid.publicKeyBase64Url,
+                VAPID_PRIVATE_KEY: vapid.privateKeyD,
+                VAPID_SUBJECT: 'mailto:test@example.com',
+            } as unknown as CloudFlareEnv);
+            const fixture = await generateSubscriberFixture(
+                'https://push.example.com/subscription/13',
+            );
+            mockFetchWithStatus(201, true);
+            const importKeySpy = spyOn(crypto.subtle, 'importKey');
+
+            await gateway.send(fixture.subscription, {
+                title: 'タイトル',
+                body: '本文',
+            });
+
+            const vapidImportCalls =
+                importKeySpy.mock.calls.filter(isVapidImportKeyCall);
+            expect(vapidImportCalls).toHaveLength(1);
+            const [, , , extractable] = vapidImportCalls[0];
+            expect(extractable).toBe(false);
+            importKeySpy.mockRestore();
         });
 
         it('E2: 送信した暗号文をラウンドトリップ復号すると元のペイロードと一致すること', async () => {
