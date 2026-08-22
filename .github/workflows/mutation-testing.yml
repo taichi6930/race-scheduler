@@ -419,6 +419,24 @@ jobs:
                   </html>
                   HTML
 
+            # Cloudflare Pagesは1ファイル25MiB上限。Strykerのhtml reporterは全ミュータント
+            # 情報を1ファイルへ埋め込むため、対象コードの量によっては上限を超えることがある
+            # （2026-08-22、batch/index.htmlが35.9MiBとなりデプロイ全体が失敗、core/admin/api
+            # の正常なレポートまで巻き添えで非公開になる実障害が発生）。超過ファイルはプレース
+            # ホルダへ置き換えて警告を出し、他パッケージのレポートは正常に公開する。
+            - name: Guard against oversized files (Cloudflare Pages 25MiB limit)
+              run: |
+                  set -uo pipefail
+                  find site -type f -size +25M | while read -r f; do
+                    size=$(du -h "$f" | cut -f1)
+                    echo "::warning::${f} は ${size}（25MiB超過）のためプレースホルダに置き換えます"
+                    cat > "$f" <<HTML
+                  <!doctype html>
+                  <html lang="ja"><head><meta charset="utf-8" /><title>レポートが大きすぎます</title></head>
+                  <body><p>このレポートはCloudflare Pagesの1ファイル25MiB上限を超えたため公開できませんでした。詳細はGitHub Actionsのジョブサマリーを確認してください。</p></body></html>
+                  HTML
+                  done
+
             - name: "🔍 Validate Cloudflare Secrets"
               uses: ./.github/actions/validate-cf-secrets
               with:
