@@ -3,8 +3,8 @@
  *
  * | #    | メソッド            | 状況                                     | 期待                              |
  * | ---- | -------------------- | ------------------------------------------- | ----------------------------------- |
- * | T-19 | verifyRegistration    | 正当なfmt:none登録レスポンス（成功）        | sessionToken/nicknameを返し永続化される |
- * | T-20 | verifyLogin           | 実ECDSA署名を持つ正当な認証レスポンス（成功） | sessionToken/nicknameを返しsignCountが更新される |
+ * | T-19 | verifyRegistration    | 正当なfmt:none登録レスポンス（成功）        | sessionToken/nicknameを返し永続化される。createSessionへ渡すexpiresAtは発行から7日後 |
+ * | T-20 | verifyLogin           | 実ECDSA署名を持つ正当な認証レスポンス（成功） | sessionToken/nicknameを返しsignCountが更新される。createSessionへ渡すexpiresAtは発行から7日後 |
  *
  * `authUsecase.test.ts`はrepositoryをmockして失敗分岐（`verifyRegistration`/
  * `verifyAuthentication`がnullを返す）のみ検証しており、成功分岐
@@ -33,6 +33,25 @@ import {
 const RP_ENV = { WEBAUTHN_RP_ID: 'front.example.com' } as never;
 const ORIGIN = 'https://front.example.com';
 const RP_ID = 'front.example.com';
+/** authUsecase.ts内のSESSION_TTL_MS（非export）に対応する期待値（7日）。 */
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+/** Date.now()呼び出しのタイミングずれを許容する誤差。 */
+const TOLERANCE_MS = 2000;
+
+/**
+ * ISO文字列の日時が期待するタイムスタンプ（ms）に近いことを検証する。
+ * TTL算出の演算子が壊れるミューテーションは結果の桁が大きくずれるため
+ * 許容誤差を超えて検知できる（authUsecase.test.tsのexpectIsoCloseToと同趣旨）。
+ * @param actual - 検証対象のISO文字列
+ * @param expectedMs - 期待するタイムスタンプ（エポックミリ秒）
+ */
+const expectIsoCloseTo = (actual: unknown, expectedMs: number): void => {
+    if (typeof actual !== 'string') {
+        throw new TypeError('expected an ISO date string');
+    }
+    const diff = Math.abs(new Date(actual).getTime() - expectedMs);
+    expect(diff).toBeLessThanOrEqual(TOLERANCE_MS);
+};
 
 const buildRepository = (
     overrides?: Partial<IAuthRepository>,
@@ -67,6 +86,14 @@ describe('AuthUsecase（成功パス）', () => {
                 'raw-challenge',
                 credentialId,
             );
+            const createSession = mock(
+                (
+                    _token: string,
+                    _userId: string,
+                    _credentialId: string,
+                    _expiresAt: string,
+                ) => Promise.resolve(),
+            );
             const repository = buildRepository({
                 consumeChallenge: mock(() =>
                     Promise.resolve({
@@ -78,9 +105,11 @@ describe('AuthUsecase（成功パス）', () => {
                 findValidInvite: mock(() =>
                     Promise.resolve({ token: 'invite-token', memo: null }),
                 ),
+                createSession,
             });
             const usecase = new AuthUsecase(repository);
 
+            const before = Date.now();
             const result = await usecase.verifyRegistration({
                 challengeId: 'c1',
                 nickname: 'たなか',
@@ -96,7 +125,16 @@ describe('AuthUsecase（成功パス）', () => {
                 'invite-token',
                 expect.any(String),
             );
-            expect(repository.createSession).toHaveBeenCalled();
+            expect(createSession).toHaveBeenCalledWith(
+                result?.sessionToken,
+                expect.any(String),
+                expect.any(String),
+                expect.any(String),
+            );
+            expectIsoCloseTo(
+                createSession.mock.calls[0]?.[3],
+                before + SEVEN_DAYS_MS,
+            );
         });
     });
 
@@ -117,6 +155,14 @@ describe('AuthUsecase（成功パス）', () => {
                 publicKey,
                 signCount: 0,
             };
+            const createSession = mock(
+                (
+                    _token: string,
+                    _userId: string,
+                    _credentialId: string,
+                    _expiresAt: string,
+                ) => Promise.resolve(),
+            );
             const repository = buildRepository({
                 consumeChallenge: mock(() =>
                     Promise.resolve({
@@ -129,9 +175,11 @@ describe('AuthUsecase（成功パス）', () => {
                     Promise.resolve(storedCredential),
                 ),
                 findUserNickname: mock(() => Promise.resolve('たなか')),
+                createSession,
             });
             const usecase = new AuthUsecase(repository);
 
+            const before = Date.now();
             const result = await usecase.verifyLogin({
                 challengeId: 'c1',
                 credentialResponse: response,
@@ -141,11 +189,21 @@ describe('AuthUsecase（成功パス）', () => {
                 sessionToken: expect.any(String),
                 nickname: 'たなか',
             });
+            if (!result) throw new Error('result must not be null');
             expect(repository.touchCredential).toHaveBeenCalledWith(
                 storedCredential.id,
                 1,
             );
-            expect(repository.createSession).toHaveBeenCalled();
+            expect(createSession).toHaveBeenCalledWith(
+                result.sessionToken,
+                storedCredential.userId,
+                storedCredential.id,
+                expect.any(String),
+            );
+            expectIsoCloseTo(
+                createSession.mock.calls[0]?.[3],
+                before + SEVEN_DAYS_MS,
+            );
         });
     });
 });
