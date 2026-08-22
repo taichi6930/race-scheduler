@@ -575,7 +575,7 @@ jobs:
   # Widgetbook（デザインシステムのウィジェットカタログ、lib/widgetbook.dart）をPRブランチごとに
   # Cloudflare Pagesへプレビューデプロイし、URLをPRコメントで通知する（ユーザー依頼、2026-08-07:
   # 「PRの中でstorybookが見れたらデザイン確認が楽になる」）。
-  # test-report.ymlの race-schedule-ci-report と同じ「初回のみproject create（2回目以降は
+  # test-report.ymlの race-scheduler-ci-report と同じ「初回のみproject create（2回目以降は
   # || trueで無視）→ wrangler pages deploy」パターンを踏襲する。
   # 実行条件: デザインシステム本体（lib/design/**）・カタログのentry point（widgetbook.dart）の
   # 変更時は自動、それ以外のfront変更でプレビューが見たい場合は`widgetbook:preview`ラベルで
@@ -631,9 +631,9 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         # 初回のみプロジェクトが存在しないため作成する。2回目以降は
-        # 「already exists」エラーになるため `|| true` で無視する（race-schedule-ci-reportと同じ）。
+        # 「already exists」エラーになるため `|| true` で無視する（race-scheduler-ci-reportと同じ）。
         run: |
-          bunx wrangler pages project create race-schedule-widgetbook \
+          bunx wrangler pages project create race-scheduler-widgetbook \
             --production-branch main \
             || true
 
@@ -651,7 +651,7 @@ jobs:
           BRANCH_NAME: ${{ github.head_ref }}
         run: |
           bunx wrangler pages deploy build/web \
-            --project-name race-schedule-widgetbook \
+            --project-name race-scheduler-widgetbook \
             --branch "$BRANCH_NAME" | tee /tmp/wrangler-deploy-output.txt
 
           # wranglerの出力から実際のデプロイURLを拾う（deploy-front-reusable.ymlと同じ手法）。

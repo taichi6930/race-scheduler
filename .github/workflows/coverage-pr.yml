@@ -118,9 +118,9 @@ jobs:
                   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
               # 初回のみプロジェクトが存在しないため作成する。2回目以降は
               # 「already exists」エラーになるため `|| true` で無視する
-              # （race-schedule-ci-report/race-schedule-widgetbookと同じ冪等化パターン）。
+              # （race-scheduler-ci-report/race-scheduler-widgetbookと同じ冪等化パターン）。
               run: |
-                  bunx wrangler pages project create race-schedule-coverage \
+                  bunx wrangler pages project create race-scheduler-coverage \
                     --production-branch main \
                     || true
 
@@ -139,7 +139,7 @@ jobs:
                   BRANCH_NAME: ${{ github.head_ref }}
               run: |
                   bunx wrangler pages deploy coverage-html \
-                    --project-name race-schedule-coverage \
+                    --project-name race-scheduler-coverage \
                     --branch "$BRANCH_NAME" | tee /tmp/wrangler-deploy-output.txt
 
                   # wranglerの出力から実際のデプロイURLを拾う（widgetbook-previewと同じ手法）。

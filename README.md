@@ -40,6 +40,12 @@ CIに任せてください（詳細方針は [`.claude/docs/ci-conventions.md`](
 | セキュリティポリシー・脆弱性報告 | [`SECURITY.md`](SECURITY.md) |
 | 貢献方法・PR運用のルール | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
 
+## テスト・品質レポート
+
+race-schedule / race-scheduler 両リポジトリのテスト結果・カバレッジ・Allure Report・Widgetbook等は
+[**レポートダッシュボード（race-schedule-dashboard.pages.dev）**](https://race-schedule-dashboard.pages.dev)
+にまとめています。個別の結果を直接見たい場合は [`race-scheduler-ci-report.pages.dev`](https://race-scheduler-ci-report.pages.dev) へ。
+
 ## 不具合・要望の連絡先
 
 アプリの不具合や機能要望は [GitHub Issues](https://github.com/taichi6930/race-scheduler/issues/new/choose) から報告してください（脆弱性報告は公開Issueではなく [`SECURITY.md`](SECURITY.md) の手順に従ってください）。
