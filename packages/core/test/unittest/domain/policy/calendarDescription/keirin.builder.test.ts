@@ -56,11 +56,28 @@ describe('getKeirinDescription', () => {
         const updateDate = new Date('2025-01-01T12:00:00+09:00');
         const result = getKeirinDescription(gpEntity, updateDate);
 
-        expect(result).toContain('ぺーちゃんねる');
+        // ラベルの厳密一致（アンカータグのテキスト部分）を検証する。
+        // 'ぺーちゃんねる' という部分文字列だけだとYouTubeチャンネル名URL
+        // （@加藤慎平のぺーちゃんねる）にも含まれてしまい、ラベル文言自体の
+        // 破壊を検知できないため、アンカータグの開始・終了込みで厳密に検証する。
+        expect(result).toContain('>レース映像（ぺーちゃんねる）<');
         expect(result).toContain(
             'href="https://www.youtube.com/@加藤慎平のぺーちゃんねる/stream"',
         );
     });
+
+    // GP以外にもGⅠ/GⅡ/GⅢのいずれのグレードでもぺーちゃんねるリンクを含むことを網羅する
+    // （isShowPeChannelの判定配列['GP','GⅠ','GⅡ','GⅢ']の各要素を個別に検証）
+    it.each(['GP', 'GⅠ', 'GⅡ', 'GⅢ'] as const)(
+        '%sグレードでぺーちゃんねるリンクを含む',
+        (grade) => {
+            const entity = { ...KEIRIN_ENTITY, raceGrade: grade };
+            const updateDate = new Date('2025-01-01T12:00:00+09:00');
+            const result = getKeirinDescription(entity, updateDate);
+
+            expect(result).toContain('>レース映像（ぺーちゃんねる）<');
+        },
+    );
 
     it('下位グレードではぺーちゃんねるリンクを含まない', () => {
         const f1Entity = { ...KEIRIN_ENTITY, raceGrade: 'FⅠ' };

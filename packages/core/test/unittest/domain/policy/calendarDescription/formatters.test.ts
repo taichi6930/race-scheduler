@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'bun:test';
+import type { RaceEntity } from '@race-schedule/core';
 import {
+    buildDescription,
     formatDescriptionTemplate,
     formatRaceTime,
     formatUpdateTime,
@@ -61,6 +63,22 @@ describe('formatters', () => {
             const parts = ['part1', '   part2', 'part3'];
             const result = formatDescriptionTemplate(parts);
             expect(result).toBe('part1\npart2\npart3');
+        });
+    });
+
+    describe('buildDescription', () => {
+        // extraLines を省略した場合のデフォルト値 [] を直接検証する。
+        // jra/keirin.builder はどちらも extraLines を渡さずに呼び出すため、
+        // デフォルト値が空配列であることは実際の出力の行数に直結する。
+        it('extraLinesを省略した場合、発走時刻と更新時刻のみの説明文を生成する', () => {
+            const raceEntity = {
+                datetime: new Date('2025-01-01T09:30:00+09:00'),
+            } as unknown as RaceEntity;
+            const updateDate = new Date('2025-01-01T12:00:00+09:00');
+
+            const result = buildDescription(raceEntity, updateDate, () => []);
+
+            expect(result).toBe('発走: 09:30\n更新日時: 2025/01/01 12:00');
         });
     });
 });
