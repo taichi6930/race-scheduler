@@ -324,6 +324,13 @@ C0/C1カバレッジ100%は「そのコードが実行されたか」しか保�
   「殺す」にはテスト側に同じ値を書き写す（tautologicalな）テストしか書けず、
   スコアを上げても実際のロジックのテスト効力は測れない。データの中身が正しいかどうかは
   ミューテーションテストではなくコードレビュー等で担保する。
+  `packages/admin/src/di/`・`packages/api/src/di/`（tsyringeへのDIコンテナ登録）も
+  対象外（2026-08-22）: `container.register(TOKEN, { useClass: Impl })` の羅列で分岐を
+  持たない配線コードであり、誤配線（実装クラスの取り違え・トークンのtypo）は
+  コンテナを実際に解決する結合テスト・コンポーネントテストが真っ先に検知するため、
+  単体テストで`container.resolve().toBeInstanceOf()`を並べて配線を再確認しても
+  実質的な安全性の上乗せは小さい。ミューテーションスコアを埋めるためだけの
+  テスト追加になりやすいと判断し除外した。
 - **実行方法**: `bun test` を直接サポートするミューテーションツールが無いため、Stryker の
   command runner（任意のテストコマンドを実行し終了コードで判定する汎用ランナー）を使う
   （設定はパッケージごとに `stryker.<pkg>.config.json`、ローカル実行は
@@ -356,8 +363,8 @@ C0/C1カバレッジ100%は「そのコードが実行されたか」しか保�
 
 - **対象ファイルの絞り込み**: `scripts/mutation-diff-targets.ts` が変更ファイル一覧を
   各パッケージの `stryker.<pkg>.config.json` の `mutate` スコープ（index.ts・
-  constants/・types/、api限定でopenapi/、core限定でdomain/master/を除外）へ絞り込む。
-  対象ファイルが1件も無ければジョブは何もせず終了する。
+  constants/・types/、api限定でopenapi/、core限定でdomain/master/、admin/api限定で
+  di/を除外）へ絞り込む。対象ファイルが1件も無ければジョブは何もせず終了する。
 - **ブロッキング化を見送っている理由**: (1) command runnerが1ミュータントごとに
   対象パッケージのテストスイート全体を再実行する構造のため、diffスコープに
   絞ってもコストが小さくない（実測: core配下1ファイル29ミュータントで約34秒。
