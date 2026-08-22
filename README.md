@@ -42,6 +42,8 @@ CIに任せてください（詳細方針は [`.claude/docs/ci-conventions.md`](
 | 各パッケージ（admin/api/batch/calendar/core/db/front）固有の詳細 | `packages/<pkg>/README.md`（例: [`packages/admin/README.md`](packages/admin/README.md)） |
 | プロダクト仕様のうちテストと紐づけて検証したいもの | [`docs/specs/`](docs/specs/README.md) |
 | セキュリティポリシー・脆弱性報告 | [`SECURITY.md`](SECURITY.md) |
+| 収集する情報・利用目的・削除方法（プライバシーポリシー） | [`docs/privacy-policy.md`](docs/privacy-policy.md) |
+| 障害時にまず何を確認し、どう切り戻すか（runbook） | [`docs/runbook.md`](docs/runbook.md) |
 | 貢献方法・PR運用のルール | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
 
 ## テスト・品質レポート
