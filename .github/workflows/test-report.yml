@@ -216,7 +216,7 @@ jobs:
         with:
           name: test-report
           path: test-report/
-          retention-days: 14
+          retention-days: 7
 
       - name: "🔍 Validate Cloudflare Secrets"
         if: always()

@@ -254,7 +254,7 @@ jobs:
         with:
           name: sbom
           path: sbom.json
-          retention-days: 90
+          retention-days: 14
 
   license-check:
     # CICD-100対応: web-push-web-platform用に追加したpushトリガーでは実行不要。
