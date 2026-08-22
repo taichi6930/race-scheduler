@@ -108,7 +108,7 @@ export const buildValidNoneAttestationResponse = async (
 };
 
 /** WebCryptoのECDSA生署名（r||s、各32バイト）をDER（SEQUENCE of 2 INTEGER）へ変換する。 */
-const derEncodeEcdsaSignature = (
+export const derEncodeEcdsaSignature = (
     raw: Uint8Array<ArrayBuffer>,
 ): Uint8Array<ArrayBuffer> => {
     const derEncodeInteger = (component: Uint8Array): Uint8Array => {

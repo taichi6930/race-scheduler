@@ -19,10 +19,11 @@
  * | 6 | `encv1:`プレフィックス付きの値 | 未設定 | throw |
  * | 7 | `encv1:`プレフィックス付きだがIV部分が欠落した値 | 設定済み | throw |
  * | 8 | `encv1:`プレフィックス付きだが暗号文部分が欠落した値 | 設定済み | throw |
+ * | 9 | 設定済み（fromBase64Url内部でString.prototype.codePointAtがundefinedを返す） | 設定済み | 0にフォールバックして暗号化を継続する |
  *
  * ## カバレッジ目標: 行・分岐カバレッジ 100%
  */
-import { afterEach, describe, expect, it } from 'bun:test';
+import { afterEach, describe, expect, it, spyOn } from 'bun:test';
 import { type CloudFlareEnv, EnvStore } from '@race-schedule/core';
 import 'reflect-metadata';
 
@@ -100,6 +101,26 @@ describe('pushAuthEncryption', () => {
             const second = await encryptPushAuth('plain-auth-value');
 
             expect(first).not.toBe(second);
+        });
+
+        // 9: fromBase64Url内部の `char.codePointAt(0) ?? 0` フォールバック（防御的分岐。
+        // atob() が返すバイナリ文字列を1文字ずつ列挙する限りcodePointAt(0)は必ず
+        // 定義された値を返すため通常到達しないが、`?? 0` の型上ありうる分岐として
+        // String.prototype.codePointAtを1回だけスタブして直接検証する）
+        it('9: codePointAtがundefinedを返す文字がある場合は0にフォールバックして暗号化を継続すること', async () => {
+            EnvStore.setEnv({
+                ...MOCK_ENV_BASE,
+                PUSH_AUTH_ENCRYPTION_KEY: generateTestKey(),
+            } as unknown as CloudFlareEnv);
+            const codePointAtSpy = spyOn(
+                String.prototype,
+                'codePointAt',
+            ).mockReturnValueOnce(undefined);
+
+            const result = await encryptPushAuth('plain-auth-value');
+            codePointAtSpy.mockRestore();
+
+            expect(result.startsWith('encv1:')).toBe(true);
         });
     });
 

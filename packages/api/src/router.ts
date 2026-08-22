@@ -106,6 +106,19 @@ export const ensureDIInitialized = (env: CloudFlareEnv): void => {
 };
 
 /**
+ * `ensureDIInitialized` のDI初期化済みフラグをリセットする（テスト専用、`EnvStore.reset`
+ * と同じ `@internal` の位置付け）。`_state` はプロセス全体で共有されるモジュールスコープの
+ * シングルトンのため、初回リクエスト以降は常に早期return（分岐idx0）してしまい、
+ * `isUseInMemoryDB(env)` がfalse側の分岐（本番D1相当の初期化パス）を単体テストで
+ * 再現できない。呼び出し側はテスト終了時に必ず `ensureDIInitialized` を再度呼び、
+ * 他のテストが前提とする「DI初期化済み・in-memoryモード」の状態へ戻すこと。
+ * @internal
+ */
+export const resetDIInitializedStateForTests = (): void => {
+    _state.diInitialized = false;
+};
+
+/**
  * 読み取り専用エンドポイントに適用する Cache-Control の設定（1エンドポイント分）。
  */
 interface CacheTtlConfig {

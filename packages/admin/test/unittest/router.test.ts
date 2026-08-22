@@ -25,18 +25,35 @@
  * | T-18 | POST /invite/api  | 正常なボディ     | 201 + {token, inviteUrl}                       |
  * | T-19 | GET /participants | 正常系           | 200・HTML（<!doctype html>を含む）             |
  * | T-20 | GET /participants/api | 正常系       | 200 + {participants}                           |
+ * | T-21 | POST /join-requests/api/:id/approve | 正常なid | 200（承認）                       |
+ * | T-22 | POST /join-requests/api/:id/reject  | 正常なid | 200（却下）                       |
+ * | T-23 | POST /join-requests/api/:id/approve | Honoのparam('id')がundefined | 400（idガードのフェイルクローズ） |
+ * | T-24 | POST /join-requests/api/:id/reject  | Honoのparam('id')がundefined | 400（idガードのフェイルクローズ） |
  */
 
 import 'reflect-metadata';
 
-import { beforeEach, describe, expect, it } from 'bun:test';
+import { beforeEach, describe, expect, it, spyOn } from 'bun:test';
 import { DI_TOKENS } from '@race-schedule/core';
 import { Hono } from 'hono';
+import { HonoRequest } from 'hono/request';
 import { container } from 'tsyringe';
 
 import { setupDI } from '../../src/di';
 import type { IMainApiGateway } from '../../src/gateway/interface/IMainApiGateway';
 import { registerErrorHandlers, router } from '../../src/router';
+
+/**
+ * `HonoRequest.prototype.param`を1回だけundefinedに差し替える。
+ * `param`はHonoのルート文字列リテラル型に依存した複雑なオーバーロード型を持ち、
+ * `mockReturnValueOnce`へ直接`undefined`を渡すと型エラーになるため、
+ * `unknown`経由の変換に一度だけ閉じ込める。
+ * @returns スタブを解除するための`mockRestore`を持つスパイ
+ */
+const stubHonoParamUndefinedOnce = (): { mockRestore: () => void } =>
+    spyOn(HonoRequest.prototype, 'param').mockReturnValueOnce(
+        undefined as unknown as ReturnType<HonoRequest['param']>,
+    );
 
 describe('Admin Router', () => {
     beforeEach(() => {
@@ -319,5 +336,65 @@ describe('Admin Router', () => {
         expect(response.status).toBe(200);
         const body = (await response.json()) as { participants: unknown[] };
         expect(body.participants).toEqual([]);
+    });
+
+    it('T-21: POST /join-requests/api/:id/approveは正常なidで200を返す', async () => {
+        const response = await router.fetch(
+            new Request(
+                'http://localhost:8790/join-requests/api/req-1/approve',
+                { method: 'POST' },
+            ),
+        );
+
+        expect(response.status).toBe(200);
+        const body = (await response.json()) as { ok: boolean };
+        expect(body.ok).toBe(true);
+    });
+
+    it('T-22: POST /join-requests/api/:id/rejectは正常なidで200を返す', async () => {
+        const response = await router.fetch(
+            new Request(
+                'http://localhost:8790/join-requests/api/req-1/reject',
+                { method: 'POST' },
+            ),
+        );
+
+        expect(response.status).toBe(200);
+        const body = (await response.json()) as { ok: boolean };
+        expect(body.ok).toBe(true);
+    });
+
+    /**
+     * Honoの`:id`ルーティングは空セグメントにマッチしないため、実際のHTTPリクエスト
+     * だけでは`if (!id) return badRequest(...)`のtrue側（ガード発火）を再現できない。
+     * `HonoRequest.prototype.param`を一時的にスタブし、ルーティング自体は正常なパスで
+     * 通過させた上でハンドラ内の戻り値だけをundefinedに差し替えることで、
+     * `c.req.param()`の型（`string | undefined`）が示すとおりのフェイルクローズ分岐を
+     * 直接検証する。
+     */
+    it('T-23: POST /join-requests/api/:id/approveはparamがundefinedのとき400を返す', async () => {
+        const paramSpy = stubHonoParamUndefinedOnce();
+        const response = await router.fetch(
+            new Request(
+                'http://localhost:8790/join-requests/api/placeholder/approve',
+                { method: 'POST' },
+            ),
+        );
+        paramSpy.mockRestore();
+
+        expect(response.status).toBe(400);
+    });
+
+    it('T-24: POST /join-requests/api/:id/rejectはparamがundefinedのとき400を返す', async () => {
+        const paramSpy = stubHonoParamUndefinedOnce();
+        const response = await router.fetch(
+            new Request(
+                'http://localhost:8790/join-requests/api/placeholder/reject',
+                { method: 'POST' },
+            ),
+        );
+        paramSpy.mockRestore();
+
+        expect(response.status).toBe(400);
     });
 });

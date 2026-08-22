@@ -155,8 +155,13 @@ const deleteStaleRaceRows = async (
  * @param dateRangeByPlace - placeId → 今回実際に取得を試みたレースの日時範囲
  * （CONC-04。この範囲外のレースは fresh 集合に無くても削除対象にしない）
  * @returns stale と判定された raceId 一覧
+ * @remarks
+ * `pruneStaleRaces` からのみ呼ばれる内部関数だが、`dateRangeByPlace` に
+ * `placeIdToFreshRaceIds` と不整合なキー集合を直接渡すケース（本来は
+ * `buildFetchedDateTimeRangeByPlace` で必ず同じキー集合になる防御的分岐）を
+ * 単体テストで検証するため export している。
  */
-const findStaleRaceIds = async (
+export const findStaleRaceIds = async (
     db: RaceDb,
     placeIdToFreshRaceIds: Map<string, Set<string>>,
     dateRangeByPlace: Map<string, DateTimeRange>,

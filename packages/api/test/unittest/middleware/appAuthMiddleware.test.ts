@@ -16,6 +16,7 @@
  * | T-11 | service-or-session     | なし                 | なし                 | 401                             |
  * | T-12 | 未列挙ルート            | なし                 | なし                 | 401（既定はservice-only）       |
  * | T-13 | ワイルドカードパス       | なし                 | 正                   | 200（`/auth/credential/*`が動的パスにマッチ） |
+ * | T-14 | session-only           | なし                 | 空白のみ（trim後に空） | 401（トークン抽出のフォールバック分岐） |
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
@@ -199,5 +200,19 @@ describe('requireAppAuth', () => {
             headers: { Authorization: `Bearer ${VALID_SESSION_TOKEN}` },
         });
         expect(res.status).toBe(200);
+    });
+
+    it('[T-14] session-only_Bearerに空白のみが続く場合トークン無しとして401', async () => {
+        // NOTE: 通常の半角スペースはHTTPヘッダー値の正規化（Fetch仕様のHTTP whitespace
+        // トリム）で末尾ごと消え「Bearer」単体になってしまい、`if (!header?.startsWith('Bearer '))`
+        // の側で先にfalseになる（line112のトークン抽出フォールバック分岐まで届かない）。
+        // NBSP（U+00A0）はHTTPヘッダー正規化の対象外だが`String.prototype.trim()`では
+        // 空白として扱われるため、「Bearerプレフィックスにはマッチするが後続が空扱いになる」
+        // ケースを安定して再現できる。
+        const app = buildApp();
+        const res = await app.request('/session-only', {
+            headers: { Authorization: 'Bearer \u00a0' },
+        });
+        expect(res.status).toBe(401);
     });
 });
