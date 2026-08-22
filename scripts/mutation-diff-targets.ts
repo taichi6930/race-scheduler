@@ -9,7 +9,8 @@
  * `stryker run --mutate <files>` はCLIの `--mutate` がconfig側の `mutate` 配列を
  * 丸ごと上書きするため（`.github/workflows/mutation-testing.yml` の mutation-api
  * matrixで踏んだ制約と同じ）、config側の除外パターン（index.ts・constants/・
- * types/・api限定でopenapi/・core限定でdomain/master/）をここで手動で再現している。
+ * types/・api限定でopenapi/・core限定でdomain/master/・admin/api限定でdi/）を
+ * ここで手動で再現している。
  *
  * 使い方:
  *   bun scripts/mutation-diff-targets.ts changed-files.txt
@@ -28,7 +29,8 @@ export type MutationPackage = (typeof MUTATION_PACKAGES)[number];
  * 1ファイルが指定パッケージの stryker `mutate` スコープに入るかどうかを判定する。
  * 各 stryker.<pkg>.config.json の mutate/ignorePatterns と同じ除外ルール
  * （index.ts・constants/・types/、api限定でopenapi/、core限定でdomain/master/
- * — 分岐を持たない素の対応表データのため。詳細はdocs/README.md参照）を再現する。
+ * — 分岐を持たない素の対応表データのため、admin/api限定でdi/ — DIコンテナへの
+ * 登録のみで分岐を持たない配線コードのため。詳細はdocs/README.md参照）を再現する。
  * @param file - `packages/<pkg>/src/...` 形式のファイルパス
  * @param pkg - 判定対象パッケージ
  */
@@ -44,6 +46,11 @@ export const isMutationTarget = (
     if (pkg === 'api' && file.startsWith('packages/api/src/openapi/'))
         return false;
     if (pkg === 'core' && file.startsWith('packages/core/src/domain/master/'))
+        return false;
+    if (
+        (pkg === 'admin' || pkg === 'api') &&
+        file.startsWith(`packages/${pkg}/src/di/`)
+    )
         return false;
     return true;
 };

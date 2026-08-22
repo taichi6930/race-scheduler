@@ -5,7 +5,8 @@
         "packages/admin/src/**/*.ts",
         "!packages/admin/src/**/index.ts",
         "!packages/admin/src/**/constants/**",
-        "!packages/admin/src/**/types/**"
+        "!packages/admin/src/**/types/**",
+        "!packages/admin/src/di/**"
     ],
 
     "testRunner": "command",
