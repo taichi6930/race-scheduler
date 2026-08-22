@@ -23,6 +23,9 @@
  * | T-09 | packages/core/src/foo.md | core | false（.ts以外） |
  * | T-13 | packages/core/src/domain/master/gradeMaster.ts | core | false（core限定でdomain/master/除外） |
  * | T-14 | packages/admin/src/domain/master/foo.ts | admin | true（domain/master除外はcore限定） |
+ * | T-15 | packages/admin/src/di/application.ts | admin | false（admin限定でdi/除外） |
+ * | T-16 | packages/api/src/di/infrastructure.ts | api | false（api限定でdi/除外） |
+ * | T-17 | packages/core/src/di/foo.ts | core | true（di/除外はadmin/api限定） |
  *
  * ### groupMutationTargets
  * | # | 入力 | 期待 |
@@ -119,6 +122,30 @@ describe('mutation-diff-targets', () => {
                     'packages/admin/src/domain/master/foo.ts',
                     'admin',
                 ),
+            ).toBe(true);
+        });
+
+        it('T-15: adminのdi/配下はfalseを返す', () => {
+            expect(
+                isMutationTarget(
+                    'packages/admin/src/di/application.ts',
+                    'admin',
+                ),
+            ).toBe(false);
+        });
+
+        it('T-16: apiのdi/配下はfalseを返す', () => {
+            expect(
+                isMutationTarget(
+                    'packages/api/src/di/infrastructure.ts',
+                    'api',
+                ),
+            ).toBe(false);
+        });
+
+        it('T-17: di/除外はadmin/api限定で他パッケージには適用されない', () => {
+            expect(
+                isMutationTarget('packages/core/src/di/foo.ts', 'core'),
             ).toBe(true);
         });
     });
