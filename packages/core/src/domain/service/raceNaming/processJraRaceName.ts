@@ -173,11 +173,14 @@ const isScalarFieldMismatch = <T>(
 ): boolean => !!patternValue && actual !== patternValue;
 
 /**
- * すべての条件がレース情報にマッチするかを判定する
+ * すべての条件がレース情報にマッチするかを判定する。
+ * `RACE_PATTERNS` は全エントリが `keywordPatternList` を持つため、
+ * それを持たないパターンでの判定（`keywordPatternList` 未指定時は無条件マッチ）を
+ * テストで直接検証できるよう export している。
  * @param raceInfo
  * @param pattern
  */
-const isMatchingPattern = (
+export const isMatchingPattern = (
     raceInfo: JraRaceDataForRaceName,
     pattern: RacePattern,
 ): boolean => {

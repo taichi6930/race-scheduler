@@ -26,14 +26,26 @@
  * | T-13 | ","         | なし             | ValidationError(400) 有効な値がありません |
  * | T-14 | "p1"        | valid JSON       | placeHeldDaysMap を返す                 |
  * | T-15 | "p1"        | invalid JSON     | placeHeldDaysMap = undefined            |
+ * | T-17 | "p1"        | 有効なJSONだがスキーマ不一致 | placeHeldDaysMap = undefined（parsed.success=false分岐） |
+ *
+ * ## デシジョンテーブル: 内部ヘルパー単体（parseCommonSearchParams経由では到達しない分岐）
+ *
+ * | #    | Function | 入力 | 期待結果 | Coverage |
+ * |------|----------|------|----------|----------|
+ * | T-18 | dateTransform | value=null | Error('有効な日付形式が必要です')をスロー | Branch |
+ * | T-19 | parseRaceTypeList | value=null | Error('raceTypeList is required')をスロー | Branch |
+ * | T-20 | resolveValidationErrorMessage | Errorでない値 | 'Validation error' | Branch |
  */
 
 import { describe, expect, it } from 'bun:test';
 import { ValidationError } from '@race-schedule/core';
 
 import {
+    dateTransform,
     parseCommonSearchParams,
     parseRaceSearchParams,
+    parseRaceTypeList,
+    resolveValidationErrorMessage,
 } from '../../../src/http/parse';
 
 describe('parseCommonSearchParams', () => {
@@ -148,6 +160,25 @@ describe('parseCommonSearchParams', () => {
         expect(result.finishDate.getUTCSeconds()).toBe(59);
     });
 
+    it('parseCommonSearchParams_locationListがカンマのみで有効値なし_undefinedを返す', () => {
+        // Arrange
+        // splitCsvはtrim・空要素除去を行うため、','のみのlocationListは
+        // truthyな生値のまま空配列へ分割される（parseLocationList内の
+        // `list.length > 0 ? list : undefined` のfalse分岐を通る）。
+        const params = new URLSearchParams({
+            startDate: '2025-01-01',
+            finishDate: '2025-01-31',
+            raceTypeList: 'jra',
+            locationList: ',,',
+        });
+
+        // Act
+        const result = parseCommonSearchParams(params);
+
+        // Assert
+        expect(result.locationList).toBeUndefined();
+    });
+
     it('[T-09] parseCommonSearchParams_YYYY-MM-DD以外の有効なISO日付_正常にパースする', () => {
         // Arrange
         const params = new URLSearchParams({
@@ -233,6 +264,53 @@ describe('parseRaceSearchParams', () => {
         // Assert
         expect(result.placeIdList).toEqual(['place1']);
         expect(result.placeHeldDaysMap).toBeUndefined();
+    });
+
+    it('[T-17] parseRaceSearchParams_placeHeldDaysMapが有効なJSONだがスキーマ不一致_undefinedを返す', () => {
+        // Arrange
+        // JSON.parse自体は成功するが、heldTimesが数値でないためPlaceHeldDaysSchema
+        // の検証に失敗する（`parsed.success ? parsed.data : undefined`のfalse分岐）。
+        const params = new URLSearchParams({
+            placeIdList: 'place1',
+            placeHeldDaysMap: JSON.stringify({
+                place1: { heldTimes: 'not-a-number', heldDayTimes: 2 },
+            }),
+        });
+
+        // Act
+        const result = parseRaceSearchParams(params);
+
+        // Assert
+        expect(result.placeIdList).toEqual(['place1']);
+        expect(result.placeHeldDaysMap).toBeUndefined();
+    });
+});
+
+describe('内部ヘルパー単体（parseCommonSearchParams経由では到達しない分岐）', () => {
+    it('[T-18] dateTransform_valueがnull_有効な日付形式が必要ですをスローする', () => {
+        // Arrange & Act & Assert
+        // parseCommonSearchParams経由ではisDateRangeMissingにより事前に
+        // 弾かれるため、null分岐は直接呼び出してのみ検証できる。
+        expect(() => dateTransform(null, false)).toThrow(
+            '有効な日付形式が必要です',
+        );
+    });
+
+    it('[T-19] parseRaceTypeList_valueがnull_raceTypeList is requiredをスローする', () => {
+        // Arrange & Act & Assert
+        // parseCommonSearchParams経由では呼び出し前にraceTypeListRawの
+        // truthyチェックが済んでいるため、null分岐は直接呼び出してのみ検証できる。
+        expect(() => parseRaceTypeList(null)).toThrow(
+            'raceTypeList is required',
+        );
+    });
+
+    it('[T-20] resolveValidationErrorMessage_Errorでない値_Validation_errorを返す', () => {
+        // Arrange & Act
+        const result = resolveValidationErrorMessage('文字列エラー');
+
+        // Assert
+        expect(result).toBe('Validation error');
     });
 });
 

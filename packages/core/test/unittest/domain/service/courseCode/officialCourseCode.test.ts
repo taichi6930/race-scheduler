@@ -14,6 +14,8 @@
  * | 7  | findPlaceNameByCode | JRA      | '99'          | null                  | 異常系・未一致  |
  * | 8  | findPlaceNameByCode | AUTORACE | '01'          | '船橋'                | 正常系・別種別  |
  * | 9  | findPlaceNameByCode | JRA      | '01'          | '札幌'                | 正常系・別コード |
+ * | T-10 | buildOfficialCourseCodeMaps | JRA | raceCourse/placeCode双方が重複するエントリ2件 | 先勝ちで1件目のみ登録される | Branch |
+ * | T-11 | findPlaceNameByCode | JRA      | '00'          | null                  | 異常系・ゼロのみのlocationCodeのフォールバック |
  */
 
 import { describe, expect, it } from 'bun:test';
@@ -22,6 +24,7 @@ import type { LocationCode } from '../../../../../src/domain/model/valueObject/l
 import { validateLocationCode } from '../../../../../src/domain/model/valueObject/locationCode';
 import { RaceType } from '../../../../../src/domain/model/valueObject/raceType';
 import {
+    buildOfficialCourseCodeMaps,
     findPlaceCodeByName,
     findPlaceNameByCode,
 } from '../../../../../src/domain/service/courseCode/officialCourseCode';
@@ -134,5 +137,50 @@ describe('findPlaceNameByCode', () => {
             // Assert
             expect(result).toBeNull();
         });
+
+        it('[T-11] findPlaceNameByCode_JRA_locationCode=00_ゼロのみのフォールバックを経てnullを返す', () => {
+            // Arrange
+            // '00' は先頭ゼロを全て除去すると空文字になるため、正規化ロジックの
+            // `|| '0'` フォールバック分岐を通る。マスタにplaceCode='00'/'0'の
+            // JRAエントリは存在しないためnullになる。
+
+            // Act
+            const result = findPlaceNameByCode(
+                validateLocationCode('00'),
+                RaceType.JRA,
+            );
+
+            // Assert
+            expect(result).toBeNull();
+        });
+    });
+});
+
+describe('buildOfficialCourseCodeMaps', () => {
+    it('[T-10] buildOfficialCourseCodeMaps_raceCourseキー重複とplaceCodeキー重複が別々に発生_双方とも先勝ちで登録される', () => {
+        // Arrange
+        // entries[1] は entries[0] と raceCourse（'東京'）が重複するキーを持つ
+        // （placeCodeByRaceCourseAndTypeMap側の「既に登録済み」分岐）。
+        // entries[2] は entries[0] と placeCode（'05'）が重複するキーを持つ
+        // （raceCourseByPlaceCodeAndTypeMap側の「既に登録済み」分岐）。
+        const entries = [
+            { raceType: RaceType.JRA, raceCourse: '東京', placeCode: '05' },
+            { raceType: RaceType.JRA, raceCourse: '東京', placeCode: '99' },
+            { raceType: RaceType.JRA, raceCourse: '大阪', placeCode: '05' },
+        ];
+
+        // Act
+        const {
+            placeCodeByRaceCourseAndTypeMap,
+            raceCourseByPlaceCodeAndTypeMap,
+        } = buildOfficialCourseCodeMaps(entries);
+
+        // Assert
+        // '東京' キーは entries[0] の '05' のまま（entries[1] の '99' で上書きされない）
+        expect(placeCodeByRaceCourseAndTypeMap.get('jra:東京')).toBe('05');
+        // '05' キーは entries[0] の '東京' のまま（entries[2] の '大阪' で上書きされない）
+        expect(raceCourseByPlaceCodeAndTypeMap.get('jra:05')).toBe('東京');
+        // entries[1] の placeCode '99' は新規キーのため登録される
+        expect(raceCourseByPlaceCodeAndTypeMap.get('jra:99')).toBe('東京');
     });
 });

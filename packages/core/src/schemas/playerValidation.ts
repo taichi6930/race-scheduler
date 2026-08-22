@@ -44,6 +44,17 @@ const playerEntityUpsertSchema = z.union([
 ]);
 
 /**
+ * バリデーション失敗時にthrowするメッセージを解決する。
+ * 通常のzod検証失敗では issues は常に1件以上を持つため、空配列側
+ * （'Invalid request body'）は実運用では到達しない防御的な既定値だが、
+ * テストで直接検証できるよう独立関数として export している。
+ * @param issues - ZodErrorのissues配列
+ * @returns throwするメッセージ文字列
+ */
+export const resolvePlayerValidationMessage = (issues: z.ZodIssue[]): string =>
+    issues.length > 0 ? formatZodIssues(issues) : 'Invalid request body';
+
+/**
  * PlayerEntityのアップサートペイロード（単一 or 配列）を検証してパースする
  * @param body - リクエストボディ（単一オブジェクトまたは配列）
  * @returns domain検証済みのPlayerEntity配列
@@ -51,11 +62,9 @@ const playerEntityUpsertSchema = z.union([
 export const parsePlayerEntityUpsert = (body: unknown): PlayerEntity[] => {
     const result = playerEntityUpsertSchema.safeParse(body);
     if (!result.success) {
-        const message =
-            result.error.issues.length > 0
-                ? formatZodIssues(result.error.issues)
-                : 'Invalid request body';
-        throw new ValidationError(message);
+        throw new ValidationError(
+            resolvePlayerValidationMessage(result.error.issues),
+        );
     }
 
     return Array.isArray(result.data) ? result.data : [result.data];

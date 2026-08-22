@@ -28,9 +28,10 @@
  * | T-20 | toJstISOString | JST深夜0時ちょうど（UTC 15:00 前日） | '...T00:00:00+09:00'（完全一致） | Line |
  * | T-21 | toJstISOString | JST 23:59:59（1日の最終秒） | '...T23:59:59+09:00'（完全一致） | Line |
  * | T-22 | toJstISOString | JST年またぎ（12/31 23:59:59 → 1/1 00:00:00） | 完全一致（PERF-091: formatToParts化で1文字も変わらないことを担保） | Line |
+ * | T-23 | toJstISOString | formatToPartsが深夜0時を"24"として返すICU実装（モック） | '00'に正規化されること | Branch |
  */
 
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, spyOn } from 'bun:test';
 import {
     createJstDate,
     formatJstDatetime,
@@ -287,6 +288,36 @@ describe('Date JST Utilities', () => {
             expect(toJstISOString(afterMidnight)).toBe(
                 '2025-01-01T00:00:00+09:00',
             );
+        });
+
+        it('[T-23] toJstISOString_formatToPartsが深夜0時を24として返す場合_00に正規化されること', () => {
+            // Arrange: 一部のICU実装ではhour12:false指定時に深夜0時が"24"として
+            // 返る既知の挙動差がある。手元のICU実装では再現できないため、
+            // Intl.DateTimeFormat.prototype.formatToPartsをモックしてその挙動を再現する。
+            const spy = spyOn(
+                Intl.DateTimeFormat.prototype,
+                'formatToParts',
+            ).mockReturnValue([
+                { type: 'year', value: '2024' },
+                { type: 'literal', value: '-' },
+                { type: 'month', value: '04' },
+                { type: 'literal', value: '-' },
+                { type: 'day', value: '26' },
+                { type: 'literal', value: ', ' },
+                { type: 'hour', value: '24' },
+                { type: 'literal', value: ':' },
+                { type: 'minute', value: '00' },
+                { type: 'literal', value: ':' },
+                { type: 'second', value: '00' },
+            ]);
+
+            // Act
+            const result = toJstISOString(new Date('2024-04-25T15:00:00.000Z'));
+
+            // Assert
+            expect(result).toBe('2024-04-26T00:00:00+09:00');
+
+            spy.mockRestore();
         });
     });
 

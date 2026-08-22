@@ -42,10 +42,16 @@ const isDateRangeMissing = (
 /**
  * startDate/finishDate クエリ文字列を Date に変換する。
  * `YYYY-MM-DD` 形式は JST の日付として解釈し、finishDate は 23:59:59 とする。
+ * `parseCommonSearchParams` 経由では `isDateRangeMissing` により null は事前に
+ * 弾かれるため、value が null のガード（先頭の `if (!value)`）はテストから直接
+ * 呼び出して検証する必要があり export している。
  * @param value - 日付文字列（null 許容）
  * @param isFinish - finishDate として解釈するか（true の場合 23:59:59 とする）
  */
-const dateTransform = (value: string | null, isFinish: boolean): Date => {
+export const dateTransform = (
+    value: string | null,
+    isFinish: boolean,
+): Date => {
     if (!value) throw new Error('有効な日付形式が必要です');
     if (DATE_ONLY_PATTERN.test(value)) {
         const [y, m, d] = value.split('-').map(Number);
@@ -70,9 +76,12 @@ const dateTransform = (value: string | null, isFinish: boolean): Date => {
  * RaceType 判定は共通スキーマ RaceTypeSchema に集約して重複実装を解消する。
  * 挙動不変を厳守: 無効な値は現状どおり黙って除外し、
  * 有効値が 0 件のときのみエラーとする（raceTypeListField の strict 判定とは意図的に異なる）。
+ * `parseCommonSearchParams` 経由では呼び出し前に raceTypeListRaw の truthy
+ * チェックが済んでいるため、value が null のガード（先頭の `if (!value)`）は
+ * テストから直接呼び出して検証する必要があり export している。
  * @param value - raceTypeList クエリパラメータの生値
  */
-const parseRaceTypeList = (value: string | null): RaceType[] => {
+export const parseRaceTypeList = (value: string | null): RaceType[] => {
     if (!value) throw new Error('raceTypeList is required');
     const raceTypeList = splitCsv(value)
         .map((v) => v.toLowerCase())
@@ -92,6 +101,18 @@ const parseLocationList = (value: string | null): string[] | undefined => {
     const list = splitCsv(value);
     return list.length > 0 ? list : undefined;
 };
+
+/**
+ * catch節で捕捉したエラーからValidationErrorへ渡すメッセージ文字列を解決する。
+ * `parseCommonSearchParams` 内で捕捉されうるエラーは現状すべて Error
+ * （またはそのサブクラス）のため、`error instanceof Error` が false になる側は
+ * 通常経路では到達しない。それでも防御的な既定値（'Validation error'）を
+ * テストで直接検証できるよう、独立関数として export している。
+ * @param error - catch節で捕捉したエラー
+ * @returns ValidationError へ渡すメッセージ文字列
+ */
+export const resolveValidationErrorMessage = (error: unknown): string =>
+    error instanceof Error ? error.message : 'Validation error';
 
 export const parseCommonSearchParams = (
     searchParams: URLSearchParams,
@@ -120,9 +141,9 @@ export const parseCommonSearchParams = (
             locationList: parseLocationList(locationListRaw),
         };
     } catch (error) {
-        const message =
-            error instanceof Error ? error.message : 'Validation error';
-        throw new ValidationError(message, 400, { cause: error });
+        throw new ValidationError(resolveValidationErrorMessage(error), 400, {
+            cause: error,
+        });
     }
 };
 

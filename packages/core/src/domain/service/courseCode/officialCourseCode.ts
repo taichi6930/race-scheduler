@@ -11,29 +11,62 @@ import type { RaceType } from '../../model/valueObject/raceType';
  */
 export const UNKNOWN_PLACE_CODE: LocationCode = validateLocationCode('00');
 
-/**
- * `raceType:raceCourse` → placeCode のルックアップ表。
- * `RaceCourseOfficialMasterList` はモジュール初期化時に確定する不変マスタのため、
- * 呼び出しのたびに配列を線形探索する代わりにモジュール初期化時へ1回だけ構築する
- * （PERF-095/PERF-103: レース行1件ごとに155件規模のマスタを都度 `.find()` していたコスト）。
- * 同一キーが複数存在する場合は `Array.find` と同じ「先勝ち」を維持するため、
- * 既に登録済みのキーは上書きしない。
- */
-const placeCodeByRaceCourseAndTypeMap = new Map<string, string>();
-
-/** `raceType:placeCode` → raceCourse のルックアップ表（用途は上記と同様）。 */
-const raceCourseByPlaceCodeAndTypeMap = new Map<string, RaceCourse>();
-
-for (const entry of RaceCourseOfficialMasterList) {
-    const placeCodeKey = `${entry.raceType}:${entry.raceCourse}`;
-    if (!placeCodeByRaceCourseAndTypeMap.has(placeCodeKey)) {
-        placeCodeByRaceCourseAndTypeMap.set(placeCodeKey, entry.placeCode);
-    }
-    const raceCourseKey = `${entry.raceType}:${entry.placeCode}`;
-    if (!raceCourseByPlaceCodeAndTypeMap.has(raceCourseKey)) {
-        raceCourseByPlaceCodeAndTypeMap.set(raceCourseKey, entry.raceCourse);
-    }
+/** {@link buildOfficialCourseCodeMaps} に渡すマスタエントリ1件分の型。 */
+export interface OfficialCourseCodeMasterEntry {
+    raceType: RaceType;
+    raceCourse: string;
+    placeCode: string;
 }
+
+/** {@link buildOfficialCourseCodeMaps} が構築するルックアップ表のペア。 */
+export interface OfficialCourseCodeMaps {
+    placeCodeByRaceCourseAndTypeMap: Map<string, string>;
+    raceCourseByPlaceCodeAndTypeMap: Map<string, RaceCourse>;
+}
+
+/**
+ * `placeCodeByRaceCourseAndTypeMap` / `raceCourseByPlaceCodeAndTypeMap` を
+ * マスタエントリ配列から構築する。同一キーが複数存在する場合は `Array.find` と
+ * 同じ「先勝ち」を維持するため、既に登録済みのキーは上書きしない。
+ *
+ * モジュール初期化時に実マスタ（`RaceCourseOfficialMasterList`）へ1回だけ適用する
+ * 想定の内部ヘルパーだが、「先勝ち」分岐（重複キーをスキップする側）はテストで
+ * 明示的に検証するため export している（実マスタに重複キーは存在しない）。
+ * @param entries マスタエントリ配列
+ * @returns 構築済みの2つのルックアップ表
+ */
+export const buildOfficialCourseCodeMaps = (
+    entries: readonly OfficialCourseCodeMasterEntry[],
+): OfficialCourseCodeMaps => {
+    const placeCodeMap = new Map<string, string>();
+    const raceCourseMap = new Map<string, RaceCourse>();
+
+    for (const entry of entries) {
+        const placeCodeKey = `${entry.raceType}:${entry.raceCourse}`;
+        if (!placeCodeMap.has(placeCodeKey)) {
+            placeCodeMap.set(placeCodeKey, entry.placeCode);
+        }
+        const raceCourseKey = `${entry.raceType}:${entry.placeCode}`;
+        if (!raceCourseMap.has(raceCourseKey)) {
+            raceCourseMap.set(raceCourseKey, entry.raceCourse);
+        }
+    }
+
+    return {
+        placeCodeByRaceCourseAndTypeMap: placeCodeMap,
+        raceCourseByPlaceCodeAndTypeMap: raceCourseMap,
+    };
+};
+
+/**
+ * `raceType:raceCourse` → placeCode / `raceType:placeCode` → raceCourse の
+ * ルックアップ表。`RaceCourseOfficialMasterList` はモジュール初期化時に確定する
+ * 不変マスタのため、呼び出しのたびに配列を線形探索する代わりにモジュール初期化時へ
+ * 1回だけ構築する（PERF-095/PERF-103: レース行1件ごとに155件規模のマスタを都度
+ * `.find()` していたコスト）。
+ */
+const { placeCodeByRaceCourseAndTypeMap, raceCourseByPlaceCodeAndTypeMap } =
+    buildOfficialCourseCodeMaps(RaceCourseOfficialMasterList);
 
 /**
  * 公式マスタから raceCourse + raceType に対応する placeCode を引く生ルックアップ。

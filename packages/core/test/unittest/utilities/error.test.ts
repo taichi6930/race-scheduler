@@ -16,6 +16,7 @@
  * | 9  | resolveInternalErrorMessage | サービス間呼び出し内・Error | `name: message` | Branch |
  * | 10 | resolveInternalErrorMessage | サービス間呼び出し内・非Error | 汎用メッセージ | Branch |
  * | 11 | handleControllerError | サービス間呼び出し内・Error | 応答にエラー詳細を含む | Branch |
+ * | 12 | resolveInternalErrorMessage | サービス間呼び出し内・非Errorだがmessageのみ持つオブジェクト | `Error: message`（nameが文字列でないため既定'Error'を使用） | Branch |
  */
 
 import { describe, expect, it, mock } from 'bun:test';
@@ -300,6 +301,19 @@ describe('error Utilities', () => {
             );
 
             expect(result).toBe('Internal Server Error');
+        });
+
+        it('resolveInternalErrorMessage_サービス間呼び出し内・messageのみ持つ非Error_nameは既定のErrorになること[T-12]', () => {
+            // Arrange & Act
+            // sanitizeErrorはError以外の値をキーそのまま透過するため、
+            // nameキーを持たずmessageのみ持つオブジェクトを渡すと
+            // 分割代入結果は { name: undefined, message: 'boom' } になる。
+            const result = runWithInternalServiceCall(true, () =>
+                resolveInternalErrorMessage({ message: 'boom' }),
+            );
+
+            // Assert
+            expect(result).toBe('Error: boom');
         });
     });
 

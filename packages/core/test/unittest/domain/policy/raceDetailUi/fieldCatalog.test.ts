@@ -16,6 +16,7 @@
  * | T-09 | stage     | raceStage未設定                               | null                |
  * | T-10 | condition | conditionData: {surfaceType:"芝",distance:2000} | "芝 ・ 2000m"     |
  * | T-11 | condition | conditionData未設定                           | null                |
+ * | T-12 | stage     | raceStage: ""（空文字）                       | null                |
  */
 
 import { describe, expect, it } from 'bun:test';
@@ -105,5 +106,10 @@ describe('RACE_DETAIL_FIELDS', () => {
 
     it('T-11: conditionはconditionDataが無い場合nullを返すこと', () => {
         expect(RACE_DETAIL_FIELDS.condition.resolve(BASE_ENTITY)).toBeNull();
+    });
+
+    it('T-12: stageは空文字の場合nullを返すこと', () => {
+        const emptyStageEntity: RaceEntity = { ...BASE_ENTITY, raceStage: '' };
+        expect(RACE_DETAIL_FIELDS.stage.resolve(emptyStageEntity)).toBeNull();
     });
 });

@@ -12,12 +12,20 @@
  * | 4  | 必須フィールド欠如 | ValidationError | Branch |
  * | 5  | 空配列 | ValidationError | Branch |
  * | 6  | priority が小数点 | ValidationError | Branch |
+ *
+ * ### resolvePlayerValidationMessage
+ * | # | Input | 期待結果 | Coverage |
+ * |----|-------|----------|----------|
+ * | 7  | issues=[]（空配列） | 'Invalid request body' | Branch |
  */
 
 import { describe, expect, it } from 'bun:test';
 import { ValidationError } from '@race-schedule/core';
 
-import { parsePlayerEntityUpsert } from '../../../src/schemas/playerValidation';
+import {
+    parsePlayerEntityUpsert,
+    resolvePlayerValidationMessage,
+} from '../../../src/schemas/playerValidation';
 
 const validPlayer = {
     race_type: 'keirin',
@@ -108,5 +116,17 @@ describe('parsePlayerEntityUpsert', () => {
         const input = { ...validPlayer, extra_field: 'unexpected' };
 
         expect(() => parsePlayerEntityUpsert(input)).toThrow(ValidationError);
+    });
+});
+
+describe('resolvePlayerValidationMessage', () => {
+    it('#7: issuesが空配列の場合はInvalid request bodyを返す', () => {
+        // Arrange & Act
+        // 通常のzod検証失敗では issues は常に1件以上を持つため、この分岐は
+        // parsePlayerEntityUpsert経由では到達できない防御的な既定値。
+        const result = resolvePlayerValidationMessage([]);
+
+        // Assert
+        expect(result).toBe('Invalid request body');
     });
 });
