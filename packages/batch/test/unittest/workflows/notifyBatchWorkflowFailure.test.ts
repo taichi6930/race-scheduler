@@ -5,7 +5,8 @@
  *
  * | #    | failures  | 既存Issue（タイトル一致） | 期待挙動                                     |
  * |------|-----------|----------------------------|-----------------------------------------------|
- * | T-01 | 空配列    | -                           | 何もしない（fetchAllOpenIssuesも呼ばれない）  |
+ * | T-01a | 空配列（成功） | なし                   | 何もしない（addComment/closeIssueも呼ばれない）（QRUN-01） |
+ * | T-01b | 空配列（成功） | あり                   | 復旧コメント追加 → Close（QRUN-01）           |
  * | T-02 | 1件以上   | なし                        | 新規Issue作成                                 |
  * | T-03 | 1件以上   | あり                        | 既存Issueにコメント追加のみ（新規作成しない） |
  * | T-04 | 1件以上   | -（fetchAllOpenIssuesが例外）| catchされ、addComment/createIssueは呼ばれない |
@@ -46,14 +47,36 @@ describe('syncBatchWorkflowFailureIssue', () => {
         EnvStore.reset();
     });
 
-    it('T-01: failuresが空配列の場合は何もしない', async () => {
+    it('T-01a: failuresが空配列(成功)かつ既存Issueが無ければ何もしない', async () => {
         const gateway = buildGateway();
 
         await syncBatchWorkflowFailureIssue([], 'instance-1', gateway, 'token');
 
-        expect(gateway.fetchAllOpenIssues).not.toHaveBeenCalled();
+        expect(gateway.fetchAllOpenIssues).toHaveBeenCalledTimes(1);
         expect(gateway.createIssue).not.toHaveBeenCalled();
         expect(gateway.addComment).not.toHaveBeenCalled();
+        expect(gateway.closeIssue).not.toHaveBeenCalled();
+    });
+
+    it('T-01b: failuresが空配列(成功)かつ既存Issueがあればコメント追加後にCloseする(QRUN-01)', async () => {
+        const gateway = buildGateway({
+            fetchAllOpenIssues: mock(() =>
+                Promise.resolve([
+                    { title: BATCH_WORKFLOW_FAILURE_ISSUE_TITLE, number: 55 },
+                ]),
+            ),
+        });
+
+        await syncBatchWorkflowFailureIssue([], 'instance-1', gateway, 'token');
+
+        expect(gateway.addComment).toHaveBeenCalledTimes(1);
+        expect(gateway.addComment).toHaveBeenCalledWith(
+            'token',
+            55,
+            expect.stringContaining('失敗なしで完了'),
+        );
+        expect(gateway.closeIssue).toHaveBeenCalledWith('token', 55);
+        expect(gateway.createIssue).not.toHaveBeenCalled();
     });
 
     it('T-02: failuresがあり既存Issueが無ければ新規作成する', async () => {
