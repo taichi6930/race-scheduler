@@ -67,6 +67,7 @@
         "test:slow": "bun scripts/report-slow-tests.ts",
         "clean:branches": "git fetch -p && git branch -vv | grep ': gone]' | awk '{print $1}' | xargs git branch -D",
         "front:dev": "cd packages/front && flutter run -d chrome --web-port 8080 --web-browser-flag \"--disable-web-security\" --dart-define=API_BASE_URL=https://race-schedule-test.tn-product.workers.dev",
+        "front:dev:local": "cd packages/front && flutter run -d chrome --web-port 8080 --dart-define=API_BASE_URL=http://localhost:8787",
         "front:widgetbook": "cd packages/front && flutter run -t lib/widgetbook.dart -d chrome --web-port 8081 --web-browser-flag \"--disable-web-security\" --dart-define=API_BASE_URL=https://race-schedule-test.tn-product.workers.dev",
         "front:mock": "cd packages/front && flutter run -t lib/main_mock.dart -d chrome --web-port 8082"
     },
