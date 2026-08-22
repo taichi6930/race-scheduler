@@ -36,7 +36,7 @@ name: Mutation Testing
 # で7日間保持していたが、人が閲覧するレポートを毎週artifactとして積み上げるのは
 # GitHub Actions storageの無駄（判断基準は.claude/docs/ci-conventions.md「成果物の
 # 永続化先」参照、race-schedule側のsubmodule経由で共有）。HTMLレポートの恒久的な
-# 公開先はCloudflare Pages（race-schedule-mutation-report、新設のdeploy-mutation-report
+# 公開先はCloudflare Pages（race-scheduler-mutation-report、新設のdeploy-mutation-report
 # ジョブ）に一本化し、各mutation-<pkg>ジョブのartifactはreport-mutation-failure・
 # deploy-mutation-reportの2ジョブへ同一実行内で受け渡すためだけの一時的なものとして
 # retention-daysを1日に短縮した（Pagesへのデプロイ後は不要になる）。
@@ -102,7 +102,7 @@ jobs:
                     grep -B2 "^All files" mutation-report.log || echo "(結果テーブルを取得できませんでした。詳細はログを参照してください)"
                     echo '```'
                     echo ""
-                    echo "詳細は https://race-schedule-mutation-report.pages.dev/core/ を参照してください。"
+                    echo "詳細は https://race-scheduler-mutation-report.pages.dev/core/ を参照してください。"
                   } >> "$GITHUB_STEP_SUMMARY"
 
             - name: Upload mutation report
@@ -150,7 +150,7 @@ jobs:
                     grep -B2 "^All files" mutation-report.log || echo "(結果テーブルを取得できませんでした。詳細はログを参照してください)"
                     echo '```'
                     echo ""
-                    echo "詳細は https://race-schedule-mutation-report.pages.dev/admin/ を参照してください。"
+                    echo "詳細は https://race-scheduler-mutation-report.pages.dev/admin/ を参照してください。"
                   } >> "$GITHUB_STEP_SUMMARY"
 
             - name: Upload mutation report
@@ -199,7 +199,7 @@ jobs:
                     grep -B2 "^All files" mutation-report.log || echo "(結果テーブルを取得できませんでした。詳細はログを参照してください)"
                     echo '```'
                     echo ""
-                    echo "詳細は https://race-schedule-mutation-report.pages.dev/batch/ を参照してください。"
+                    echo "詳細は https://race-scheduler-mutation-report.pages.dev/batch/ を参照してください。"
                   } >> "$GITHUB_STEP_SUMMARY"
 
             - name: Upload mutation report
@@ -304,7 +304,7 @@ jobs:
                     grep -B2 "^All files" mutation-report.log || echo "(結果テーブルを取得できませんでした。詳細はログを参照してください)"
                     echo '```'
                     echo ""
-                    echo "詳細は https://race-schedule-mutation-report.pages.dev/api/${{ matrix.name }}/ を参照してください。"
+                    echo "詳細は https://race-scheduler-mutation-report.pages.dev/api/${{ matrix.name }}/ を参照してください。"
                   } >> "$GITHUB_STEP_SUMMARY"
 
             - name: Upload mutation report
@@ -319,7 +319,7 @@ jobs:
                   if-no-files-found: warn
 
     # CFCOST-10対応（2026-08-22）: 各mutation-<pkg>ジョブが出力したHTMLレポートを
-    # 1つのCloudflare Pages（race-schedule-mutation-report）へ集約デプロイする。
+    # 1つのCloudflare Pages（race-scheduler-mutation-report）へ集約デプロイする。
     #
     # 14個のジョブ（core/admin/batch + apiの10シャード）がそれぞれ`wrangler pages deploy`を
     # 個別に呼ぶと、Cloudflare Pagesのデプロイは「ディレクトリ丸ごとの1回のスナップショット」
@@ -430,7 +430,7 @@ jobs:
                   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_API_TOKEN }}
                   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
               run: |
-                  bunx wrangler pages project create race-schedule-mutation-report \
+                  bunx wrangler pages project create race-scheduler-mutation-report \
                     --production-branch main \
                     || true
 
@@ -440,7 +440,7 @@ jobs:
                   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
               run: |
                   bunx wrangler pages deploy site/ \
-                    --project-name race-schedule-mutation-report \
+                    --project-name race-scheduler-mutation-report \
                     --branch main
 
     # 週次・無人実行のため、各mutation-<pkg>ジョブ自体が失敗（Strykerのクラッシュ・
