@@ -104,7 +104,7 @@ jobs:
                   path: |
                       reports/mutation/core/
                       mutation-report.log
-                  retention-days: 30
+                  retention-days: 7
                   if-no-files-found: warn
 
     mutation-admin:
@@ -152,7 +152,7 @@ jobs:
                   path: |
                       reports/mutation/admin/
                       mutation-report.log
-                  retention-days: 30
+                  retention-days: 7
                   if-no-files-found: warn
 
     mutation-batch:
@@ -201,7 +201,7 @@ jobs:
                   path: |
                       reports/mutation/batch/
                       mutation-report.log
-                  retention-days: 30
+                  retention-days: 7
                   if-no-files-found: warn
 
     # packages/api は他パッケージと桁違いにミュータント数が多く（全体で約4,950。うち
@@ -306,7 +306,7 @@ jobs:
                   path: |
                       reports/mutation/api/
                       mutation-report.log
-                  retention-days: 30
+                  retention-days: 7
                   if-no-files-found: warn
 
     # 週次・無人実行のため、各mutation-<pkg>ジョブ自体が失敗（Strykerのクラッシュ・
