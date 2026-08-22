@@ -40,9 +40,11 @@ describe('ScrapingApiGateway', () => {
 
     it('#1: syncPlace はPOST /sync/place をcacheOnly:true付きで叩き結果を返す', async () => {
         let capturedUrl: string | undefined;
+        let capturedInit: RequestInit | undefined;
         let capturedBody: string | undefined;
         globalThis.fetch = mock((url: string, init?: RequestInit) => {
             capturedUrl = url;
+            capturedInit = init;
             capturedBody = init?.body as string;
             return Promise.resolve(
                 new Response(
@@ -65,6 +67,9 @@ describe('ScrapingApiGateway', () => {
         });
 
         expect(capturedUrl).toBe('https://scraping.example.com/sync/place');
+        expect(capturedInit?.method).toBe('POST');
+        const headers = capturedInit?.headers as Record<string, string>;
+        expect(headers['Content-Type']).toBe('application/json');
         const parsedBody = JSON.parse(capturedBody ?? '{}') as {
             cacheOnly: boolean;
         };
@@ -105,14 +110,22 @@ describe('ScrapingApiGateway', () => {
 
     it('#3: syncRace は件数が閾値(500件)を超過した場合、複数回に分割してPOSTし結果を集計する', async () => {
         const capturedBodies: string[] = [];
+        const callOrder: Array<{ successCount: number; failureCount: number }> =
+            [
+                { successCount: 10, failureCount: 2 },
+                { successCount: 5, failureCount: 3 },
+            ];
+        let callIndex = 0;
         globalThis.fetch = mock((_url: string, init?: RequestInit) => {
             capturedBodies.push(init?.body as string);
+            const response = callOrder[callIndex];
+            callIndex += 1;
             return Promise.resolve(
                 new Response(
                     JSON.stringify({
-                        successCount: 1,
-                        failureCount: 0,
-                        failures: [],
+                        successCount: response.successCount,
+                        failureCount: response.failureCount,
+                        failures: [{ message: 'error' }],
                         notCachedPlaceIds: ['keirin2026010999'],
                     }),
                     { status: 200 },
@@ -135,7 +148,12 @@ describe('ScrapingApiGateway', () => {
         };
         expect(firstChunk.placeIdList.length).toBe(500);
         expect(secondChunk.placeIdList.length).toBe(250);
-        expect(result.successCount).toBe(2);
+        // 成功数の集計確認（+ で加算されるべき）
+        expect(result.successCount).toBe(15); // 10 + 5
+        // 失敗数の集計確認（+ で加算されるべき）
+        expect(result.failureCount).toBe(5); // 2 + 3
+        // failures配列がマージされていることを確認
+        expect(result.failures.length).toBe(2); // [error] + [error]
         expect(result.notCachedPlaceIds).toEqual([
             'keirin2026010999',
             'keirin2026010999',
@@ -169,5 +187,113 @@ describe('ScrapingApiGateway', () => {
 
         const headers = capturedInit?.headers as Record<string, string>;
         expect(headers['X-Service-Auth-Token']).toBe('test-service-auth-token');
+    });
+
+    it('#5: syncRace は件数がちょうど閾値(500件)の場合POSTを1回のみ実行する', async () => {
+        const capturedBodies: string[] = [];
+        globalThis.fetch = mock((_url: string, init?: RequestInit) => {
+            capturedBodies.push(init?.body as string);
+            return Promise.resolve(
+                new Response(
+                    JSON.stringify({
+                        successCount: 1,
+                        failureCount: 0,
+                        failures: [],
+                        notCachedPlaceIds: [],
+                    }),
+                    { status: 200 },
+                ),
+            );
+        }) as unknown as typeof fetch;
+
+        const placeIdList = Array.from(
+            { length: 500 },
+            (_, index) => `keirin2026010${index}`,
+        );
+        await gateway.syncRace({ placeIdList, cacheOnly: true });
+
+        // SYNC_RACE_CHUNK_SIZE = 500 なので、length <= 500 で1回のみ
+        expect(capturedBodies.length).toBe(1);
+    });
+
+    it('#6: syncRace は件数が閾値を超える場合のみ複数回に分割する', async () => {
+        const capturedBodies: string[] = [];
+        globalThis.fetch = mock((_url: string, init?: RequestInit) => {
+            capturedBodies.push(init?.body as string);
+            return Promise.resolve(
+                new Response(
+                    JSON.stringify({
+                        successCount: 1,
+                        failureCount: 0,
+                        failures: [],
+                        notCachedPlaceIds: [],
+                    }),
+                    { status: 200 },
+                ),
+            );
+        }) as unknown as typeof fetch;
+
+        const placeIdList = Array.from(
+            { length: 501 },
+            (_, index) => `keirin2026010${index}`,
+        );
+        await gateway.syncRace({ placeIdList, cacheOnly: true });
+
+        // length > 500 なので2回に分割される
+        expect(capturedBodies.length).toBe(2);
+    });
+
+    it('#7: syncRace の単一POST時のパスが /sync/race であることを確認', async () => {
+        let capturedUrl: string | undefined;
+        globalThis.fetch = mock((url: string, _init?: RequestInit) => {
+            capturedUrl = url;
+            return Promise.resolve(
+                new Response(
+                    JSON.stringify({
+                        successCount: 1,
+                        failureCount: 0,
+                        failures: [],
+                        notCachedPlaceIds: [],
+                    }),
+                    { status: 200 },
+                ),
+            );
+        }) as unknown as typeof fetch;
+
+        const placeIdList = Array.from(
+            { length: 100 },
+            (_, index) => `keirin2026010${index}`,
+        );
+        await gateway.syncRace({ placeIdList, cacheOnly: true });
+
+        expect(capturedUrl).toContain('/sync/race');
+    });
+
+    it('#8: syncRace のチャンク複数POST時各パスが /sync/race であることを確認', async () => {
+        const capturedUrls: string[] = [];
+        globalThis.fetch = mock((url: string, _init?: RequestInit) => {
+            capturedUrls.push(url);
+            return Promise.resolve(
+                new Response(
+                    JSON.stringify({
+                        successCount: 1,
+                        failureCount: 0,
+                        failures: [],
+                        notCachedPlaceIds: [],
+                    }),
+                    { status: 200 },
+                ),
+            );
+        }) as unknown as typeof fetch;
+
+        const placeIdList = Array.from(
+            { length: 750 },
+            (_, index) => `keirin2026010${index}`,
+        );
+        await gateway.syncRace({ placeIdList, cacheOnly: true });
+
+        expect(capturedUrls.length).toBe(2);
+        expect(capturedUrls[0]).toContain('/sync/race');
+        expect(capturedUrls[1]).toContain('/sync/race');
     });
 });
