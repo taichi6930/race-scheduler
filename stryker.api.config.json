@@ -6,7 +6,8 @@
         "!packages/api/src/**/index.ts",
         "!packages/api/src/**/constants/**",
         "!packages/api/src/**/types/**",
-        "!packages/api/src/openapi/**"
+        "!packages/api/src/openapi/**",
+        "!packages/api/src/di/**"
     ],
 
     "testRunner": "command",

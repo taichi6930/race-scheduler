@@ -95,10 +95,17 @@ async function importVapidPrivateKey(
     const x = toBase64Url(publicKeyBytes.slice(1, 33));
     const y = toBase64Url(publicKeyBytes.slice(33, 65));
 
+    // Stryker disable next-line BooleanLiteral : JWKのext:trueは「extractableになり得る」ことの
+    // 申告に過ぎず、実際のextractabilityは下記の明示的なextractable引数（false）で決まる
+    // （Web Crypto APIの仕様上、明示引数がJWKのextより厳しい方向には常に安全）。実際に
+    // ext:true/falseの両方でimportKeyがkey.extractable=falseを返すことを確認済み
+    // （このext値の変更は下記extractable引数がfalseである限り観測不可能で真の等価ミュータント）。
     return crypto.subtle.importKey(
         'jwk',
         { kty: 'EC', crv: 'P-256', d: privateKeyD, x, y, ext: true },
         { name: 'ECDSA', namedCurve: 'P-256' },
+        // extractable=false: この秘密鍵をexportKeyで取り出せないようにする
+        // （webPushGateway.test.ts の J4 で importKey 呼び出し引数を直接検証している）
         false,
         ['sign'],
     );

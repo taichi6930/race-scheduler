@@ -831,6 +831,22 @@ describe('calendarInclusion', () => {
             const result = isSpecifiedRace(race);
             expect(result).toBe(false);
         });
+
+        it('S6: KEIRIN - FⅠ + S級決勝(StagePriorityListにspecifiedOverride未設定)は false を返すこと', () => {
+            // FⅠ/S級決勝 は StagePriorityList 上に priority:4 のエントリはあるが
+            // specifiedOverride フィールド自体が定義されていない（undefined）。
+            // `match.specifiedOverride ?? false` のフォールバックが正しく false に
+            // 解決されることを検証する（priorityとのAND条件に隠れないよう、
+            // shouldIncludeInCalendar 経由ではなく isSpecifiedRace を直接呼ぶ）。
+            const race = {
+                raceType: RaceType.KEIRIN,
+                raceGrade: 'FⅠ',
+                raceStage: 'S級決勝',
+            } as unknown as RaceEntity;
+
+            const result = isSpecifiedRace(race);
+            expect(result).toBe(false);
+        });
     });
 
     describe('getPriority', () => {
