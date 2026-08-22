@@ -753,6 +753,7 @@ const renderCoverageSection = (coverage: CoveragePackage[] | null): string => {
         .join('');
     return `<section id="coverage">
   <h2>カバレッジ（C0/C1、src/ 配下、100%達成ファイル比率）</h2>
+  <p class="meta"><a href="./coverage-html/">行単位カバレッジ（genhtml、ファイル・行単位のハイライト表示）を見る →</a></p>
   ${rows}
 </section>`;
 };
