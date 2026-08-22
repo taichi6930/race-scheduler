@@ -107,8 +107,10 @@ describe('MainApiGateway', () => {
         );
 
         const url = new URL(capturedUrl ?? '');
+        const headers = capturedInit?.headers as Record<string, string>;
         expect(url.pathname).toBe('/internal/feature-flags');
         expect(capturedInit?.method).toBe('POST');
+        expect(headers['Content-Type']).toBe('application/json');
         expect(capturedInit?.body).toBe(
             JSON.stringify({ key: 'announcement_banner', enabled: true }),
         );
@@ -168,8 +170,10 @@ describe('MainApiGateway', () => {
         const result = await gateway.backfillPlace(filter);
 
         const url = new URL(capturedUrl ?? '');
+        const headers = capturedInit?.headers as Record<string, string>;
         expect(url.pathname).toBe('/internal/backfill/place');
         expect(capturedInit?.method).toBe('POST');
+        expect(headers['Content-Type']).toBe('application/json');
         expect(capturedInit?.body).toBe(JSON.stringify(filter));
         expect(result.successCount).toBe(1);
     });
@@ -201,17 +205,22 @@ describe('MainApiGateway', () => {
         const result = await gateway.backfillRace(filter);
 
         const url = new URL(capturedUrl ?? '');
+        const headers = capturedInit?.headers as Record<string, string>;
         expect(url.pathname).toBe('/internal/backfill/race');
         expect(capturedInit?.method).toBe('POST');
+        expect(headers['Content-Type']).toBe('application/json');
         expect(capturedInit?.body).toBe(JSON.stringify(filter));
         expect(result.notCachedPlaceIds).toEqual([]);
     });
 
     it('#7: fetchUiLayoutはGET /internal/ui-layout?raceType=keirinを叩きconfigを返す', async () => {
+        process.env.SERVICE_AUTH_TOKEN = 'test-service-auth-token';
         const config: RaceDetailUiConfig = { sections: [] };
         let capturedUrl: string | undefined;
-        globalThis.fetch = mock((url: string) => {
+        let capturedInit: RequestInit | undefined;
+        globalThis.fetch = mock((url: string, init?: RequestInit) => {
             capturedUrl = url;
+            capturedInit = init;
             return Promise.resolve(
                 new Response(JSON.stringify({ raceType: 'keirin', config }), {
                     status: 200,
@@ -224,6 +233,8 @@ describe('MainApiGateway', () => {
         const url = new URL(capturedUrl ?? '');
         expect(url.pathname).toBe('/internal/ui-layout');
         expect(url.searchParams.get('raceType')).toBe('keirin');
+        const headers = capturedInit?.headers as Record<string, string>;
+        expect(headers['X-Service-Auth-Token']).toBe('test-service-auth-token');
         expect(result).toEqual(config);
     });
 
@@ -244,8 +255,10 @@ describe('MainApiGateway', () => {
         const result = await gateway.saveUiLayout(RaceType.KEIRIN, config);
 
         const url = new URL(capturedUrl ?? '');
+        const headers = capturedInit?.headers as Record<string, string>;
         expect(url.pathname).toBe('/internal/ui-layout');
         expect(capturedInit?.method).toBe('POST');
+        expect(headers['Content-Type']).toBe('application/json');
         expect(capturedInit?.body).toBe(
             JSON.stringify({ raceType: 'keirin', config }),
         );
@@ -268,7 +281,10 @@ describe('MainApiGateway', () => {
         const result = await gateway.previewUiLayout(config, 'race-1');
 
         const url = new URL(capturedUrl ?? '');
+        const headers = capturedInit?.headers as Record<string, string>;
         expect(url.pathname).toBe('/internal/ui-layout/preview');
+        expect(capturedInit?.method).toBe('POST');
+        expect(headers['Content-Type']).toBe('application/json');
         expect(capturedInit?.body).toBe(
             JSON.stringify({ config, raceId: 'race-1' }),
         );
@@ -301,6 +317,7 @@ describe('MainApiGateway', () => {
     });
 
     it('#12: fetchUpcomingKeirinRacesはGET /raceをstartDate/finishDate/raceTypeList=keirinで叩きraces[]を返す', async () => {
+        process.env.SERVICE_AUTH_TOKEN = 'test-service-auth-token';
         const race: RaceSummary = {
             raceId: 'keirin202608091',
             raceName: '開設70周年記念',
@@ -310,8 +327,10 @@ describe('MainApiGateway', () => {
             datetime: '2026-08-09T10:00:00+09:00',
         };
         let capturedUrl: string | undefined;
-        globalThis.fetch = mock((url: string) => {
+        let capturedInit: RequestInit | undefined;
+        globalThis.fetch = mock((url: string, init?: RequestInit) => {
             capturedUrl = url;
+            capturedInit = init;
             return Promise.resolve(
                 new Response(JSON.stringify({ races: [race] }), {
                     status: 200,
@@ -322,18 +341,24 @@ describe('MainApiGateway', () => {
         const result = await gateway.fetchUpcomingKeirinRaces(14);
 
         const url = new URL(capturedUrl ?? '');
+        const startDate = url.searchParams.get('startDate') ?? '';
+        const finishDate = url.searchParams.get('finishDate') ?? '';
+        const diffDays =
+            (new Date(`${finishDate}T00:00:00Z`).getTime() -
+                new Date(`${startDate}T00:00:00Z`).getTime()) /
+            86_400_000;
         expect(url.pathname).toBe('/race');
         expect(url.searchParams.get('raceTypeList')).toBe('keirin');
-        expect(url.searchParams.get('startDate')).toMatch(
-            /^\d{4}-\d{2}-\d{2}$/,
-        );
-        expect(url.searchParams.get('finishDate')).toMatch(
-            /^\d{4}-\d{2}-\d{2}$/,
-        );
+        expect(startDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        expect(finishDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        expect(diffDays).toBe(14);
+        const headers = capturedInit?.headers as Record<string, string>;
+        expect(headers['X-Service-Auth-Token']).toBe('test-service-auth-token');
         expect(result).toEqual([race]);
     });
 
     it('#13: fetchReleaseNotesはGET /internal/release-notesを叩きリリースノート配列を返す', async () => {
+        process.env.SERVICE_AUTH_TOKEN = 'test-service-auth-token';
         const note: ReleaseNote = {
             tag_name: 'v1.0.0',
             name: 'v1.0.0',
@@ -344,8 +369,10 @@ describe('MainApiGateway', () => {
             source_repo: 'race-schedule',
         };
         let capturedUrl: string | undefined;
-        globalThis.fetch = mock((url: string) => {
+        let capturedInit: RequestInit | undefined;
+        globalThis.fetch = mock((url: string, init?: RequestInit) => {
             capturedUrl = url;
+            capturedInit = init;
             return Promise.resolve(
                 new Response(JSON.stringify([note]), { status: 200 }),
             );
@@ -355,6 +382,8 @@ describe('MainApiGateway', () => {
 
         const url = new URL(capturedUrl ?? '');
         expect(url.pathname).toBe('/internal/release-notes');
+        const headers = capturedInit?.headers as Record<string, string>;
+        expect(headers['X-Service-Auth-Token']).toBe('test-service-auth-token');
         expect(result).toEqual([note]);
     });
 
@@ -374,13 +403,16 @@ describe('MainApiGateway', () => {
         const result = await gateway.issueInvite('テストメモ');
 
         const url = new URL(capturedUrl ?? '');
+        const headers = capturedInit?.headers as Record<string, string>;
         expect(url.pathname).toBe('/auth/invite');
         expect(capturedInit?.method).toBe('POST');
+        expect(headers['Content-Type']).toBe('application/json');
         expect(capturedInit?.body).toBe(JSON.stringify({ memo: 'テストメモ' }));
         expect(result).toEqual({ token: 'invite-token' });
     });
 
     it('#15: fetchParticipantsはGET /auth/participantsを叩きparticipants[]を返す', async () => {
+        process.env.SERVICE_AUTH_TOKEN = 'test-service-auth-token';
         const participant: ParticipantSummary = {
             userId: 'user-1',
             nickname: 'にっくねーむ',
@@ -391,8 +423,10 @@ describe('MainApiGateway', () => {
             userCreatedAt: '2026-08-01T00:00:00.000Z',
         };
         let capturedUrl: string | undefined;
-        globalThis.fetch = mock((url: string) => {
+        let capturedInit: RequestInit | undefined;
+        globalThis.fetch = mock((url: string, init?: RequestInit) => {
             capturedUrl = url;
+            capturedInit = init;
             return Promise.resolve(
                 new Response(JSON.stringify({ participants: [participant] }), {
                     status: 200,
@@ -404,17 +438,22 @@ describe('MainApiGateway', () => {
 
         const url = new URL(capturedUrl ?? '');
         expect(url.pathname).toBe('/auth/participants');
+        const headers = capturedInit?.headers as Record<string, string>;
+        expect(headers['X-Service-Auth-Token']).toBe('test-service-auth-token');
         expect(result).toEqual([participant]);
     });
 
     it('#16: fetchJoinRequestsはGET /auth/join-requestsを叩きrequests[]を返す', async () => {
+        process.env.SERVICE_AUTH_TOKEN = 'test-service-auth-token';
         const request: JoinRequestSummary = {
             id: 'request-1',
             nickname: 'にっくねーむ',
         };
         let capturedUrl: string | undefined;
-        globalThis.fetch = mock((url: string) => {
+        let capturedInit: RequestInit | undefined;
+        globalThis.fetch = mock((url: string, init?: RequestInit) => {
             capturedUrl = url;
+            capturedInit = init;
             return Promise.resolve(
                 new Response(JSON.stringify({ requests: [request] }), {
                     status: 200,
@@ -426,6 +465,8 @@ describe('MainApiGateway', () => {
 
         const url = new URL(capturedUrl ?? '');
         expect(url.pathname).toBe('/auth/join-requests');
+        const headers = capturedInit?.headers as Record<string, string>;
+        expect(headers['X-Service-Auth-Token']).toBe('test-service-auth-token');
         expect(result).toEqual([request]);
     });
 
