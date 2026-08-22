@@ -184,6 +184,15 @@ jobs:
         if: always()
         run: genhtml coverage/lcov.info -o test-report/coverage-html
 
+      # 分岐カバレッジ（C1、admin/api/batch/core・実験的、race-schedule PR #2559と同じ設計）。
+      # istanbul-lib-instrumentによる計装のため既存のtest:gap（行カバレッジ）とは別経路。
+      - name: Run branch coverage (core, experimental)
+        if: always()
+        run: |
+          bun run test:branch-coverage
+          mkdir -p test-report/branch-coverage
+          cp -r coverage/branch-html/. test-report/branch-coverage/
+
       - name: Run spec coverage analysis
         if: always()
         run: |

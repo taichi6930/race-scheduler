@@ -1,0 +1,29 @@
+# `bun run test:branch-coverage`（package.json）専用の設定ファイル。
+# [test] セクションは bunfig.toml と同一内容を維持し、`preload` に
+# scripts/branch-coverage/branchInstrumentPlugin.ts を追加している。
+# package.json のスクリプト文字列に `--preload=<path>` を直書きすると
+# `bun run check:unused`（knip）が誤って未解決importとして検出したため、
+# bunfig.verbose.toml と同じ `--config` 差し替え方式に変更した。
+# bunfig.toml を変更した場合は、このファイルの root/timeout/coveragePathIgnorePatterns も
+# 同じ値に更新すること（ドリフト防止）。
+
+[test]
+root = "packages"
+singleThreaded = false
+timeout = 30000
+preload = ["./scripts/branch-coverage/branchInstrumentPlugin.ts"]
+
+coverageReporter = ["lcov"]
+coverageDir = "coverage"
+
+coveragePathIgnorePatterns = [
+  "**/constants/**",
+  "**/index.ts",
+  "**/types/**",
+  "**/*.config.ts",
+  "**/*.config.js",
+  "packages/batch/src/cli.ts",
+  "packages/batch/src/workflows/batchAllWorkflow.ts",
+  "packages/*/test/**",
+  "tests/**"
+]

@@ -92,6 +92,7 @@ interface Report {
     summary: Record<Layer, Record<string, ReportSummaryCell>>;
     notes: string[];
     hasAllureReport: boolean;
+    hasBranchCoverageReport: boolean;
     coverage: CoveragePackage[] | null;
     specCoverage: SpecCoverageReport | null;
 }
@@ -675,6 +676,9 @@ const buildReport = (): Report => {
         summary: buildSummary(files),
         notes: NOTES,
         hasAllureReport: existsSync(join(OUT_DIR, 'allure', 'index.html')),
+        hasBranchCoverageReport: existsSync(
+            join(OUT_DIR, 'branch-coverage', 'index.html'),
+        ),
         coverage: loadCoverageData(),
         specCoverage: loadSpecCoverageData(),
     };
@@ -836,6 +840,7 @@ const renderHtml = (report: Report): string => `<!doctype html>
 <main>
   <section id="summary"></section>
   ${renderCoverageSection(report.coverage)}
+  ${report.hasBranchCoverageReport ? '<p class="meta"><a href="./branch-coverage/index.html">分岐カバレッジ（C1、admin/api/batch/core、実験的）を見る →</a></p>' : ''}
   ${renderSpecCoverageSection(report.specCoverage)}
   <section id="controls">
     <input id="search" type="search" placeholder="ファイルパス・テスト名で検索">
