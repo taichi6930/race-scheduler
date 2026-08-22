@@ -1,17 +1,22 @@
 /**
  * 「異常検知→Issue作成／復旧→Close」を行う通知の共通制御フロー。
  *
- * dataFreshnessNotifier/errorMonitorNotifier/uptimeCheckNotifierの3つが
- * 同型の「固定タイトルでIssue検索→復旧/異常で分岐→addComment/createIssue/closeIssue」
- * ロジックを個別実装していたため、制御フローをここに集約し、各ファイルは
- * タイトル・本文生成・復旧判定などのドメイン固有部分だけを渡す。
+ * api の dataFreshnessNotifier/errorMonitorNotifier/uptimeCheckNotifier/
+ * dataQualityWarningNotifier が同型の「固定タイトルでIssue検索→復旧/異常で
+ * 分岐→addComment/createIssue/closeIssue」ロジックを個別実装していたため、
+ * 制御フローをここに集約し、各呼び出し元はタイトル・本文生成・復旧判定などの
+ * ドメイン固有部分だけを渡す。
+ *
+ * @remarks QRUN-01: 元は `packages/api/src/utility/githubIssueSync.ts` に
+ *   あったが、batch（Workflow失敗Issueの自動Close）からも使えるよう、
+ *   全Workerから参照可能な core へ移設した（api固有の依存は無かった）。
  */
 
+import { appLogger } from '../utilities/appLogger';
 import type {
     GithubIssueSummary,
     IGithubIssueGateway,
-} from '@race-schedule/core';
-import { appLogger } from '@race-schedule/core';
+} from './IGithubIssueGateway';
 
 /** GitHub Issue同期の挙動を定義するハンドラ群（ドメイン固有部分）。 */
 export interface GithubIssueSyncHandlers<T> {

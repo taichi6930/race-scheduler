@@ -439,11 +439,14 @@ export async function runBatchAllWorkflow(
         event.instanceId,
     );
 
+    // QRUN-01: 失敗0件（成功）の場合も呼ぶ。既存の失敗Issueが残っていれば
+    // ここでCloseされる（syncBatchWorkflowFailureIssue参照）。
+    await notifyFailuresStep(step, env, allFailures, event.instanceId);
+
     if (allFailures.length === 0) {
         return;
     }
 
-    await notifyFailuresStep(step, env, allFailures, event.instanceId);
     throw new Error(
         `batch実行が${allFailures.length}件失敗しました: ${allFailures
             .map((failure) => `${failure.raceType}-${failure.target}`)

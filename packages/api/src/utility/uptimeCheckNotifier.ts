@@ -17,13 +17,12 @@
  * `dataFreshnessNotifier.ts`と同じ方針）。
  *
  * Issue検索→復旧/異常分岐→addComment/createIssue/closeIssueという制御フロー自体は
- * `dataFreshnessNotifier.ts`/`errorMonitorNotifier.ts`と同型のため`githubIssueSync.ts`
- * に共通化している。
+ * `dataFreshnessNotifier.ts`/`errorMonitorNotifier.ts`と同型のため`@race-schedule/core`の
+ * `syncGithubIssueByCondition`に共通化している（QRUN-01: batchからも使えるよう core へ移設済み）。
  */
 
 import type { IGithubIssueGateway } from '@race-schedule/core';
-
-import { syncGithubIssueByCondition } from './githubIssueSync';
+import { syncGithubIssueByCondition } from '@race-schedule/core';
 
 /** 1回分のUptimeチェック結果。 */
 export interface UptimeCheckResult {
